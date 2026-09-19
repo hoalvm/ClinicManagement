@@ -39,14 +39,20 @@ class ConflictError(AppError):
         super().__init__(detail, status.HTTP_409_CONFLICT)
 
 
+class InternalServerError(AppError):
+    def __init__(self, detail: str = "An unexpected server error occurred.") -> None:
+        super().__init__(detail, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 def _safe_validation_errors(exc: RequestValidationError) -> list[dict[str, Any]]:
-    """Remove raw inputs so validation responses never echo passwords."""
+    """Return JSON-safe errors without echoing inputs or validator exceptions."""
 
     safe_errors: list[dict[str, Any]] = []
     for error in exc.errors():
-        safe_error = {
-            key: value for key, value in error.items() if key in {"type", "loc", "msg", "ctx"}
-        }
+        # Pydantic may put a ValueError instance in ``ctx["error"]``.  Keeping
+        # that context would make JSONResponse serialization fail and turn a
+        # legitimate validation failure into a 500 response.
+        safe_error = {key: error[key] for key in ("type", "loc", "msg") if key in error}
         safe_errors.append(safe_error)
     return safe_errors
 
@@ -70,7 +76,9 @@ def register_exception_handlers(app: FastAPI) -> None:
         _request: Request, exc: RequestValidationError
     ) -> JSONResponse:
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            # Literal keeps compatibility across the supported FastAPI/
+            # Starlette range (the symbolic name changed in newer releases).
+            status_code=422,
             content={"detail": _safe_validation_errors(exc)},
         )
 

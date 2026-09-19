@@ -5,7 +5,8 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, Numeric, String, text
+from sqlalchemy import ForeignKey, Integer, Numeric, text
+from sqlalchemy.dialects.mssql import NVARCHAR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.models.base import Base
@@ -21,7 +22,7 @@ class InvoiceItem(Base):
     invoice_id: Mapped[int] = mapped_column(
         "InvoiceID", ForeignKey("Invoices.InvoiceID"), nullable=False
     )
-    item_name: Mapped[str] = mapped_column("ItemName", String(200), nullable=False)
+    item_name: Mapped[str] = mapped_column("ItemName", NVARCHAR(200), nullable=False)
     quantity: Mapped[int] = mapped_column(
         "Quantity", Integer, nullable=False, server_default=text("1")
     )

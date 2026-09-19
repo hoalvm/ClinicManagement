@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import time
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, Integer, SmallInteger, Time, text
+from sqlalchemy import Boolean, ForeignKey, Integer, Time, text
+from sqlalchemy.dialects.mssql import TINYINT
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.models.base import Base
@@ -21,7 +22,7 @@ class DoctorSchedule(Base):
     doctor_id: Mapped[int] = mapped_column(
         "DoctorID", ForeignKey("Doctors.DoctorID"), nullable=False
     )
-    day_of_week: Mapped[int] = mapped_column("DayOfWeek", SmallInteger, nullable=False)
+    day_of_week: Mapped[int] = mapped_column("DayOfWeek", TINYINT, nullable=False)
     start_time: Mapped[time] = mapped_column("StartTime", Time, nullable=False)
     end_time: Mapped[time] = mapped_column("EndTime", Time, nullable=False)
     slot_duration: Mapped[int] = mapped_column(

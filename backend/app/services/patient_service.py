@@ -3,7 +3,7 @@
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from backend.app.core.exceptions import AppError
+from backend.app.core.exceptions import InternalServerError
 from backend.app.models import Patient
 from backend.app.schemas.patient import PatientProfileResponse, PatientProfileUpdate
 
@@ -46,5 +46,5 @@ class PatientService:
             self.session.commit()
         except SQLAlchemyError as exc:
             self.session.rollback()
-            raise AppError("Unable to update patient profile.") from exc
+            raise InternalServerError("Unable to update patient profile at this time.") from exc
         return self.to_profile(patient)

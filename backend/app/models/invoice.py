@@ -6,8 +6,8 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, Numeric, String, text
-from sqlalchemy.dialects.mssql import DATETIME2
+from sqlalchemy import ForeignKey, Integer, Numeric, text
+from sqlalchemy.dialects.mssql import DATETIME2, NVARCHAR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.models.base import Base
@@ -32,7 +32,7 @@ class Invoice(Base):
         "TotalAmount", Numeric(18, 2), nullable=False, server_default=text("0")
     )
     status: Mapped[str] = mapped_column(
-        "Status", String(20), nullable=False, server_default=text("'UNPAID'")
+        "Status", NVARCHAR(20), nullable=False, server_default=text("'UNPAID'")
     )
     created_at: Mapped[datetime] = mapped_column(
         "CreatedAt", DATETIME2, nullable=False, server_default=text("GETDATE()")

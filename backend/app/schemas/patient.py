@@ -4,6 +4,7 @@ from datetime import date
 
 from pydantic import EmailStr, Field, field_validator
 
+from backend.app.core.clock import clinic_today
 from backend.app.schemas.auth import _clean_required
 from backend.app.schemas.common import APIModel
 
@@ -48,7 +49,7 @@ class PatientProfileUpdate(APIModel):
     @field_validator("date_of_birth")
     @classmethod
     def validate_date_of_birth(cls, value: date | None) -> date | None:
-        if value is not None and value > date.today():
+        if value is not None and value > clinic_today():
             raise ValueError("Date of birth cannot be in the future")
         return value
 

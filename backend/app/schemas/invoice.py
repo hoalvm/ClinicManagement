@@ -1,16 +1,15 @@
 """Invoice history and detail schemas."""
 
 from datetime import date, datetime, time
-from decimal import Decimal
 
-from backend.app.schemas.common import APIModel, Page
+from backend.app.schemas.common import APIModel, Money, Page
 
 
 class InvoiceSummary(APIModel):
     invoice_id: int
     appointment_id: int
     created_at: datetime
-    total_amount: Decimal
+    total_amount: Money
     status: str
 
 
@@ -32,13 +31,13 @@ class InvoiceAppointment(APIModel):
 class InvoiceItemResponse(APIModel):
     item_name: str
     quantity: int
-    unit_price: Decimal
-    line_total: Decimal
+    unit_price: Money
+    line_total: Money
 
 
 class PaymentResponse(APIModel):
     payment_id: int
-    amount: Decimal
+    amount: Money
     payment_method: str
     payment_date: datetime
 
@@ -47,7 +46,7 @@ class InvoiceDetail(APIModel):
     invoice_id: int
     appointment_id: int
     created_at: datetime
-    total_amount: Decimal
+    total_amount: Money
     status: str
     appointment: InvoiceAppointment
     items: list[InvoiceItemResponse]

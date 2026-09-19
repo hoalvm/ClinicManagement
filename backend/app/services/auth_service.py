@@ -3,7 +3,12 @@
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from backend.app.core.exceptions import AppError, AuthenticationError, ConflictError
+from backend.app.core.exceptions import (
+    AppError,
+    AuthenticationError,
+    ConflictError,
+    InternalServerError,
+)
 from backend.app.core.security import create_access_token, hash_password, verify_password
 from backend.app.models import Patient, User
 from backend.app.repositories import PatientRepository, UserRepository
@@ -14,6 +19,8 @@ from backend.app.schemas.auth import (
     RegisterResponse,
     TokenResponse,
 )
+
+DUMMY_PASSWORD_HASH = hash_password("clinic-login-dummy-password")
 
 
 class AuthService:
@@ -52,7 +59,7 @@ class AuthService:
             raise AppError("Unable to register patient.") from exc
         except SQLAlchemyError as exc:
             self.session.rollback()
-            raise AppError("Unable to register patient.") from exc
+            raise InternalServerError("Unable to register patient at this time.") from exc
 
         return RegisterResponse(
             user_id=user.user_id,
@@ -64,11 +71,9 @@ class AuthService:
 
     def login(self, payload: LoginRequest) -> TokenResponse:
         user = self.users.get_by_username(payload.username)
-        if (
-            user is None
-            or not user.is_active
-            or not verify_password(payload.password, user.password_hash)
-        ):
+        password_hash = user.password_hash if user is not None else DUMMY_PASSWORD_HASH
+        password_valid = verify_password(payload.password, password_hash)
+        if user is None or not user.is_active or user.role != "PATIENT" or not password_valid:
             raise AuthenticationError("Incorrect username or password.")
         return TokenResponse(access_token=create_access_token(user_id=user.user_id, role=user.role))
 

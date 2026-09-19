@@ -73,7 +73,10 @@ class MedicalRecordRepository:
         total = int(self.session.scalar(count_statement) or 0)
         statement = (
             base.options(*_medical_load_options())
-            .order_by(MedicalRecord.examination_date.desc())
+            .order_by(
+                MedicalRecord.examination_date.desc(),
+                MedicalRecord.medical_record_id.desc(),
+            )
             .offset((page - 1) * page_size)
             .limit(page_size)
         )

@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from backend.app.core.clock import clinic_today
 from backend.app.core.security import hash_password, verify_password
 from backend.app.db.session import SessionLocal
 from backend.app.models import (
@@ -177,6 +178,9 @@ def _ensure_appointment(
         session,
         select(Appointment).where(
             Appointment.patient_id == patient.patient_id,
+            Appointment.doctor_id == doctor.doctor_id,
+            Appointment.clinic_id == clinic.clinic_id,
+            Appointment.start_time == start_time,
             Appointment.reason == reason,
         ),
     )
@@ -189,6 +193,11 @@ def _ensure_appointment(
     appointment.start_time = start_time
     appointment.end_time = end_time
     appointment.status = status
+    scheduled_for = datetime.combine(appointment_date, start_time)
+    appointment.created_at = min(
+        scheduled_for - timedelta(days=7),
+        datetime.combine(clinic_today(), time(7, 0)),
+    )
     session.flush()
     return appointment
 
@@ -229,6 +238,7 @@ def _ensure_prescription(
         prescription = Prescription(medical_record_id=record.medical_record_id)
         session.add(prescription)
         session.flush()
+    prescription.created_at = record.examination_date + timedelta(minutes=5)
 
     for data in items:
         item = _first(
@@ -290,6 +300,8 @@ def _ensure_invoice(
         (item.unit_price * item.quantity for item in all_items), start=Decimal("0.00")
     )
     invoice.status = status
+    completed_at = datetime.combine(appointment.appointment_date, appointment.end_time)
+    invoice.created_at = completed_at + timedelta(minutes=10)
     session.flush()
 
     if status == "PAID" and payment_method is not None:
@@ -299,9 +311,7 @@ def _ensure_invoice(
             session.add(payment)
         payment.amount = invoice.total_amount
         payment.payment_method = payment_method
-        payment.payment_date = datetime.combine(
-            appointment.appointment_date, appointment.end_time
-        ) + timedelta(minutes=10)
+        payment.payment_date = completed_at + timedelta(minutes=15)
     session.flush()
     return invoice
 
@@ -433,7 +443,7 @@ def seed_database(session: Session) -> None:
         ),
     )
 
-    today = date.today()
+    today = clinic_today()
     appointment_specs = (
         (patients[0], doctors[0], central, -90, time(8, 0), "Annual health check", "COMPLETED"),
         (

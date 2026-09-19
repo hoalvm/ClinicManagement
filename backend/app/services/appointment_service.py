@@ -4,6 +4,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from backend.app.core.clock import clinic_now
 from backend.app.core.exceptions import NotFoundError
 from backend.app.models import Appointment
 from backend.app.repositories import AppointmentRepository
@@ -72,11 +73,11 @@ class AppointmentService:
     def get_upcoming(
         self, patient_id: int, *, now: datetime | None = None
     ) -> AppointmentSummary | None:
-        clinic_now = now or datetime.now().astimezone()
+        current = now or clinic_now()
         appointment = self.repository.get_upcoming(
             patient_id,
-            current_date=clinic_now.date(),
-            current_time=clinic_now.time().replace(tzinfo=None),
+            current_date=current.date(),
+            current_time=current.time().replace(tzinfo=None),
         )
         return self.to_summary(appointment) if appointment is not None else None
 

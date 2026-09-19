@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, text
+from sqlalchemy import Boolean, ForeignKey, Integer, text
+from sqlalchemy.dialects.mssql import NVARCHAR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.models.base import Base
@@ -31,7 +32,7 @@ class Doctor(Base):
         "ClinicID", ForeignKey("Clinics.ClinicID"), nullable=True
     )
     license_number: Mapped[str | None] = mapped_column(
-        "LicenseNumber", String(50), unique=True, nullable=True
+        "LicenseNumber", NVARCHAR(50), unique=True, nullable=True
     )
     is_active: Mapped[bool] = mapped_column(
         "IsActive", Boolean, nullable=False, server_default=text("1")

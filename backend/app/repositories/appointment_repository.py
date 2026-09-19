@@ -69,7 +69,11 @@ class AppointmentRepository:
         total = int(self.session.scalar(count_statement) or 0)
         statement = (
             base.options(*_appointment_load_options())
-            .order_by(Appointment.appointment_date.desc(), Appointment.start_time.desc())
+            .order_by(
+                Appointment.appointment_date.desc(),
+                Appointment.start_time.desc(),
+                Appointment.appointment_id.desc(),
+            )
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
@@ -93,7 +97,11 @@ class AppointmentRepository:
                     ),
                 ),
             )
-            .order_by(Appointment.appointment_date.asc(), Appointment.start_time.asc())
+            .order_by(
+                Appointment.appointment_date.asc(),
+                Appointment.start_time.asc(),
+                Appointment.appointment_id.asc(),
+            )
             .limit(1)
         )
         return self.session.execute(statement).unique().scalar_one_or_none()

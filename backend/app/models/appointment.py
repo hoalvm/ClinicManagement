@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import date, datetime, time
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, ForeignKey, Integer, String, Time, text
-from sqlalchemy.dialects.mssql import DATETIME2
+from sqlalchemy import Date, ForeignKey, Integer, Time, text
+from sqlalchemy.dialects.mssql import DATETIME2, NVARCHAR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.models.base import Base
@@ -35,9 +35,9 @@ class Appointment(Base):
     appointment_date: Mapped[date] = mapped_column("AppointmentDate", Date, nullable=False)
     start_time: Mapped[time] = mapped_column("StartTime", Time, nullable=False)
     end_time: Mapped[time] = mapped_column("EndTime", Time, nullable=False)
-    reason: Mapped[str | None] = mapped_column("Reason", String(500), nullable=True)
+    reason: Mapped[str | None] = mapped_column("Reason", NVARCHAR(500), nullable=True)
     status: Mapped[str] = mapped_column(
-        "Status", String(20), nullable=False, server_default=text("'PENDING'")
+        "Status", NVARCHAR(20), nullable=False, server_default=text("'PENDING'")
     )
     created_at: Mapped[datetime] = mapped_column(
         "CreatedAt", DATETIME2, nullable=False, server_default=text("GETDATE()")

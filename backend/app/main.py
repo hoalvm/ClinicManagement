@@ -11,7 +11,9 @@ settings = get_settings()
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    debug=settings.debug,
+    # Traceback responses could expose SQL and application internals.  Keep
+    # FastAPI's debug exception page disabled in every environment.
+    debug=False,
 )
 register_exception_handlers(app)
 app.include_router(api_router)

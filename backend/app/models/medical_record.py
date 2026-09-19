@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Integer, String, text
-from sqlalchemy.dialects.mssql import DATETIME2
+from sqlalchemy import ForeignKey, Integer, text
+from sqlalchemy.dialects.mssql import DATETIME2, NVARCHAR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.models.base import Base
@@ -26,9 +26,9 @@ class MedicalRecord(Base):
         unique=True,
         nullable=False,
     )
-    symptoms: Mapped[str | None] = mapped_column("Symptoms", String(1000), nullable=True)
-    diagnosis: Mapped[str | None] = mapped_column("Diagnosis", String(1000), nullable=True)
-    notes: Mapped[str | None] = mapped_column("Notes", String(2000), nullable=True)
+    symptoms: Mapped[str | None] = mapped_column("Symptoms", NVARCHAR(1000), nullable=True)
+    diagnosis: Mapped[str | None] = mapped_column("Diagnosis", NVARCHAR(1000), nullable=True)
+    notes: Mapped[str | None] = mapped_column("Notes", NVARCHAR(2000), nullable=True)
     examination_date: Mapped[datetime] = mapped_column(
         "ExaminationDate", DATETIME2, nullable=False, server_default=text("GETDATE()")
     )

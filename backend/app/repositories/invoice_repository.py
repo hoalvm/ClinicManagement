@@ -29,7 +29,9 @@ class InvoiceRepository:
             count_statement = count_statement.where(Invoice.status == status)
         total = int(self.session.scalar(count_statement) or 0)
         statement = (
-            base.order_by(Invoice.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+            base.order_by(Invoice.created_at.desc(), Invoice.invoice_id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
         )
         invoices = list(self.session.execute(statement).scalars().all())
         return invoices, total

@@ -1,13 +1,22 @@
 """Shared API schema building blocks."""
 
+from decimal import Decimal
 from enum import StrEnum
-from typing import Generic, TypeVar
+from typing import Annotated, Generic, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer
 
 
 class APIModel(BaseModel):
     model_config = ConfigDict(from_attributes=True, str_strip_whitespace=True)
+
+
+# Keep Decimal throughout ORM/service validation, but honor the public API
+# contract by emitting JSON numbers (rather than Pydantic's default strings).
+Money = Annotated[
+    Decimal,
+    PlainSerializer(lambda value: float(value), return_type=float, when_used="json"),
+]
 
 
 class AppointmentStatus(StrEnum):
