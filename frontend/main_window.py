@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, QResizeEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QMainWindow,
@@ -47,6 +47,7 @@ class MainWindow(QMainWindow):
         self.resize(1240, 800)
 
         self.root_stack = QStackedWidget()
+        self.root_stack.setObjectName("rootStack")
         self.setCentralWidget(self.root_stack)
         self.login_view = LoginView(api_client)
         self.register_view = RegisterView(api_client)
@@ -88,6 +89,7 @@ class MainWindow(QMainWindow):
 
         self._connect_navigation()
         self.root_stack.setCurrentWidget(self.login_view)
+        self._sync_sidebar_mode()
 
     def _connect_navigation(self) -> None:
         self.login_view.register_requested.connect(
@@ -100,6 +102,8 @@ class MainWindow(QMainWindow):
         self.sidebar.logout_requested.connect(self._logout)
 
         self.dashboard_view.appointment_requested.connect(self.show_appointment)
+        self.dashboard_view.route_requested.connect(self._sidebar_navigation)
+        self.profile_view.profile_updated.connect(self.sidebar.set_user)
         self.appointments_view.appointment_requested.connect(self.show_appointment)
         self.appointment_detail_view.back_requested.connect(self.go_back)
         self.appointment_detail_view.medical_record_requested.connect(self.show_medical_result)
@@ -115,14 +119,20 @@ class MainWindow(QMainWindow):
         current_user = user if isinstance(user, dict) else {}
         self.api_client.set_access_token(token)
         self.session.set_authenticated(token, current_user)
+        self.sidebar.set_user(current_user)
         self._handling_expiry = False
         self._history.clear()
         self.root_stack.setCurrentWidget(self.shell)
         self.navigate("dashboard", push=True)
 
     def _registration_succeeded(self, username: str) -> None:
-        self.login_view.set_username(username)
         self._show_login()
+        self.login_view.set_username(username)
+        self.login_view.feedback.show_message(
+            "Account created",
+            "Your patient account is ready. Enter your password to sign in.",
+            severity="success",
+        )
 
     def _show_login(self) -> None:
         self.register_view.invalidate_pending()
@@ -216,6 +226,15 @@ class MainWindow(QMainWindow):
             page.clear_data()
         self.page_stack.setCurrentWidget(self.dashboard_view)
         self.sidebar.set_active("")
+        self.sidebar.clear_user()
+
+    def _sync_sidebar_mode(self) -> None:
+        if hasattr(self, "sidebar"):
+            self.sidebar.set_compact(self.width() < 1100)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._sync_sidebar_mode()
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         self.api_client.close()

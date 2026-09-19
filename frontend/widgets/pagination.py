@@ -1,5 +1,7 @@
 """Shared pagination controls for list screens."""
 
+from __future__ import annotations
+
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QWidget
 
@@ -14,26 +16,36 @@ class PaginationWidget(QWidget):
         self._total_pages = 0
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addStretch()
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(8)
 
         self._summary = QLabel("No results")
         self._summary.setObjectName("mutedLabel")
-        self._previous = QPushButton("Previous")
-        self._previous.setObjectName("secondaryButton")
-        self._next = QPushButton("Next")
-        self._next.setObjectName("secondaryButton")
+        self._summary.setAccessibleName("Pagination summary")
+
+        rows_label = QLabel("Rows per page")
+        rows_label.setObjectName("mutedLabel")
         self._page_size = QComboBox()
         self._page_size.addItems(["5", "10", "20", "50", "100"])
         self._page_size.setCurrentText("10")
         self._page_size.setAccessibleName("Rows per page")
+        self._page_size.setFixedWidth(76)
+        rows_label.setBuddy(self._page_size)
+
+        self._previous = QPushButton("‹  Previous")
+        self._previous.setObjectName("secondaryButton")
+        self._previous.setAccessibleName("Previous page")
+        self._next = QPushButton("Next  ›")
+        self._next.setObjectName("secondaryButton")
+        self._next.setAccessibleName("Next page")
 
         layout.addWidget(self._summary)
-        layout.addSpacing(12)
+        layout.addStretch()
+        layout.addWidget(rows_label)
+        layout.addWidget(self._page_size)
+        layout.addSpacing(8)
         layout.addWidget(self._previous)
         layout.addWidget(self._next)
-        layout.addWidget(QLabel("Rows:"))
-        layout.addWidget(self._page_size)
 
         self._previous.clicked.connect(self._go_previous)
         self._next.clicked.connect(self._go_next)
@@ -50,8 +62,11 @@ class PaginationWidget(QWidget):
         self._page = max(1, page)
         self._total_pages = max(0, total_pages)
         if total:
+            first = (self._page - 1) * self.page_size + 1
+            last = min(total, self._page * self.page_size)
             self._summary.setText(
-                f"Page {self._page} of {max(1, self._total_pages)} · {total} total"
+                f"Showing {first}–{last} of {total}  ·  Page {self._page} of "
+                f"{max(1, self._total_pages)}"
             )
         else:
             self._summary.setText("No results")

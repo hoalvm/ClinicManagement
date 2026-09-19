@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
-    QHBoxLayout,
     QLabel,
     QPushButton,
     QScrollArea,
@@ -17,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient
+from frontend.ui.icons import apply_line_icon
 from frontend.views.common import (
     BaseApiView,
     display_text,
@@ -24,6 +24,8 @@ from frontend.views.common import (
     format_time,
     require_dict,
 )
+from frontend.widgets.page_header import PageHeader
+from frontend.widgets.status_badge import StatusBadge
 
 
 class AppointmentDetailView(BaseApiView):
@@ -38,24 +40,47 @@ class AppointmentDetailView(BaseApiView):
         self._invoice_id: int | None = None
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(28, 24, 28, 24)
-        header = QHBoxLayout()
-        self.back_button = QPushButton("Back")
-        self.back_button.setObjectName("secondaryButton")
-        title = QLabel("Appointment Detail")
-        title.setObjectName("pageTitle")
-        header.addWidget(self.back_button)
-        header.addWidget(title)
-        header.addStretch()
-        root.addLayout(header)
+        root.setContentsMargins(32, 28, 32, 28)
+        root.setSpacing(14)
+
+        self.header = PageHeader(
+            "Appointment Detail",
+            "Review the visit, care provider, and clinic information.",
+            show_back=True,
+        )
+        self.back_button = self.header.back_button
+        self.title = self.header.title_label
+        self.medical_button = QPushButton("Medical result")
+        self.medical_button.setObjectName("secondaryButton")
+        apply_line_icon(
+            self.medical_button,
+            "medical",
+            active_color="#0F766E",
+            accessible_name="View medical result",
+        )
+        self.invoice_button = QPushButton("Invoice")
+        self.invoice_button.setObjectName("primaryButton")
+        apply_line_icon(
+            self.invoice_button,
+            "invoice",
+            "#FFFFFF",
+            active_color="#FFFFFF",
+            accessible_name="View invoice",
+        )
+        self.header.add_action(self.medical_button)
+        self.header.add_action(self.invoice_button)
+        root.addWidget(self.header)
+        root.addWidget(self.feedback)
         root.addWidget(self.loading)
 
         scroll = QScrollArea()
+        scroll.setObjectName("pageScroll")
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setAccessibleName("Appointment information")
         content = QWidget()
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(0, 0, 8, 0)
+        content_layout.setContentsMargins(0, 2, 8, 4)
         content_layout.setSpacing(16)
         self.values: dict[str, QLabel] = {}
         content_layout.addWidget(
@@ -64,22 +89,22 @@ class AppointmentDetailView(BaseApiView):
                 [
                     ("Appointment ID", "appointment_id"),
                     ("Date", "date"),
-                    ("Start Time", "start_time"),
-                    ("End Time", "end_time"),
+                    ("Start time", "start_time"),
+                    ("End time", "end_time"),
                     ("Status", "status"),
-                    ("Reason", "reason"),
+                    ("Reason for visit", "reason"),
                 ],
             )
         )
         content_layout.addWidget(
             self._section(
-                "Doctor",
+                "Care provider",
                 [
-                    ("Doctor Name", "doctor_name"),
+                    ("Doctor", "doctor_name"),
                     ("Specialty", "specialty"),
-                    ("License Number", "license"),
-                    ("Doctor Phone", "doctor_phone"),
-                    ("Doctor Email", "doctor_email"),
+                    ("License number", "license"),
+                    ("Phone", "doctor_phone"),
+                    ("Email", "doctor_email"),
                 ],
             )
         )
@@ -87,59 +112,64 @@ class AppointmentDetailView(BaseApiView):
             self._section(
                 "Clinic",
                 [
-                    ("Clinic Name", "clinic_name"),
-                    ("Clinic Address", "clinic_address"),
-                    ("Clinic Phone", "clinic_phone"),
+                    ("Clinic", "clinic_name"),
+                    ("Address", "clinic_address"),
+                    ("Phone", "clinic_phone"),
                 ],
             )
         )
-
-        actions = QHBoxLayout()
-        actions.addStretch()
-        self.medical_button = QPushButton("View Medical Result")
-        self.medical_button.setObjectName("secondaryButton")
-        self.invoice_button = QPushButton("View Invoice")
-        self.invoice_button.setObjectName("primaryButton")
-        actions.addWidget(self.medical_button)
-        actions.addWidget(self.invoice_button)
-        content_layout.addLayout(actions)
         content_layout.addStretch()
         scroll.setWidget(content)
         root.addWidget(scroll, 1)
 
-        self.back_button.clicked.connect(self.back_requested)
+        self.header.back_requested.connect(self.back_requested.emit)
         self.medical_button.clicked.connect(self._open_medical)
         self.invoice_button.clicked.connect(self._open_invoice)
         self.clear_data()
 
     def _section(self, title: str, fields: list[tuple[str, str]]) -> QFrame:
         card = QFrame()
-        card.setObjectName("contentCard")
+        card.setObjectName("infoCard")
         layout = QGridLayout(card)
-        layout.setContentsMargins(22, 18, 22, 18)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setHorizontalSpacing(28)
+        layout.setVerticalSpacing(12)
         section_title = QLabel(title)
         section_title.setObjectName("sectionTitle")
-        layout.addWidget(section_title, 0, 0, 1, 4)
-        for index, (label, key) in enumerate(fields):
-            row, pair = divmod(index, 2)
+        layout.addWidget(section_title, 0, 0, 1, 2)
+        for row, (label, key) in enumerate(fields, start=1):
             label_widget = QLabel(label)
             label_widget.setObjectName("fieldLabel")
-            value = QLabel("—")
-            value.setWordWrap(True)
-            if key in {"reason", "clinic_address"}:
-                value.setMinimumHeight(42)
-            layout.addWidget(label_widget, row + 1, pair * 2)
-            layout.addWidget(value, row + 1, pair * 2 + 1)
+            label_widget.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+            value: QLabel
+            if key == "status":
+                value = StatusBadge()
+                value.setAccessibleName(f"{label}: not available")
+                value.setMaximumWidth(180)
+            else:
+                value = QLabel("—")
+                value.setObjectName("fieldValue")
+                value.setWordWrap(True)
+                value.setTextInteractionFlags(
+                    Qt.TextInteractionFlag.TextSelectableByMouse
+                    | Qt.TextInteractionFlag.TextSelectableByKeyboard
+                )
+                value.setAccessibleName(label)
+            layout.addWidget(label_widget, row, 0, Qt.AlignmentFlag.AlignTop)
+            layout.addWidget(value, row, 1, Qt.AlignmentFlag.AlignTop)
             self.values[key] = value
+        layout.setColumnMinimumWidth(0, 142)
+        layout.setColumnStretch(1, 1)
         return card
 
     def activate(self, appointment_id: int) -> None:
         # A previous detail request may still be running if the user navigated
-        # away quickly.  Move to a new generation so its response cannot render
+        # away quickly. Move to a new generation so its response cannot render
         # over the newly selected appointment.
         self.invalidate_pending()
         self.clear_data()
         self._appointment_id = appointment_id
+        self.header.set_subtitle(f"Appointment #{appointment_id:06d}")
         self.load()
 
     def load(self) -> None:
@@ -150,7 +180,7 @@ class AppointmentDetailView(BaseApiView):
             "appointment-detail",
             lambda: self.api_client.get(f"/api/v1/appointments/me/{appointment_id}"),
             self._render,
-            controls=(self.back_button, self.medical_button, self.invoice_button),
+            controls=(self.medical_button, self.invoice_button),
             loading_text="Loading appointment…",
         )
 
@@ -175,7 +205,11 @@ class AppointmentDetailView(BaseApiView):
             "clinic_phone": clinic.get("phone"),
         }
         for key, value in values.items():
-            self.values[key].setText(display_text(value))
+            label = self.values[key]
+            if isinstance(label, StatusBadge):
+                label.set_status(value)
+            else:
+                label.setText(display_text(value))
         medical_id = data.get("medical_record_id")
         invoice_id = data.get("invoice_id")
         self._medical_record_id = int(medical_id) if medical_id is not None else None
@@ -195,7 +229,11 @@ class AppointmentDetailView(BaseApiView):
         self._appointment_id = None
         self._medical_record_id = None
         self._invoice_id = None
+        self.header.set_subtitle("Review the visit, care provider, and clinic information.")
         for value in self.values.values():
-            value.setText("—")
+            if isinstance(value, StatusBadge):
+                value.set_status(None)
+            else:
+                value.setText("—")
         self.medical_button.hide()
         self.invoice_button.hide()

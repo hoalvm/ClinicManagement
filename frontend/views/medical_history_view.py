@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QModelIndex, Signal
+from PySide6.QtCore import QModelIndex, Qt, Signal
 from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
-    QHBoxLayout,
-    QLabel,
+    QFrame,
+    QGridLayout,
     QLineEdit,
     QPushButton,
+    QStackedWidget,
     QTableView,
     QVBoxLayout,
     QWidget,
 )
 
 from frontend.api.api_client import ApiClient
+from frontend.ui.icons import apply_line_icon, line_icon
 from frontend.views.common import (
     BaseApiView,
     configure_table,
@@ -22,53 +24,109 @@ from frontend.views.common import (
     require_page,
     table_item,
 )
+from frontend.widgets.empty_state import EmptyState
+from frontend.widgets.page_header import PageHeader
 from frontend.widgets.pagination import PaginationWidget
 
 
 class MedicalHistoryView(BaseApiView):
     medical_record_requested = Signal(int)
 
+    _DEFAULT_SUBTITLE = "Review diagnoses, clinical notes, and care from previous visits."
+
     def __init__(self, api_client: ApiClient, parent: QWidget | None = None) -> None:
         super().__init__(api_client, parent)
         self._page = 1
+
         root = QVBoxLayout(self)
         root.setContentsMargins(28, 24, 28, 24)
         root.setSpacing(14)
-        title = QLabel("Medical History")
-        title.setObjectName("pageTitle")
-        root.addWidget(title)
 
-        controls = QHBoxLayout()
+        self.header = PageHeader("Medical History", self._DEFAULT_SUBTITLE)
+        root.addWidget(self.header)
+
+        filter_card = QFrame()
+        filter_card.setObjectName("filterBar")
+        filters = QGridLayout(filter_card)
+        filters.setContentsMargins(16, 16, 16, 16)
+        filters.setHorizontalSpacing(10)
+        filters.setVerticalSpacing(10)
+
         self.search = QLineEdit()
         self.search.setPlaceholderText("Search diagnosis, symptoms, doctor, or specialty")
         self.search.setClearButtonEnabled(True)
+        self.search.setAccessibleName("Search medical history")
+        search_action = self.search.addAction(
+            line_icon("search", "#64748B", active_color="#0F766E"),
+            QLineEdit.ActionPosition.LeadingPosition,
+        )
+        search_action.setToolTip("Search medical records")
+        filters.addWidget(self.search, 0, 0, 1, 3)
+
         self.refresh_button = QPushButton("Refresh")
         self.refresh_button.setObjectName("secondaryButton")
+        apply_line_icon(
+            self.refresh_button,
+            "refresh",
+            active_color="#0F766E",
+            accessible_name="Refresh medical history",
+        )
         self.details_button = QPushButton("View Details")
         self.details_button.setObjectName("primaryButton")
         self.details_button.setEnabled(False)
-        controls.addWidget(self.search, 1)
-        controls.addWidget(self.refresh_button)
-        controls.addWidget(self.details_button)
-        root.addLayout(controls)
+        apply_line_icon(
+            self.details_button,
+            "eye",
+            "#FFFFFF",
+            disabled_color="#94A3B8",
+            accessible_name="View selected medical record details",
+        )
+
+        filters.setColumnStretch(0, 1)
+        filters.addWidget(self.refresh_button, 1, 1)
+        filters.addWidget(self.details_button, 1, 2)
+        root.addWidget(filter_card)
+        root.addWidget(self.feedback)
         root.addWidget(self.loading)
 
         self.table = QTableView()
+        self.table.setAccessibleName("Medical history results")
+        self.table.setAccessibleDescription(
+            "Select a medical record and press Enter to open its details."
+        )
         self.model: QStandardItemModel = configure_table(
             self.table,
             ["Examination Date", "Doctor", "Specialty", "Diagnosis"],
+            stretch_column=3,
+            column_widths={0: 190, 1: 190, 2: 170},
         )
-        root.addWidget(self.table, 1)
+
+        self.empty_state = EmptyState(
+            "No medical records found",
+            "Try a different search term or refresh to check for new records.",
+            icon="medical",
+            action_text="Refresh results",
+        )
+        self.empty_state.setAccessibleName("No medical history results")
+
+        self.content_stack = QStackedWidget()
+        self.content_stack.addWidget(self.table)
+        self.content_stack.addWidget(self.empty_state)
+        self.content_stack.setCurrentWidget(self.table)
+        root.addWidget(self.content_stack, 1)
+
         self.pagination = PaginationWidget()
+        self.pagination.setAccessibleName("Medical history pagination")
         root.addWidget(self.pagination)
 
         self.search.returnPressed.connect(self._search)
         self.refresh_button.clicked.connect(self._search)
         self.details_button.clicked.connect(self._open_selected)
-        self.table.doubleClicked.connect(self._open_index)
+        self.table.activated.connect(self._open_index)
         self.table.selectionModel().selectionChanged.connect(
-            lambda: self.details_button.setEnabled(bool(self.table.selectionModel().selectedRows()))
+            lambda *_args: self._sync_details_button()
         )
+        self.empty_state.action_requested.connect(self._retry)
         self.pagination.page_changed.connect(self._change_page)
         self.pagination.page_size_changed.connect(self._page_size_changed)
 
@@ -83,6 +141,9 @@ class MedicalHistoryView(BaseApiView):
         keyword = self.search.text().strip()
         if keyword:
             params["keyword"] = keyword
+
+        self.content_stack.setCurrentWidget(self.table)
+        self.details_button.setEnabled(False)
         self.run_api_task(
             "medical-history",
             lambda: self.api_client.get("/api/v1/medical-records/me", params=params),
@@ -91,16 +152,19 @@ class MedicalHistoryView(BaseApiView):
                 self.search,
                 self.refresh_button,
                 self.details_button,
+                self.table,
+                self.empty_state.action_button,
                 self.pagination,
             ),
-            loading_text="Loading medical history…",
+            loading_text="Loading medical history...",
             on_finished=self._sync_details_button,
         )
 
     def _render(self, payload: object) -> None:
         page = require_page(payload)
+        items = page["items"]
         self.model.removeRows(0, self.model.rowCount())
-        for record in page["items"]:
+        for record in items:
             doctor = record.get("doctor") or {}
             record_id = int(record["medical_record_id"])
             self.model.appendRow(
@@ -114,19 +178,25 @@ class MedicalHistoryView(BaseApiView):
                     table_item(record.get("diagnosis")),
                 ]
             )
+
         self._page = int(page.get("page", self._page))
+        total = int(page.get("total", 0))
         self.pagination.set_page(
             self._page,
             int(page.get("total_pages", 0)),
-            int(page.get("total", 0)),
+            total,
         )
+        noun = "record" if total == 1 else "records"
+        self.header.set_subtitle(f"{total:,} medical {noun} found")
+        self.table.clearSelection()
         self.details_button.setEnabled(False)
+        self.content_stack.setCurrentWidget(self.table if items else self.empty_state)
 
     def _selected_id(self) -> int | None:
         indexes = self.table.selectionModel().selectedRows(0)
         if not indexes:
             return None
-        value = indexes[0].data(role=0x0100)
+        value = indexes[0].data(role=Qt.ItemDataRole.UserRole)
         return int(value) if value is not None else None
 
     def _open_selected(self) -> None:
@@ -135,11 +205,15 @@ class MedicalHistoryView(BaseApiView):
             self.medical_record_requested.emit(record_id)
 
     def _open_index(self, index: QModelIndex) -> None:
-        value = self.model.index(index.row(), 0).data(role=0x0100)
+        value = self.model.index(index.row(), 0).data(role=Qt.ItemDataRole.UserRole)
         if value is not None:
             self.medical_record_requested.emit(int(value))
 
     def _search(self) -> None:
+        self._page = 1
+        self.load()
+
+    def _retry(self) -> None:
         self._page = 1
         self.load()
 
@@ -152,11 +226,15 @@ class MedicalHistoryView(BaseApiView):
         self.load()
 
     def _sync_details_button(self) -> None:
-        self.details_button.setEnabled(bool(self.table.selectionModel().selectedRows()))
+        has_selection = bool(self.table.selectionModel().selectedRows())
+        self.details_button.setEnabled(not self._workers and has_selection)
 
     def clear_data(self) -> None:
         self._page = 1
         self.search.clear()
         self.model.removeRows(0, self.model.rowCount())
+        self.table.clearSelection()
         self.pagination.reset()
+        self.header.set_subtitle(self._DEFAULT_SUBTITLE)
+        self.content_stack.setCurrentWidget(self.table)
         self.details_button.setEnabled(False)

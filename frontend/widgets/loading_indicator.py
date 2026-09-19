@@ -7,11 +7,13 @@ class LoadingIndicator(QWidget):
     def __init__(self, text: str = "Loading…", parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("loadingIndicator")
+        self.setAccessibleName("Loading")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
         self._label = QLabel(text)
         self._bar = QProgressBar()
+        self._bar.setAccessibleName("Request in progress")
         self._bar.setRange(0, 0)
         self._bar.setTextVisible(False)
         self._bar.setFixedWidth(110)
@@ -23,6 +25,7 @@ class LoadingIndicator(QWidget):
     def start(self, text: str | None = None) -> None:
         if text:
             self._label.setText(text)
+        self.setAccessibleName(self._label.text())
         self.show()
 
     def stop(self) -> None:

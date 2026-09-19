@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
-    QHBoxLayout,
     QLabel,
     QPushButton,
     QScrollArea,
@@ -19,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient
+from frontend.ui.icons import apply_line_icon
 from frontend.views.common import (
     BaseApiView,
     configure_table,
@@ -29,6 +29,9 @@ from frontend.views.common import (
     require_dict,
     table_item,
 )
+from frontend.widgets.empty_state import EmptyState
+from frontend.widgets.page_header import PageHeader
+from frontend.widgets.status_badge import StatusBadge
 
 
 class InvoiceDetailView(BaseApiView):
@@ -39,97 +42,148 @@ class InvoiceDetailView(BaseApiView):
         super().__init__(api_client, parent)
         self._invoice_id: int | None = None
         self._appointment_id: int | None = None
+
         root = QVBoxLayout(self)
-        root.setContentsMargins(28, 24, 28, 24)
-        header = QHBoxLayout()
-        self.back_button = QPushButton("Back")
-        self.back_button.setObjectName("secondaryButton")
-        self.title = QLabel("Invoice")
-        self.title.setObjectName("pageTitle")
-        header.addWidget(self.back_button)
-        header.addWidget(self.title)
-        header.addStretch()
-        root.addLayout(header)
+        root.setContentsMargins(32, 28, 32, 28)
+        root.setSpacing(14)
+
+        self.header = PageHeader(
+            "Invoice",
+            "Review billed services, totals, and payment information.",
+            show_back=True,
+        )
+        self.back_button = self.header.back_button
+        # ``title`` is retained for existing callers that update the invoice ID.
+        self.title = self.header.title_label
+        self.appointment_button = QPushButton("View appointment")
+        self.appointment_button.setObjectName("primaryButton")
+        apply_line_icon(
+            self.appointment_button,
+            "calendar",
+            "#FFFFFF",
+            active_color="#FFFFFF",
+            accessible_name="View related appointment",
+        )
+        self.header.add_action(self.appointment_button)
+        root.addWidget(self.header)
+        root.addWidget(self.feedback)
         root.addWidget(self.loading)
 
         scroll = QScrollArea()
+        scroll.setObjectName("pageScroll")
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setAccessibleName("Invoice information")
         content = QWidget()
         content_layout = QVBoxLayout(content)
-        content_layout.setContentsMargins(0, 0, 8, 0)
+        content_layout.setContentsMargins(0, 2, 8, 4)
         content_layout.setSpacing(16)
 
         info = QFrame()
-        info.setObjectName("contentCard")
+        info.setObjectName("infoCard")
         info_grid = QGridLayout(info)
-        info_grid.setContentsMargins(22, 18, 22, 18)
+        info_grid.setContentsMargins(24, 20, 24, 20)
+        info_grid.setHorizontalSpacing(28)
+        info_grid.setVerticalSpacing(12)
+        overview_title = QLabel("Invoice overview")
+        overview_title.setObjectName("sectionTitle")
+        info_grid.addWidget(overview_title, 0, 0, 1, 2)
         self.values: dict[str, QLabel] = {}
         fields = [
             ("Appointment ID", "appointment_id"),
-            ("Appointment Date", "appointment_date"),
+            ("Appointment date", "appointment_date"),
             ("Doctor", "doctor"),
-            ("Total Amount", "total"),
+            ("Total amount", "total"),
             ("Status", "status"),
         ]
-        for index, (label, key) in enumerate(fields):
-            row, pair = divmod(index, 2)
+        for row, (label, key) in enumerate(fields, start=1):
             field_label = QLabel(label)
             field_label.setObjectName("fieldLabel")
-            value = QLabel("—")
-            value.setWordWrap(True)
-            info_grid.addWidget(field_label, row, pair * 2)
-            info_grid.addWidget(value, row, pair * 2 + 1)
+            field_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+            value: QLabel
+            if key == "status":
+                value = StatusBadge()
+                value.setMaximumWidth(180)
+            else:
+                value = QLabel("—")
+                value.setObjectName("fieldValue")
+                value.setWordWrap(True)
+                value.setTextInteractionFlags(
+                    Qt.TextInteractionFlag.TextSelectableByMouse
+                    | Qt.TextInteractionFlag.TextSelectableByKeyboard
+                )
+                value.setAccessibleName(label)
+            info_grid.addWidget(field_label, row, 0, Qt.AlignmentFlag.AlignTop)
+            info_grid.addWidget(value, row, 1, Qt.AlignmentFlag.AlignTop)
             self.values[key] = value
+        info_grid.setColumnMinimumWidth(0, 142)
+        info_grid.setColumnStretch(1, 1)
         content_layout.addWidget(info)
 
-        item_title = QLabel("Invoice Items")
+        items_card = QFrame()
+        items_card.setObjectName("tableCard")
+        items_layout = QVBoxLayout(items_card)
+        items_layout.setContentsMargins(20, 18, 20, 20)
+        items_layout.setSpacing(12)
+        item_title = QLabel("Invoice items")
         item_title.setObjectName("sectionTitle")
-        content_layout.addWidget(item_title)
+        items_layout.addWidget(item_title)
         self.items_table = QTableView()
+        self.items_table.setAccessibleName("Invoice line items")
         self.items_model: QStandardItemModel = configure_table(
-            self.items_table, ["Item", "Quantity", "Unit Price", "Line Total"]
+            self.items_table,
+            ["Item", "Quantity", "Unit price", "Line total"],
+            stretch_column=0,
+            column_widths={0: 300, 1: 90, 2: 160, 3: 170},
         )
         self.items_table.setMinimumHeight(190)
-        content_layout.addWidget(self.items_table)
+        items_layout.addWidget(self.items_table)
+        content_layout.addWidget(items_card)
 
         payment_title = QLabel("Payment")
         payment_title.setObjectName("sectionTitle")
         content_layout.addWidget(payment_title)
         self.payment_card = QFrame()
-        self.payment_card.setObjectName("contentCard")
+        self.payment_card.setObjectName("infoCard")
         payment_grid = QGridLayout(self.payment_card)
-        payment_grid.setContentsMargins(22, 18, 22, 18)
+        payment_grid.setContentsMargins(24, 20, 24, 20)
+        payment_grid.setHorizontalSpacing(28)
+        payment_grid.setVerticalSpacing(12)
         self.payment_values: dict[str, QLabel] = {}
-        for index, (label, key) in enumerate(
+        for row, (label, key) in enumerate(
             [
-                ("Payment Method", "method"),
-                ("Amount", "amount"),
-                ("Payment Date", "date"),
+                ("Payment method", "method"),
+                ("Amount paid", "amount"),
+                ("Payment date", "date"),
             ]
         ):
             field_label = QLabel(label)
             field_label.setObjectName("fieldLabel")
             value = QLabel("—")
-            payment_grid.addWidget(field_label, index, 0)
-            payment_grid.addWidget(value, index, 1)
+            value.setObjectName("fieldValue")
+            value.setWordWrap(True)
+            value.setTextInteractionFlags(
+                Qt.TextInteractionFlag.TextSelectableByMouse
+                | Qt.TextInteractionFlag.TextSelectableByKeyboard
+            )
+            value.setAccessibleName(label)
+            payment_grid.addWidget(field_label, row, 0, Qt.AlignmentFlag.AlignTop)
+            payment_grid.addWidget(value, row, 1, Qt.AlignmentFlag.AlignTop)
             self.payment_values[key] = value
-        self.not_paid = QLabel("Not paid")
-        self.not_paid.setObjectName("emptyState")
+        payment_grid.setColumnMinimumWidth(0, 142)
+        payment_grid.setColumnStretch(1, 1)
+        self.not_paid = EmptyState(
+            "Payment pending",
+            "No payment has been recorded for this invoice yet.",
+            icon="invoice",
+        )
         content_layout.addWidget(self.payment_card)
         content_layout.addWidget(self.not_paid)
-
-        actions = QHBoxLayout()
-        actions.addStretch()
-        self.appointment_button = QPushButton("View Appointment")
-        self.appointment_button.setObjectName("primaryButton")
-        actions.addWidget(self.appointment_button)
-        content_layout.addLayout(actions)
         content_layout.addStretch()
         scroll.setWidget(content)
         root.addWidget(scroll, 1)
 
-        self.back_button.clicked.connect(self.back_requested)
+        self.header.back_requested.connect(self.back_requested.emit)
         self.appointment_button.clicked.connect(self._open_appointment)
         self.clear_data()
 
@@ -138,6 +192,7 @@ class InvoiceDetailView(BaseApiView):
         self.clear_data()
         self._invoice_id = invoice_id
         self.title.setText(f"Invoice #{invoice_id:06d}")
+        self.header.set_subtitle("Review billed services, totals, and payment information.")
         self.load()
 
     def load(self) -> None:
@@ -148,7 +203,7 @@ class InvoiceDetailView(BaseApiView):
             "invoice-detail",
             lambda: self.api_client.get(f"/api/v1/invoices/me/{invoice_id}"),
             self._render,
-            controls=(self.back_button, self.appointment_button),
+            controls=(self.appointment_button,),
             loading_text="Loading invoice…",
         )
 
@@ -166,18 +221,25 @@ class InvoiceDetailView(BaseApiView):
             "status": data.get("status"),
         }
         for key, value in values.items():
-            self.values[key].setText(display_text(value))
+            label = self.values[key]
+            if isinstance(label, StatusBadge):
+                label.set_status(value)
+            else:
+                label.setText(display_text(value))
 
         self.items_model.removeRows(0, self.items_model.rowCount())
         for item in data.get("items", []):
-            self.items_model.appendRow(
-                [
-                    table_item(item.get("item_name")),
-                    table_item(item.get("quantity")),
-                    table_item(format_money(item.get("unit_price"))),
-                    table_item(format_money(item.get("line_total"))),
-                ]
-            )
+            row = [
+                table_item(item.get("item_name")),
+                table_item(item.get("quantity")),
+                table_item(format_money(item.get("unit_price"))),
+                table_item(format_money(item.get("line_total"))),
+            ]
+            for numeric_item in row[1:]:
+                numeric_item.setTextAlignment(
+                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+                )
+            self.items_model.appendRow(row)
 
         payment = data.get("payment")
         if isinstance(payment, dict):
@@ -198,11 +260,15 @@ class InvoiceDetailView(BaseApiView):
         self._invoice_id = None
         self._appointment_id = None
         self.title.setText("Invoice")
+        self.header.set_subtitle("Review billed services, totals, and payment information.")
         for value in self.values.values():
-            value.setText("—")
+            if isinstance(value, StatusBadge):
+                value.set_status(None)
+            else:
+                value.setText("—")
         for value in self.payment_values.values():
             value.setText("—")
         self.items_model.removeRows(0, self.items_model.rowCount())
         self.payment_card.hide()
-        self.not_paid.show()
+        self.not_paid.hide()
         self.appointment_button.hide()

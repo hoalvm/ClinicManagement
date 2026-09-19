@@ -8,17 +8,17 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from PySide6.QtCore import QObject, Qt, QThreadPool, Signal, Slot
-from PySide6.QtGui import QBrush, QColor, QStandardItem, QStandardItemModel
+from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
-    QMessageBox,
     QTableView,
     QWidget,
 )
 
 from frontend.api.api_client import ApiClient, ApiError
 from frontend.api.workers import ApiWorker
+from frontend.widgets.feedback_banner import FeedbackBanner
 from frontend.widgets.loading_indicator import LoadingIndicator
 
 
@@ -63,8 +63,10 @@ class BaseApiView(QWidget):
 
     def __init__(self, api_client: ApiClient, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setObjectName("pageRoot")
         self.api_client = api_client
         self.loading = LoadingIndicator(parent=self)
+        self.feedback = FeedbackBanner(parent=self)
         self._workers: dict[tuple[str, int], ApiWorker] = {}
         self._handlers: dict[tuple[str, int], _TaskHandler] = {}
         self._generation = 0
@@ -85,6 +87,7 @@ class BaseApiView(QWidget):
         if task_key in self._workers:
             return False
 
+        self.feedback.clear()
         controlled_widgets = tuple(controls)
         for widget in controlled_widgets:
             widget.setEnabled(False)
@@ -113,10 +116,10 @@ class BaseApiView(QWidget):
         try:
             handler.on_success(result)
         except (KeyError, TypeError, ValueError, AttributeError):
-            QMessageBox.warning(
-                self,
+            self.feedback.show_message(
                 "Unexpected response",
                 "The server response did not contain the expected information.",
+                severity="error",
             )
 
     def _task_failed(self, handler: _TaskHandler, exc: Exception) -> None:
@@ -126,12 +129,12 @@ class BaseApiView(QWidget):
             if exc.status_code == 401 and handler.expire_on_401:
                 self.session_expired.emit()
                 return
-            QMessageBox.warning(self, "Request failed", exc.message)
+            self.feedback.show_message("Request failed", exc.message, severity="error")
             return
-        QMessageBox.critical(
-            self,
+        self.feedback.show_message(
             "Unexpected error",
             "An unexpected error occurred while processing the request.",
+            severity="error",
         )
 
     def _task_finished(self, handler: _TaskHandler) -> None:
@@ -156,13 +159,20 @@ class BaseApiView(QWidget):
             for widget in handler.controls:
                 widget.setEnabled(True)
         self.loading.stop()
+        self.feedback.clear()
         self._generation += 1
 
     def clear_data(self) -> None:
         """Clear patient-specific state. Subclasses override when needed."""
 
 
-def configure_table(table: QTableView, headers: list[str]) -> QStandardItemModel:
+def configure_table(
+    table: QTableView,
+    headers: list[str],
+    *,
+    stretch_column: int | None = None,
+    column_widths: dict[int, int] | None = None,
+) -> QStandardItemModel:
     model = QStandardItemModel(0, len(headers), table)
     model.setHorizontalHeaderLabels(headers)
     table.setModel(model)
@@ -171,8 +181,20 @@ def configure_table(table: QTableView, headers: list[str]) -> QStandardItemModel
     table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
     table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
     table.setSortingEnabled(False)
+    table.setShowGrid(False)
+    table.setWordWrap(False)
+    table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+    table.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
     table.verticalHeader().setVisible(False)
-    table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+    table.verticalHeader().setDefaultSectionSize(46)
+    header = table.horizontalHeader()
+    header.setMinimumSectionSize(72)
+    header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+    header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+    if stretch_column is not None:
+        header.setSectionResizeMode(stretch_column, QHeaderView.ResizeMode.Stretch)
+    for column, width in (column_widths or {}).items():
+        table.setColumnWidth(column, width)
     return model
 
 
@@ -189,20 +211,8 @@ def table_item(value: object, *, user_data: object | None = None) -> QStandardIt
 
 
 def status_item(value: object) -> QStandardItem:
-    item = table_item(value)
-    status = str(value or "").upper()
-    foreground, background = {
-        "PAID": ("#166534", "#dcfce7"),
-        "COMPLETED": ("#166534", "#dcfce7"),
-        "CONFIRMED": ("#075985", "#e0f2fe"),
-        "CHECKED_IN": ("#075985", "#e0f2fe"),
-        "IN_PROGRESS": ("#5b21b6", "#ede9fe"),
-        "PENDING": ("#92400e", "#fef3c7"),
-        "UNPAID": ("#92400e", "#fef3c7"),
-        "CANCELLED": ("#991b1b", "#fee2e2"),
-    }.get(status, ("#334155", "#e2e8f0"))
-    item.setForeground(QBrush(QColor(foreground)))
-    item.setBackground(QBrush(QColor(background)))
+    status = str(value or "").strip().replace("_", " ").title()
+    item = table_item(status)
     item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
     return item
 

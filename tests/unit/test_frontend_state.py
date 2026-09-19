@@ -11,11 +11,16 @@ from frontend.api.api_client import ApiClient
 from frontend.core.session import SessionState
 from frontend.main_window import MainWindow
 from frontend.views.appointment_detail_view import AppointmentDetailView
+from frontend.views.appointment_history_view import AppointmentHistoryView
 from frontend.views.common import BaseApiView, table_item
+from frontend.views.dashboard_view import DashboardView
 from frontend.views.invoice_detail_view import InvoiceDetailView
+from frontend.views.invoice_history_view import InvoiceHistoryView
+from frontend.views.medical_history_view import MedicalHistoryView
 from frontend.views.medical_result_view import MedicalResultView
 from frontend.views.patient_profile_view import NULL_DATE, PatientProfileView
 from frontend.views.register_view import RegisterView
+from frontend.widgets.sidebar import Sidebar
 
 
 @pytest.fixture(scope="module")
@@ -213,3 +218,217 @@ def test_table_item_tooltip_preserves_full_elided_text() -> None:
 
     assert item.text() == text
     assert item.toolTip() == text
+
+
+def test_registration_and_profile_addresses_use_tab_for_focus_navigation(
+    qt_app: QApplication,
+) -> None:
+    """Multiline address fields must not trap keyboard-only users."""
+
+    register = RegisterView(MagicMock(spec=ApiClient))
+    profile = PatientProfileView(MagicMock(spec=ApiClient), SessionState())
+
+    assert register.address.tabChangesFocus()
+    assert profile.address.tabChangesFocus()
+
+    register.deleteLater()
+    profile.deleteLater()
+    qt_app.processEvents()
+
+
+@pytest.mark.parametrize(
+    ("view_type", "filter_attribute", "filter_name", "table_name"),
+    [
+        (
+            AppointmentHistoryView,
+            "search",
+            "Search appointment history",
+            "Appointment history results",
+        ),
+        (
+            MedicalHistoryView,
+            "search",
+            "Search medical history",
+            "Medical history results",
+        ),
+        (
+            InvoiceHistoryView,
+            "status",
+            "Filter invoices by payment status",
+            "Invoice history results",
+        ),
+    ],
+)
+def test_history_filters_and_tables_have_accessible_names(
+    qt_app: QApplication,
+    view_type: type[BaseApiView],
+    filter_attribute: str,
+    filter_name: str,
+    table_name: str,
+) -> None:
+    view = view_type(MagicMock(spec=ApiClient))
+    filter_control = getattr(view, filter_attribute)
+
+    assert filter_control.accessibleName() == filter_name
+    assert view.table.accessibleName() == table_name
+    assert "Enter" in view.table.accessibleDescription()
+    assert view.refresh_button.accessibleName()
+    assert view.details_button.accessibleName()
+
+    view.deleteLater()
+    qt_app.processEvents()
+
+
+@pytest.mark.parametrize(
+    ("view_type", "signal_attribute", "record_id"),
+    [
+        (AppointmentHistoryView, "appointment_requested", 101),
+        (MedicalHistoryView, "medical_record_requested", 202),
+        (InvoiceHistoryView, "invoice_requested", 303),
+    ],
+)
+def test_activating_history_row_opens_its_record(
+    qt_app: QApplication,
+    view_type: type[BaseApiView],
+    signal_attribute: str,
+    record_id: int,
+) -> None:
+    view = view_type(MagicMock(spec=ApiClient))
+    received: list[int] = []
+    getattr(view, signal_attribute).connect(received.append)
+    row = [table_item("Record", user_data=record_id)]
+    row.extend(table_item("") for _ in range(view.model.columnCount() - 1))
+    view.model.appendRow(row)
+
+    view.table.activated.emit(view.model.index(0, view.model.columnCount() - 1))
+
+    assert received == [record_id]
+    view.deleteLater()
+    qt_app.processEvents()
+
+
+@pytest.mark.parametrize(
+    ("view_type", "id_attribute"),
+    [
+        (AppointmentDetailView, "_appointment_id"),
+        (MedicalResultView, "_medical_record_id"),
+        (InvoiceDetailView, "_invoice_id"),
+    ],
+)
+def test_detail_back_remains_available_while_request_starts(
+    qt_app: QApplication,
+    view_type: type[BaseApiView],
+    id_attribute: str,
+) -> None:
+    view = view_type(MagicMock(spec=ApiClient))
+    captured_controls: tuple[QPushButton, ...] = ()
+
+    def start_pending_task(
+        _key: str,
+        _operation: object,
+        _on_success: object,
+        *,
+        controls: tuple[QPushButton, ...] = (),
+        **_kwargs: object,
+    ) -> None:
+        nonlocal captured_controls
+        captured_controls = controls
+        for control in controls:
+            control.setEnabled(False)
+
+    view.run_api_task = start_pending_task  # type: ignore[method-assign]
+    setattr(view, id_attribute, 42)
+    view.back_button.setEnabled(True)
+
+    view.load()
+
+    assert view.back_button not in captured_controls
+    assert view.back_button.isEnabled()
+    view.deleteLater()
+    qt_app.processEvents()
+
+
+@pytest.mark.parametrize(
+    ("view_factory", "empty_attribute"),
+    [
+        (
+            lambda: MedicalResultView(MagicMock(spec=ApiClient)),
+            "no_prescription",
+        ),
+        (lambda: InvoiceDetailView(MagicMock(spec=ApiClient)), "not_paid"),
+        (lambda: DashboardView(MagicMock(spec=ApiClient)), "no_upcoming"),
+    ],
+)
+def test_detail_empty_states_are_hidden_before_successful_response(
+    qt_app: QApplication,
+    view_factory: object,
+    empty_attribute: str,
+) -> None:
+    view = view_factory()
+
+    assert getattr(view, empty_attribute).isHidden()
+
+    view.deleteLater()
+    qt_app.processEvents()
+
+
+def test_sidebar_compact_mode_preserves_icon_navigation_accessibility(
+    qt_app: QApplication,
+) -> None:
+    sidebar = Sidebar()
+
+    assert sidebar.width() == Sidebar.EXPANDED_WIDTH
+    assert not sidebar.is_compact
+    for route, label in Sidebar._ITEMS:
+        button = sidebar._buttons[route]
+        assert button.text() == label
+        assert button.accessibleName() == label
+        assert not button.icon().isNull()
+
+    sidebar.set_compact(True)
+
+    assert sidebar.width() == Sidebar.COMPACT_WIDTH
+    assert sidebar.is_compact
+    for route, label in Sidebar._ITEMS:
+        button = sidebar._buttons[route]
+        assert button.text() == ""
+        assert button.accessibleName() == label
+        assert button.toolTip() == label
+        assert not button.icon().isNull()
+    assert sidebar.logout_button.accessibleName() == "Log out"
+
+    sidebar.set_compact(False)
+
+    assert sidebar.width() == Sidebar.EXPANDED_WIDTH
+    assert not sidebar.is_compact
+    assert all(sidebar._buttons[route].text() == label for route, label in Sidebar._ITEMS)
+    sidebar.deleteLater()
+    qt_app.processEvents()
+
+
+def test_dashboard_stat_cards_reflow_for_wide_and_narrow_layouts(
+    qt_app: QApplication,
+) -> None:
+    dashboard = DashboardView(MagicMock(spec=ApiClient))
+
+    dashboard.resize(1100, 700)
+    dashboard._reflow_stats(force=True)
+    wide_positions = [
+        dashboard.cards.getItemPosition(dashboard.cards.indexOf(card))[:2]
+        for card in dashboard._stat_cards
+    ]
+
+    assert dashboard._stat_columns == 4
+    assert wide_positions == [(0, 0), (0, 1), (0, 2), (0, 3)]
+
+    dashboard.resize(900, 700)
+    dashboard._reflow_stats(force=True)
+    narrow_positions = [
+        dashboard.cards.getItemPosition(dashboard.cards.indexOf(card))[:2]
+        for card in dashboard._stat_cards
+    ]
+
+    assert dashboard._stat_columns == 2
+    assert narrow_positions == [(0, 0), (0, 1), (1, 0), (1, 1)]
+    dashboard.deleteLater()
+    qt_app.processEvents()
