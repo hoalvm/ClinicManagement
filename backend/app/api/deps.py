@@ -42,6 +42,23 @@ def get_current_patient(
     return patient
 
 
+def get_optional_patient(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    session: Annotated[Session, Depends(get_db)],
+) -> Patient | None:
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        return None
+    try:
+        token_payload = decode_access_token(credentials.credentials)
+        user = UserRepository(session).get_by_id(token_payload.user_id)
+        if user and user.is_active and user.role == "PATIENT":
+            return user.patient or PatientRepository(session).get_by_user_id(user.user_id)
+    except Exception:
+        return None
+    return None
+
+
 DatabaseSession = Annotated[Session, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 CurrentPatient = Annotated[Patient, Depends(get_current_patient)]
+OptionalPatient = Annotated[Patient | None, Depends(get_optional_patient)]

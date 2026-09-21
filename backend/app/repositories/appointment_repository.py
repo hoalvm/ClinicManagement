@@ -126,3 +126,48 @@ class AppointmentRepository:
             Appointment.patient_id == patient_id
         )
         return int(self.session.scalar(statement) or 0)
+
+    def get_active_appointments_for_doctor(
+        self, doctor_id: int, appointment_date: date
+    ) -> list[Appointment]:
+        statement = (
+            select(Appointment)
+            .where(
+                Appointment.doctor_id == doctor_id,
+                Appointment.appointment_date == appointment_date,
+                Appointment.status != "CANCELLED",
+            )
+            .order_by(Appointment.start_time)
+        )
+        return list(self.session.execute(statement).scalars().all())
+
+    def get_active_appointments_for_patient(
+        self, patient_id: int, appointment_date: date
+    ) -> list[Appointment]:
+        statement = (
+            select(Appointment)
+            .where(
+                Appointment.patient_id == patient_id,
+                Appointment.appointment_date == appointment_date,
+                Appointment.status != "CANCELLED",
+            )
+            .order_by(Appointment.start_time)
+        )
+        return list(self.session.execute(statement).scalars().all())
+
+    def get_active_appointments_for_patient_all(self, patient_id: int) -> list[Appointment]:
+        statement = (
+            select(Appointment)
+            .options(*_appointment_load_options())
+            .where(
+                Appointment.patient_id == patient_id,
+                Appointment.status.in_(("PENDING", "CONFIRMED")),
+            )
+            .order_by(Appointment.appointment_date.asc(), Appointment.start_time.asc())
+        )
+        return list(self.session.execute(statement).unique().scalars().all())
+
+    def add(self, appointment: Appointment) -> Appointment:
+        self.session.add(appointment)
+        self.session.flush()
+        return appointment

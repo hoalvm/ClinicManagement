@@ -36,6 +36,7 @@ AVAILABLE_ICONS = tuple(icon.value for icon in IconName)
 
 _ALIASES: dict[str, IconName] = {
     "appointments": IconName.CALENDAR,
+    "booking": IconName.CALENDAR,
     "medical_history": IconName.MEDICAL,
     "profile": IconName.USER,
     "invoice_history": IconName.INVOICE,

@@ -391,20 +391,22 @@ def seed_database(session: Session) -> None:
         )
 
     for doctor in doctors:
-        _ensure_schedule(
-            session,
-            doctor,
-            day_of_week=2,
-            start_time=time(8, 0),
-            end_time=time(12, 0),
-        )
-        _ensure_schedule(
-            session,
-            doctor,
-            day_of_week=4,
-            start_time=time(13, 0),
-            end_time=time(17, 0),
-        )
+        for day in (1, 2, 3, 5, 6):
+            _ensure_schedule(
+                session,
+                doctor,
+                day_of_week=day,
+                start_time=time(8, 0),
+                end_time=time(12, 0),
+            )
+        for day in (2, 4):
+            _ensure_schedule(
+                session,
+                doctor,
+                day_of_week=day,
+                start_time=time(13, 0),
+                end_time=time(17, 0),
+            )
 
     patient_users = (
         _ensure_user(
