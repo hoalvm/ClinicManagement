@@ -16,7 +16,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from frontend.core.i18n import get_i18n, t
 from frontend.ui.icons import apply_line_icon
+from frontend.widgets.language_selector import LanguageSelector
 
 
 class Sidebar(QFrame):
@@ -30,13 +32,15 @@ class Sidebar(QFrame):
 
     _ITEMS = (
         ("dashboard", "Dashboard"),
-        ("profile", "My Profile"),
+        ("booking", "Book Appointment"),
         ("appointments", "Appointments"),
+        ("profile", "My Profile"),
         ("medical_history", "Medical History"),
         ("invoice_history", "Invoice History"),
     )
     _ICONS = {
         "dashboard": "dashboard",
+        "booking": "calendar",
         "profile": "user",
         "appointments": "calendar",
         "medical_history": "medical",
@@ -75,6 +79,10 @@ class Sidebar(QFrame):
         self._build_user_context()
         self._layout.addSpacing(8)
 
+        self.lang_selector = LanguageSelector(self, show_label=False)
+        self._layout.addWidget(self.lang_selector)
+        self._layout.addSpacing(6)
+
         self.logout_button = QPushButton("Logout")
         self.logout_button.setObjectName("logoutButton")
         self.logout_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -90,7 +98,35 @@ class Sidebar(QFrame):
         self.logout_button.clicked.connect(self.logout_requested)
         self._layout.addWidget(self.logout_button)
 
+        get_i18n().language_changed.connect(self.retranslate_ui)
         self.set_compact(False)
+        self.retranslate_ui()
+
+    _ROUTE_TO_KEY = {
+        "dashboard": "nav_dashboard",
+        "booking": "nav_booking",
+        "appointments": "nav_appointments",
+        "profile": "nav_profile",
+        "medical_history": "nav_medical_history",
+        "invoice_history": "nav_invoice_history",
+    }
+
+    def retranslate_ui(self) -> None:
+        """Update navigation labels based on active language."""
+        self._overview_label.setText(t("nav_overview"))
+        self._care_label.setText(t("nav_my_care"))
+        for route, key in self._ROUTE_TO_KEY.items():
+            if route in self._buttons:
+                label = t(key)
+                button = self._buttons[route]
+                button.setAccessibleName(label)
+                button.setToolTip(label)
+                button.setText("" if self._compact else label)
+        self.logout_button.setText("" if self._compact else t("nav_logout"))
+        self.logout_button.setToolTip(t("nav_logout"))
+        self.logout_button.setAccessibleName(
+            "Log out" if get_i18n().current_language == "en" else t("nav_logout")
+        )
 
     @property
     def is_compact(self) -> bool:
@@ -227,16 +263,18 @@ class Sidebar(QFrame):
         self._overview_label.setVisible(not compact)
         self._care_label.setVisible(not compact)
         self._user_text.setVisible(not compact)
+        if hasattr(self, "lang_selector"):
+            self.lang_selector.setVisible(not compact)
 
-        for route, label in self._ITEMS:
-            button = self._buttons[route]
-            button.setText("" if compact else label)
-            button.setToolTip(label)
-            button.setProperty("compact", compact)
-            button.style().unpolish(button)
-            button.style().polish(button)
+        self.retranslate_ui()
 
-        self.logout_button.setText("" if compact else "Logout")
+        for route in self._ROUTE_TO_KEY:
+            if route in self._buttons:
+                button = self._buttons[route]
+                button.setProperty("compact", compact)
+                button.style().unpolish(button)
+                button.style().polish(button)
+
         self.logout_button.setProperty("compact", compact)
         self.logout_button.style().unpolish(self.logout_button)
         self.logout_button.style().polish(self.logout_button)

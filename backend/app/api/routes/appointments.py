@@ -1,8 +1,8 @@
-"""Current patient's read-only appointment endpoints."""
+"""Current patient's appointment endpoints, booking, and schedule changes."""
 
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, status
 
 from backend.app.api.deps import CurrentPatient, DatabaseSession
 from backend.app.schemas.appointment import (
@@ -10,8 +10,13 @@ from backend.app.schemas.appointment import (
     AppointmentPage,
     AppointmentSummary,
 )
+from backend.app.schemas.booking import (
+    AppointmentCancelRequest,
+    AppointmentCreateRequest,
+    AppointmentRescheduleRequest,
+)
 from backend.app.schemas.common import AppointmentStatus
-from backend.app.services import AppointmentService
+from backend.app.services import AppointmentService, BookingService
 
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
@@ -48,3 +53,36 @@ def get_appointment_detail(
     session: DatabaseSession,
 ) -> AppointmentDetail:
     return AppointmentService(session).get_detail(appointment_id, current_patient.patient_id)
+
+
+@router.post("", response_model=AppointmentDetail, status_code=status.HTTP_201_CREATED)
+def create_appointment(
+    body: AppointmentCreateRequest,
+    current_patient: CurrentPatient,
+    session: DatabaseSession,
+) -> AppointmentDetail:
+    return BookingService(session).book_appointment(current_patient.patient_id, body)
+
+
+@router.post("/{appointment_id}/cancel", response_model=AppointmentDetail)
+def cancel_appointment(
+    appointment_id: int,
+    body: AppointmentCancelRequest,
+    current_patient: CurrentPatient,
+    session: DatabaseSession,
+) -> AppointmentDetail:
+    return BookingService(session).cancel_appointment(
+        appointment_id, current_patient.patient_id, body
+    )
+
+
+@router.post("/{appointment_id}/reschedule", response_model=AppointmentDetail)
+def reschedule_appointment(
+    appointment_id: int,
+    body: AppointmentRescheduleRequest,
+    current_patient: CurrentPatient,
+    session: DatabaseSession,
+) -> AppointmentDetail:
+    return BookingService(session).reschedule_appointment(
+        appointment_id, current_patient.patient_id, body
+    )

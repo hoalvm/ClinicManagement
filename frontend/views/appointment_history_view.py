@@ -35,6 +35,7 @@ from frontend.widgets.status_badge import StatusBadgeDelegate
 
 class AppointmentHistoryView(BaseApiView):
     appointment_requested = Signal(int)
+    book_requested = Signal()
 
     _DEFAULT_SUBTITLE = "Find and review your upcoming and previous clinic visits."
 
@@ -47,6 +48,15 @@ class AppointmentHistoryView(BaseApiView):
         root.setSpacing(14)
 
         self.header = PageHeader("Appointment History", self._DEFAULT_SUBTITLE)
+        from frontend.core.i18n import get_i18n, t
+
+        self.book_button = QPushButton(t("btn_new_booking"))
+        self.book_button.setObjectName("primaryButton")
+        self.book_button.clicked.connect(self.book_requested.emit)
+        get_i18n().language_changed.connect(
+            lambda _: self.book_button.setText(t("btn_new_booking"))
+        )
+        self.header.add_action(self.book_button)
         root.addWidget(self.header)
 
         filter_card = QFrame()

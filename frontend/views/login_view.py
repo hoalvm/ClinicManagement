@@ -17,7 +17,9 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient, ApiError
+from frontend.core.i18n import get_i18n, t
 from frontend.views.common import BaseApiView, require_dict
+from frontend.widgets.language_selector import LanguageSelector
 
 
 class LoginView(BaseApiView):
@@ -29,7 +31,14 @@ class LoginView(BaseApiView):
         self.setObjectName("authPage")
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(34, 28, 34, 28)
+        root.setContentsMargins(34, 18, 34, 24)
+
+        # Top bar with Language Selector
+        top_bar = QHBoxLayout()
+        top_bar.addStretch()
+        self.lang_selector = LanguageSelector(self, show_label=True)
+        top_bar.addWidget(self.lang_selector)
+        root.addLayout(top_bar)
         root.addStretch()
 
         shell = QWidget()
@@ -58,34 +67,32 @@ class LoginView(BaseApiView):
         hero_layout.addLayout(brand_row)
         hero_layout.addStretch()
 
-        hero_title = QLabel("Your health information,\nin one calm place.")
-        hero_title.setObjectName("authHeroTitle")
-        hero_title.setWordWrap(True)
-        hero_layout.addWidget(hero_title)
+        self.hero_title = QLabel("Your health information,\nin one calm place.")
+        self.hero_title.setObjectName("authHeroTitle")
+        self.hero_title.setWordWrap(True)
+        hero_layout.addWidget(self.hero_title)
 
-        hero_text = QLabel(
+        self.hero_text = QLabel(
             "Review appointments, medical records, prescriptions, and invoices "
             "through one secure patient portal."
         )
-        hero_text.setObjectName("authHeroText")
-        hero_text.setWordWrap(True)
-        hero_layout.addWidget(hero_text)
+        self.hero_text.setObjectName("authHeroText")
+        self.hero_text.setWordWrap(True)
+        hero_layout.addWidget(self.hero_text)
         hero_layout.addSpacing(10)
 
-        for feature in (
-            "✓  Private access to your clinic records",
-            "✓  Clear appointment and billing history",
-            "✓  Designed for quick, simple follow-up",
-        ):
-            label = QLabel(feature)
-            label.setObjectName("authHeroText")
-            label.setWordWrap(True)
-            hero_layout.addWidget(label)
+        self.feature_labels: list[QLabel] = []
+        for _ in range(3):
+            lbl = QLabel()
+            lbl.setObjectName("authHeroText")
+            lbl.setWordWrap(True)
+            hero_layout.addWidget(lbl)
+            self.feature_labels.append(lbl)
         hero_layout.addStretch()
 
-        secure = QLabel("SECURE PATIENT PORTAL")
-        secure.setObjectName("sectionEyebrow")
-        hero_layout.addWidget(secure)
+        self.secure_label = QLabel("SECURE PATIENT PORTAL")
+        self.secure_label.setObjectName("sectionEyebrow")
+        hero_layout.addWidget(self.secure_label)
 
         card = QFrame()
         card.setObjectName("authCard")
@@ -95,36 +102,36 @@ class LoginView(BaseApiView):
         card_layout.setContentsMargins(38, 36, 38, 36)
         card_layout.setSpacing(11)
 
-        eyebrow = QLabel("WELCOME BACK")
-        eyebrow.setObjectName("sectionEyebrow")
-        title = QLabel("Sign in to ClinicCare")
-        title.setObjectName("authTitle")
-        subtitle = QLabel("Use your patient username to continue.")
-        subtitle.setObjectName("mutedLabel")
-        subtitle.setWordWrap(True)
-        card_layout.addWidget(eyebrow)
-        card_layout.addWidget(title)
-        card_layout.addWidget(subtitle)
+        self.eyebrow_label = QLabel("WELCOME BACK")
+        self.eyebrow_label.setObjectName("sectionEyebrow")
+        self.title_label = QLabel("Sign in to ClinicCare")
+        self.title_label.setObjectName("authTitle")
+        self.subtitle_label = QLabel("Use your patient username to continue.")
+        self.subtitle_label.setObjectName("mutedLabel")
+        self.subtitle_label.setWordWrap(True)
+        card_layout.addWidget(self.eyebrow_label)
+        card_layout.addWidget(self.title_label)
+        card_layout.addWidget(self.subtitle_label)
         card_layout.addSpacing(12)
 
-        username_label = QLabel("Username")
+        self.username_label = QLabel("Username")
         self.username = QLineEdit()
         self.username.setMaxLength(50)
         self.username.setPlaceholderText("Enter your username")
         self.username.setClearButtonEnabled(True)
         self.username.setAccessibleName("Username")
-        username_label.setBuddy(self.username)
-        card_layout.addWidget(username_label)
+        self.username_label.setBuddy(self.username)
+        card_layout.addWidget(self.username_label)
         card_layout.addWidget(self.username)
 
-        password_label = QLabel("Password")
+        self.password_label = QLabel("Password")
         self.password = QLineEdit()
         self.password.setMaxLength(128)
         self.password.setPlaceholderText("Enter your password")
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
         self.password.setAccessibleName("Password")
-        password_label.setBuddy(self.password)
-        card_layout.addWidget(password_label)
+        self.password_label.setBuddy(self.password)
+        card_layout.addWidget(self.password_label)
         card_layout.addWidget(self.password)
 
         self.show_password = QCheckBox("Show password")
@@ -142,10 +149,10 @@ class LoginView(BaseApiView):
         card_layout.addWidget(self.login_button)
         card_layout.addWidget(self.register_button)
 
-        help_text = QLabel("Need help? Contact your clinic directly.")
-        help_text.setObjectName("helperText")
-        help_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        card_layout.addWidget(help_text)
+        self.help_text = QLabel("Need help? Contact your clinic directly.")
+        self.help_text.setObjectName("helperText")
+        self.help_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card_layout.addWidget(self.help_text)
 
         shell_layout.addWidget(hero, 1)
         shell_layout.addWidget(card, 1)
@@ -161,6 +168,34 @@ class LoginView(BaseApiView):
         self.register_button.clicked.connect(self.register_requested)
         self.username.returnPressed.connect(self._login)
         self.password.returnPressed.connect(self._login)
+        self.username.setFocus()
+
+        get_i18n().language_changed.connect(self.retranslate_ui)
+        self.retranslate_ui()
+
+    def retranslate_ui(self) -> None:
+        """Update all text in LoginView according to current language."""
+        self.hero_title.setText(t("tagline"))
+        self.hero_text.setText(t("tagline_desc"))
+        features = [
+            f"✓  {t('hero_bullet_1')}",
+            f"✓  {t('hero_bullet_2')}",
+            f"✓  {t('hero_bullet_3')}",
+        ]
+        for lbl, feat in zip(self.feature_labels, features, strict=False):
+            lbl.setText(feat)
+        self.secure_label.setText(t("secure_portal"))
+        self.eyebrow_label.setText(t("welcome_back"))
+        self.title_label.setText(t("sign_in_title"))
+        self.subtitle_label.setText(t("sign_in_subtitle"))
+        self.username_label.setText(t("username"))
+        self.username.setPlaceholderText(t("username"))
+        self.password_label.setText(t("password"))
+        self.password.setPlaceholderText(t("password"))
+        self.show_password.setText(t("show_password"))
+        self.login_button.setText(t("sign_in_button"))
+        self.register_button.setText(t("create_account_button"))
+        self.help_text.setText(t("need_help"))
         self.username.setFocus()
 
     def set_username(self, username: str) -> None:

@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     db_driver: str = "ODBC Driver 18 for SQL Server"
     db_encrypt: str = "yes"
     db_trust_server_certificate: str = "yes"
+    db_trusted_connection: str = "no"
 
     jwt_secret: SecretStr
     jwt_algorithm: str = "HS256"
@@ -71,6 +72,21 @@ class Settings(BaseSettings):
     def database_url(self) -> URL:
         """Build a safely escaped SQLAlchemy URL for SQL Server/pyodbc."""
 
+        query = {
+            "driver": self.db_driver,
+            "Encrypt": self.db_encrypt,
+            "TrustServerCertificate": self.db_trust_server_certificate,
+        }
+        if str(self.db_trusted_connection).strip().lower() in {"yes", "true", "1"}:
+            query["trusted_connection"] = "yes"
+            return URL.create(
+                drivername="mssql+pyodbc",
+                host=self.db_host,
+                port=self.db_port,
+                database=self.db_name,
+                query=query,
+            )
+
         return URL.create(
             drivername="mssql+pyodbc",
             username=self.db_user,
@@ -78,11 +94,7 @@ class Settings(BaseSettings):
             host=self.db_host,
             port=self.db_port,
             database=self.db_name,
-            query={
-                "driver": self.db_driver,
-                "Encrypt": self.db_encrypt,
-                "TrustServerCertificate": self.db_trust_server_certificate,
-            },
+            query=query,
         )
 
 
