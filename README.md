@@ -258,6 +258,7 @@ ClinicManagement/
 │   ├── views/                      # Các trang nghiệp vụ (Đặt lịch, Bệnh án, Hóa đơn,...)
 │   └── widgets/                    # Các component UI tái sử dụng (Header, Badge, Banner,...)
 ├── script/
+│   ├── init_run.ps1                # Script khởi tạo venv, .env và cài đặt toàn bộ thư viện tự động
 │   ├── backend_run.ps1             # Script khởi động nhanh FastAPI backend
 │   ├── frontend_run.ps1            # Script khởi động nhanh PySide6 desktop client
 │   ├── seed_run.ps1                # Script nạp dữ liệu mẫu vào SQL Server
@@ -292,9 +293,21 @@ Trước khi cài đặt, hãy đảm bảo máy tính đáp ứng các điều 
 
 ## Hướng dẫn cài đặt và cấu hình
 
-### Bước 1: Khởi tạo môi trường ảo và cài đặt thư viện
+### Cách nhanh nhất: Tự động khởi tạo bằng 1 lệnh
 
-Mở PowerShell tại thư mục gốc của dự án:
+Khi vừa clone project về, mở PowerShell tại thư mục gốc và chạy:
+
+```powershell
+.\script\init_run.ps1
+```
+
+*(Script sẽ tự động: kiểm tra Python ➔ tạo môi trường ảo `venv` ➔ tạo file `.env` kèm `JWT_SECRET` bảo mật ➔ nâng cấp pip ➔ cài đặt toàn bộ thư viện trong `requirements.txt`).*
+
+---
+
+### Hoặc thực hiện thủ công từng bước:
+
+#### Bước 1: Khởi tạo môi trường ảo và cài đặt thư viện
 
 ```powershell
 # Tạo môi trường ảo
