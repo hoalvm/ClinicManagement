@@ -100,12 +100,6 @@ class LoginWindow(QWidget):
         self.login_btn.clicked.connect(self.handle_login)
         card_layout.addWidget(self.login_btn)
 
-        # Helper note
-        hint_label = QLabel("Tài khoản mẫu: admin / doctor01 / patient01")
-        hint_label.setStyleSheet("color: #94a3b8; font-size: 11px;")
-        hint_label.setAlignment(Qt.AlignCenter)
-        card_layout.addWidget(hint_label)
-
         main_layout.addWidget(card)
 
     def handle_login(self):
