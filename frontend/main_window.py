@@ -16,6 +16,7 @@ from frontend.api.api_client import ApiClient
 from frontend.core.session import SessionState
 from frontend.views.appointment_detail_view import AppointmentDetailView
 from frontend.views.appointment_history_view import AppointmentHistoryView
+from frontend.views.booking_view import BookingView
 from frontend.views.common import BaseApiView
 from frontend.views.dashboard_view import DashboardView
 from frontend.views.invoice_detail_view import InvoiceDetailView
@@ -69,6 +70,7 @@ class MainWindow(QMainWindow):
         self.profile_view = PatientProfileView(api_client, session)
         self.appointments_view = AppointmentHistoryView(api_client)
         self.appointment_detail_view = AppointmentDetailView(api_client)
+        self.booking_view = BookingView(api_client)
         self.medical_history_view = MedicalHistoryView(api_client)
         self.medical_result_view = MedicalResultView(api_client)
         self.invoice_history_view = InvoiceHistoryView(api_client)
@@ -78,6 +80,7 @@ class MainWindow(QMainWindow):
             "profile": self.profile_view,
             "appointments": self.appointments_view,
             "appointment_detail": self.appointment_detail_view,
+            "booking": self.booking_view,
             "medical_history": self.medical_history_view,
             "medical_result": self.medical_result_view,
             "invoice_history": self.invoice_history_view,
@@ -105,6 +108,9 @@ class MainWindow(QMainWindow):
         self.dashboard_view.route_requested.connect(self._sidebar_navigation)
         self.profile_view.profile_updated.connect(self.sidebar.set_user)
         self.appointments_view.appointment_requested.connect(self.show_appointment)
+        self.appointments_view.book_requested.connect(self.show_booking)
+        self.booking_view.back_requested.connect(lambda: self.navigate("appointments", push=True))
+        self.booking_view.appointment_booked.connect(self.show_appointment)
         self.appointment_detail_view.back_requested.connect(self.go_back)
         self.appointment_detail_view.medical_record_requested.connect(self.show_medical_result)
         self.appointment_detail_view.invoice_requested.connect(self.show_invoice)
@@ -117,6 +123,16 @@ class MainWindow(QMainWindow):
 
     def _login_succeeded(self, token: str, user: object) -> None:
         current_user = user if isinstance(user, dict) else {}
+        self.api_client.set_access_token(token)
+        self.session.set_authenticated(token, current_user)
+        self.sidebar.set_user(current_user)
+        self._handling_expiry = False
+        self._history.clear()
+        self.root_stack.setCurrentWidget(self.shell)
+        self.navigate("dashboard", push=True)
+
+    def login_as(self, token: str, current_user: dict) -> None:
+        """Bỏ qua màn hình login và đi thẳng vào dashboard (dùng khi đã xác thực từ bên ngoài)."""
         self.api_client.set_access_token(token)
         self.session.set_authenticated(token, current_user)
         self.sidebar.set_user(current_user)
@@ -174,6 +190,14 @@ class MainWindow(QMainWindow):
             "invoice_history",
         }:
             activate()
+        elif route == "booking":
+            self.booking_view.reset_flow()
+
+    def show_booking(self) -> None:
+        self._history.append("booking")
+        self.booking_view.reset_flow()
+        self._show_patient_page(self.booking_view)
+        self.sidebar.set_active("booking")
 
     def show_appointment(self, appointment_id: int) -> None:
         self._history.append("appointment_detail")

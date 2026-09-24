@@ -316,8 +316,22 @@ def _ensure_invoice(
     return invoice
 
 
+ADMIN_PASSWORD = "Admin123!"
+
+
 def seed_database(session: Session) -> None:
     """Insert or update the deterministic demo dataset in one transaction."""
+
+    # ── Admin account ──────────────────────────────────────────────────────────
+    _ensure_user(
+        session,
+        username="admin",
+        password=ADMIN_PASSWORD,
+        full_name="System Administrator",
+        phone="0900000000",
+        email="admin@clinic.local",
+        role="ADMIN",
+    )
 
     internal = _ensure_specialty(
         session, "Internal Medicine", "General adult medicine and follow-up care"
@@ -391,20 +405,22 @@ def seed_database(session: Session) -> None:
         )
 
     for doctor in doctors:
-        _ensure_schedule(
-            session,
-            doctor,
-            day_of_week=2,
-            start_time=time(8, 0),
-            end_time=time(12, 0),
-        )
-        _ensure_schedule(
-            session,
-            doctor,
-            day_of_week=4,
-            start_time=time(13, 0),
-            end_time=time(17, 0),
-        )
+        for day in (1, 2, 3, 5, 6):
+            _ensure_schedule(
+                session,
+                doctor,
+                day_of_week=day,
+                start_time=time(8, 0),
+                end_time=time(12, 0),
+            )
+        for day in (2, 4):
+            _ensure_schedule(
+                session,
+                doctor,
+                day_of_week=day,
+                start_time=time(13, 0),
+                end_time=time(17, 0),
+            )
 
     patient_users = (
         _ensure_user(

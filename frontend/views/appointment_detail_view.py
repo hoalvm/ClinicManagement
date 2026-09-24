@@ -67,6 +67,22 @@ class AppointmentDetailView(BaseApiView):
             active_color="#FFFFFF",
             accessible_name="View invoice",
         )
+        from frontend.core.i18n import get_i18n, t
+
+        self.reschedule_button = QPushButton(t("btn_reschedule"))
+        self.reschedule_button.setObjectName("secondaryButton")
+        self.cancel_button = QPushButton(t("btn_cancel"))
+        self.cancel_button.setObjectName("secondaryButton")
+        self.cancel_button.setStyleSheet("color: #dc2626; border-color: #fecaca;")
+        get_i18n().language_changed.connect(
+            lambda _: (
+                self.reschedule_button.setText(t("btn_reschedule")),
+                self.cancel_button.setText(t("btn_cancel")),
+            )
+        )
+
+        self.header.add_action(self.reschedule_button)
+        self.header.add_action(self.cancel_button)
         self.header.add_action(self.medical_button)
         self.header.add_action(self.invoice_button)
         root.addWidget(self.header)
@@ -125,6 +141,9 @@ class AppointmentDetailView(BaseApiView):
         self.header.back_requested.connect(self.back_requested.emit)
         self.medical_button.clicked.connect(self._open_medical)
         self.invoice_button.clicked.connect(self._open_invoice)
+        self.reschedule_button.clicked.connect(self._open_reschedule)
+        self.cancel_button.clicked.connect(self._open_cancel)
+        self._current_appointment_data: dict[str, Any] | None = None
         self.clear_data()
 
     def _section(self, title: str, fields: list[tuple[str, str]]) -> QFrame:
@@ -180,12 +199,18 @@ class AppointmentDetailView(BaseApiView):
             "appointment-detail",
             lambda: self.api_client.get(f"/api/v1/appointments/me/{appointment_id}"),
             self._render,
-            controls=(self.medical_button, self.invoice_button),
+            controls=(
+                self.medical_button,
+                self.invoice_button,
+                self.reschedule_button,
+                self.cancel_button,
+            ),
             loading_text="Loading appointment…",
         )
 
     def _render(self, payload: object) -> None:
         data = require_dict(payload)
+        self._current_appointment_data = data
         doctor = data.get("doctor") or {}
         clinic = data.get("clinic") or {}
         values: dict[str, Any] = {
@@ -217,6 +242,11 @@ class AppointmentDetailView(BaseApiView):
         self.medical_button.setVisible(self._medical_record_id is not None)
         self.invoice_button.setVisible(self._invoice_id is not None)
 
+        status_val = data.get("status")
+        can_modify = status_val in ("PENDING", "CONFIRMED")
+        self.reschedule_button.setVisible(can_modify)
+        self.cancel_button.setVisible(can_modify)
+
     def _open_medical(self) -> None:
         if self._medical_record_id is not None:
             self.medical_record_requested.emit(self._medical_record_id)
@@ -225,10 +255,29 @@ class AppointmentDetailView(BaseApiView):
         if self._invoice_id is not None:
             self.invoice_requested.emit(self._invoice_id)
 
+    def _open_reschedule(self) -> None:
+        if not self._current_appointment_data:
+            return
+        from frontend.views.reschedule_dialog import RescheduleAppointmentDialog
+
+        dialog = RescheduleAppointmentDialog(self.api_client, self._current_appointment_data, self)
+        dialog.appointment_rescheduled.connect(lambda _: self.load())
+        dialog.exec()
+
+    def _open_cancel(self) -> None:
+        if not self._current_appointment_data:
+            return
+        from frontend.views.cancel_dialog import CancelAppointmentDialog
+
+        dialog = CancelAppointmentDialog(self.api_client, self._current_appointment_data, self)
+        dialog.appointment_canceled.connect(lambda _: self.load())
+        dialog.exec()
+
     def clear_data(self) -> None:
         self._appointment_id = None
         self._medical_record_id = None
         self._invoice_id = None
+        self._current_appointment_data = None
         self.header.set_subtitle("Review the visit, care provider, and clinic information.")
         for value in self.values.values():
             if isinstance(value, StatusBadge):
@@ -237,3 +286,5 @@ class AppointmentDetailView(BaseApiView):
                 value.setText("—")
         self.medical_button.hide()
         self.invoice_button.hide()
+        self.reschedule_button.hide()
+        self.cancel_button.hide()
