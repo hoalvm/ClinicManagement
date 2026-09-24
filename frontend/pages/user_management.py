@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, 
                                  QPushButton, QLineEdit, QComboBox, QMessageBox, QLabel, QHeaderView,
                                  QDialog, QFormLayout, QDialogButtonBox)
 from PySide6.QtCore import Qt
-from api_client import api_client
+from frontend.api_client import api_client
 
 class UserManagementPage(QWidget):
     def __init__(self):

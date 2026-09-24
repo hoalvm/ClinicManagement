@@ -1,14 +1,20 @@
+"""SQLAlchemy engine and session – delegates URL building to core/config.py."""
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
-import os
-from dotenv import load_dotenv
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-load_dotenv()
-DATABASE_URL = os.getenv("DATABASE_URL")
+from backend.app.core.config import get_settings
 
-engine = create_engine(DATABASE_URL)
+settings = get_settings()
+
+engine = create_engine(
+    settings.database_url,
+    pool_pre_ping=True,
+    pool_recycle=1800,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
 
 def get_db():
     db = SessionLocal()

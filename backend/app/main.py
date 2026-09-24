@@ -3,8 +3,12 @@ from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from .database import get_db
-from . import models, auth, schemas
+from .auth import verify_password, create_access_token
+from . import schemas
 from .routers import users, doctors, specialties, clinics, schedules, statistics
+
+# Import models so SQLAlchemy can resolve all table mappings
+import backend.app.models  # noqa: F401 – side-effect import
 
 app = FastAPI(title="Clinic Management API")
 
@@ -15,15 +19,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.post("/auth/login", response_model=schemas.Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.Username == form_data.username).first()
-    if not user or not auth.verify_password(form_data.password, user.PasswordHash):
+    # Use the new models package (snake_case attrs)
+    from backend.app.models import User
+    user = db.query(User).filter(User.username == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(401, "Sai tài khoản hoặc mật khẩu")
-    if not user.IsActive:
+    if not user.is_active:
         raise HTTPException(403, "Tài khoản đã bị khóa")
-    token = auth.create_access_token({"sub": user.Username, "role": user.Role})
+    token = create_access_token({"sub": user.username, "role": user.role})
     return {"access_token": token, "token_type": "bearer"}
+
 
 app.include_router(users.router)
 app.include_router(doctors.router)

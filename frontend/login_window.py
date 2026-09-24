@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QPushButton, QLabel, QMessageBox
-from api_client import api_client
+from frontend.api_client import api_client
 
 class LoginWindow(QWidget):
     def __init__(self, on_success):

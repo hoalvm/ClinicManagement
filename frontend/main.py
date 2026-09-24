@@ -1,8 +1,8 @@
 import sys
 from PySide6.QtWidgets import QApplication
-from login_window import LoginWindow
-from admin_dashboard import AdminDashboard
-from style import APP_STYLE
+from frontend.login_window import LoginWindow
+from frontend.admin_dashboard import AdminDashboard
+from frontend.style import APP_STYLE
 
 app = QApplication(sys.argv)
 app.setStyleSheet(APP_STYLE)

@@ -1,10 +1,10 @@
 from PySide6.QtWidgets import QMainWindow, QListWidget, QStackedWidget, QHBoxLayout, QWidget, QLabel, QVBoxLayout
-from pages.user_management import UserManagementPage
-from pages.doctor_management import DoctorManagementPage
-from pages.specialty_management import SpecialtyManagementPage
-from pages.clinic_management import ClinicManagementPage
-from pages.schedule_management import ScheduleManagementPage
-from pages.statistics_page import StatisticsPage
+from frontend.pages.user_management import UserManagementPage
+from frontend.pages.doctor_management import DoctorManagementPage
+from frontend.pages.specialty_management import SpecialtyManagementPage
+from frontend.pages.clinic_management import ClinicManagementPage
+from frontend.pages.schedule_management import ScheduleManagementPage
+from frontend.pages.statistics_page import StatisticsPage
 
 class AdminDashboard(QMainWindow):
     def __init__(self):

@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
                                  QPushButton, QComboBox, QTimeEdit, QSpinBox, QMessageBox, QLabel, QHeaderView)
 from PySide6.QtCore import QTime
-from api_client import api_client
+from frontend.api_client import api_client
 
 DAYS_VN = {1: "Thứ 2", 2: "Thứ 3", 3: "Thứ 4", 4: "Thứ 5", 5: "Thứ 6", 6: "Thứ 7", 7: "Chủ nhật"}
 

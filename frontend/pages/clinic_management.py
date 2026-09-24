@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
                                  QPushButton, QLineEdit, QMessageBox, QLabel, QHeaderView)
-from api_client import api_client
+from frontend.api_client import api_client
 
 class ClinicManagementPage(QWidget):
     def __init__(self):

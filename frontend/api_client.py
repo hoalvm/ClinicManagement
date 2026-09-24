@@ -2,6 +2,7 @@ import requests
 
 BASE_URL = "http://127.0.0.1:8000"
 
+
 class ApiClient:
     def __init__(self):
         self.token = None
@@ -10,7 +11,7 @@ class ApiClient:
         try:
             r = requests.post(
                 f"{BASE_URL}/auth/login",
-                data={"username": username, "password": password}
+                data={"username": username, "password": password},
             )
         except requests.exceptions.ConnectionError:
             return False, "Không kết nối được server. Hãy chắc chắn backend đang chạy."
@@ -37,5 +38,6 @@ class ApiClient:
 
     def delete(self, path):
         return requests.delete(f"{BASE_URL}{path}", headers=self._headers())
+
 
 api_client = ApiClient()

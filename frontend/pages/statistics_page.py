@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QGridLayout,
                                  QTableWidget, QTableWidgetItem, QHeaderView)
-from api_client import api_client
+from frontend.api_client import api_client
 
 class StatCard(QFrame):
     def __init__(self, title, value, color):
