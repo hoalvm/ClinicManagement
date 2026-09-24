@@ -30,7 +30,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         raise HTTPException(401, "Sai tài khoản hoặc mật khẩu")
     if not user.is_active:
         raise HTTPException(403, "Tài khoản đã bị khóa")
-    token = create_access_token({"sub": user.username, "role": user.role})
+    token = create_access_token({"sub": str(user.user_id), "username": user.username, "role": user.role})
     return {"access_token": token, "token_type": "bearer"}
 
 

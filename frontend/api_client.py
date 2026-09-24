@@ -36,7 +36,7 @@ class ApiClient:
             self.token = r.json()["access_token"]
             payload = _decode_jwt_payload(self.token)
             self.role = payload.get("role", "").upper()
-            self.username = payload.get("sub", username)
+            self.username = payload.get("username") or str(payload.get("sub", username))
             return True, None
         try:
             return False, r.json().get("detail", "Lỗi đăng nhập")

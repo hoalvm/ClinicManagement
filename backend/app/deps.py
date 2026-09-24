@@ -15,13 +15,20 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     )
     try:
         payload = decode_access_token(token)
-        username: str = payload.get("sub")
-        if username is None:
+        sub_val = payload.get("sub")
+        username = payload.get("username")
+        if not sub_val and not username:
             raise credentials_exception
     except (InvalidTokenError, Exception):
         raise credentials_exception
 
-    user = db.query(User).filter(User.username == username).first()
+    if username:
+        user = db.query(User).filter(User.username == username).first()
+    elif sub_val and str(sub_val).isdigit():
+        user = db.query(User).filter(User.user_id == int(sub_val)).first()
+    else:
+        user = db.query(User).filter(User.username == str(sub_val)).first()
+
     if user is None:
         raise credentials_exception
     return user
