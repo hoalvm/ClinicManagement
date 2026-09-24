@@ -2,5 +2,7 @@
   "name": "ClinicCare Patient Portal",
   "description": "Patient portal for clinic management, appointment scheduling, medical records, prescriptions, and billing invoices.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

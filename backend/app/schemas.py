@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from datetime import datetime, time
 
@@ -25,8 +25,7 @@ class UserOut(UserBase):
     UserID: int
     IsActive: bool
     CreatedAt: datetime
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class LoginRequest(BaseModel):
     Username: str
@@ -51,8 +50,7 @@ class SpecialtyOut(BaseModel):
     SpecialtyName: str
     Description: Optional[str] = None
     IsActive: bool
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # ---------- Clinic ----------
 class ClinicCreate(BaseModel):
@@ -72,8 +70,7 @@ class ClinicOut(BaseModel):
     Address: Optional[str] = None
     Phone: Optional[str] = None
     IsActive: bool
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # ---------- Doctor ----------
 class DoctorCreate(BaseModel):
@@ -102,8 +99,7 @@ class DoctorOut(BaseModel):
     ClinicName: Optional[str] = None
     LicenseNumber: Optional[str] = None
     IsActive: bool
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # ---------- DoctorSchedule ----------
 class ScheduleCreate(BaseModel):

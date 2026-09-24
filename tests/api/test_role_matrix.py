@@ -7,10 +7,10 @@ Covers:
 - STAFF / RECEPTIONIST: Dashboard, Confirm, Check-In, Invoicing, Payment Constraints
 """
 
-from datetime import date, datetime, time, timedelta
-from decimal import Decimal
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -18,21 +18,19 @@ from backend.app.api.deps import (
     get_current_patient,
     get_current_user as api_get_current_user,
 )
-from backend.app.deps import get_current_user as legacy_get_current_user
 from backend.app.db.session import get_db
+from backend.app.deps import get_current_user as legacy_get_current_user
 from backend.app.main import app
 from backend.app.models import (
     Appointment,
     Clinic,
     Doctor,
-    DoctorSchedule,
-    Invoice,
     MedicalRecord,
     Patient,
-    Payment,
     Specialty,
     User,
 )
+
 
 
 # ==============================================================================
