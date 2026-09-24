@@ -1,85 +1,129 @@
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QGridLayout,
-                                 QTableWidget, QTableWidgetItem, QHeaderView)
+"""Modern, clean Statistics and Overview page for Admin."""
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
 from frontend.api_client import api_client
 
-class StatCard(QFrame):
-    def __init__(self, title, value, color):
+
+class ModernStatCard(QFrame):
+    def __init__(self, title: str, value: object, accent_color: str):
         super().__init__()
+        self.setObjectName("contentCard")
         self.setStyleSheet(f"""
-            QFrame {{
-                background-color: white;
+            QFrame#contentCard {{
+                background-color: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-top: 4px solid {accent_color};
                 border-radius: 10px;
-                border-left: 5px solid {color};
             }}
         """)
-        layout = QVBoxLayout()
-        layout.setContentsMargins(18, 14, 18, 14)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(6)
 
-        value_label = QLabel(str(value))
-        value_label.setStyleSheet("font-size: 28px; font-weight: 700; color: #1e293b; border: none;")
-        title_label = QLabel(title)
-        title_label.setStyleSheet("font-size: 13px; color: #64748b; border: none;")
+        self.title_label = QLabel(title)
+        self.title_label.setStyleSheet("color: #64748b; font-size: 12px; font-weight: 600;")
 
-        layout.addWidget(value_label)
-        layout.addWidget(title_label)
-        self.setLayout(layout)
+        self.value_label = QLabel(str(value))
+        self.value_label.setStyleSheet("color: #0f172a; font-size: 28px; font-weight: 800;")
+
+        layout.addWidget(self.title_label)
+        layout.addWidget(self.value_label)
 
 
 class StatisticsPage(QWidget):
     def __init__(self):
         super().__init__()
-        self.layout = QVBoxLayout()
-        self.layout.setContentsMargins(24, 20, 24, 20)
-        self.layout.setSpacing(18)
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(28, 24, 28, 24)
+        self.main_layout.setSpacing(20)
 
-        title_label = QLabel("THỐNG KÊ TỔNG QUAN")
-        title_label.setStyleSheet("font-size: 20px; font-weight: 700; color: #1e293b;")
-        self.layout.addWidget(title_label)
+        # ------------------- Header -------------------
+        header_box = QVBoxLayout()
+        header_box.setSpacing(4)
+        title_label = QLabel("Báo cáo & Thống kê")
+        title_label.setObjectName("pageTitle")
+        subtitle_label = QLabel(
+            "Số liệu tổng quan về người dùng, nhân sự y tế, cơ sở khám chữa bệnh và lịch trực"
+        )
+        subtitle_label.setObjectName("pageSubtitle")
+        header_box.addWidget(title_label)
+        header_box.addWidget(subtitle_label)
+        self.main_layout.addLayout(header_box)
 
+        # ------------------- Stat Cards Grid -------------------
         self.cards_layout = QGridLayout()
-        self.cards_layout.setSpacing(16)
-        self.layout.addLayout(self.cards_layout)
+        self.cards_layout.setHorizontalSpacing(14)
+        self.cards_layout.setVerticalSpacing(14)
+        self.main_layout.addLayout(self.cards_layout)
 
+        # ------------------- 2 Sub Tables -------------------
         sub_layout = QHBoxLayout()
         sub_layout.setSpacing(16)
 
-        # Bảng bác sĩ theo chuyên khoa
+        # Table 1: Doctors by Specialty
+        card_sp = QFrame()
+        card_sp.setObjectName("contentCard")
+        layout_sp = QVBoxLayout(card_sp)
+        layout_sp.setContentsMargins(16, 16, 16, 16)
+        layout_sp.setSpacing(10)
+
+        lbl_sp = QLabel("Phân bổ bác sĩ theo chuyên khoa")
+        lbl_sp.setObjectName("sectionTitle")
+        layout_sp.addWidget(lbl_sp)
+
         self.specialty_table = QTableWidget()
         self.specialty_table.setColumnCount(2)
-        self.specialty_table.setHorizontalHeaderLabels(["Chuyên khoa", "Số bác sĩ"])
-        header1 = self.specialty_table.horizontalHeader()
-        header1.setFixedHeight(30)
-        header1.setStretchLastSection(False)
-        header1.setSectionResizeMode(0, QHeaderView.Stretch)
-        header1.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.specialty_table.setHorizontalHeaderLabels(["Chuyên khoa", "Số lượng bác sĩ"])
+        self.specialty_table.setAlternatingRowColors(True)
+        self.specialty_table.verticalHeader().setVisible(False)
+        self.specialty_table.setShowGrid(False)
 
-        # Bảng bác sĩ theo phòng khám
+        h1 = self.specialty_table.horizontalHeader()
+        h1.setFixedHeight(36)
+        h1.setSectionResizeMode(0, QHeaderView.Stretch)
+        h1.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        layout_sp.addWidget(self.specialty_table)
+        sub_layout.addWidget(card_sp)
+
+        # Table 2: Doctors by Clinic
+        card_cl = QFrame()
+        card_cl.setObjectName("contentCard")
+        layout_cl = QVBoxLayout(card_cl)
+        layout_cl.setContentsMargins(16, 16, 16, 16)
+        layout_cl.setSpacing(10)
+
+        lbl_cl = QLabel("Phân bổ bác sĩ theo phòng khám")
+        lbl_cl.setObjectName("sectionTitle")
+        layout_cl.addWidget(lbl_cl)
+
         self.clinic_table = QTableWidget()
         self.clinic_table.setColumnCount(2)
-        self.clinic_table.setHorizontalHeaderLabels(["Phòng khám", "Số bác sĩ"])
-        header2 = self.clinic_table.horizontalHeader()
-        header2.setFixedHeight(30)
-        header2.setStretchLastSection(False)
-        header2.setSectionResizeMode(0, QHeaderView.Stretch)
-        header2.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.clinic_table.setHorizontalHeaderLabels(["Phòng khám", "Số lượng bác sĩ"])
+        self.clinic_table.setAlternatingRowColors(True)
+        self.clinic_table.verticalHeader().setVisible(False)
+        self.clinic_table.setShowGrid(False)
 
-        left_box = QVBoxLayout()
-        left_label = QLabel("Bác sĩ theo chuyên khoa")
-        left_label.setStyleSheet("font-weight: 600; color: #334155;")
-        left_box.addWidget(left_label)
-        left_box.addWidget(self.specialty_table)
+        h2 = self.clinic_table.horizontalHeader()
+        h2.setFixedHeight(36)
+        h2.setSectionResizeMode(0, QHeaderView.Stretch)
+        h2.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        layout_cl.addWidget(self.clinic_table)
+        sub_layout.addWidget(card_cl)
 
-        right_box = QVBoxLayout()
-        right_label = QLabel("Bác sĩ theo phòng khám")
-        right_label.setStyleSheet("font-weight: 600; color: #334155;")
-        right_box.addWidget(right_label)
-        right_box.addWidget(self.clinic_table)
+        self.main_layout.addLayout(sub_layout, 1)
 
-        sub_layout.addLayout(left_box)
-        sub_layout.addLayout(right_box)
-        self.layout.addLayout(sub_layout)
-
-        self.setLayout(self.layout)
         self.load_data()
 
     def load_data(self):
@@ -88,30 +132,41 @@ class StatisticsPage(QWidget):
             return
         d = r.json()
 
-        # Xóa card cũ trước khi vẽ lại (tránh chồng khi load lại nhiều lần)
+        # Clear old cards
         while self.cards_layout.count():
             item = self.cards_layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
+            w = item.widget()
+            if w:
+                w.deleteLater()
 
         cards_data = [
-            ("Tổng tài khoản", d["total_users"], "#2563eb"),
-            ("Bác sĩ", d["total_doctors"], "#16a34a"),
-            ("Phòng khám", d["total_clinics"], "#f59e0b"),
-            ("Chuyên khoa", d["total_specialties"], "#8b5cf6"),
-            ("Lịch làm việc", d["total_schedules"], "#ef4444"),
+            ("TỔNG TÀI KHOẢN", d.get("total_users", 0), "#0284c7"),
+            ("BÁC SĨ HOẠT ĐỘNG", d.get("total_doctors", 0), "#0f766e"),
+            ("CƠ SỞ PHÒNG KHÁM", d.get("total_clinics", 0), "#d97706"),
+            ("CHUYÊN KHOA Y TẾ", d.get("total_specialties", 0), "#7c3aed"),
+            ("CA LỊCH LÀM VIỆC", d.get("total_schedules", 0), "#059669"),
         ]
+
         for i, (title, value, color) in enumerate(cards_data):
-            card = StatCard(title, value, color)
+            card = ModernStatCard(title, value, color)
             self.cards_layout.addWidget(card, 0, i)
 
-        self.specialty_table.setRowCount(len(d["doctors_by_specialty"]))
-        for row, item in enumerate(d["doctors_by_specialty"]):
-            self.specialty_table.setItem(row, 0, QTableWidgetItem(item["name"]))
-            self.specialty_table.setItem(row, 1, QTableWidgetItem(str(item["count"])))
+        # Populate specialty table
+        doc_sp = d.get("doctors_by_specialty", [])
+        self.specialty_table.setRowCount(len(doc_sp))
+        for row, item in enumerate(doc_sp):
+            self.specialty_table.setItem(row, 0, QTableWidgetItem(item.get("name", "—")))
+            count_item = QTableWidgetItem(str(item.get("count", 0)))
+            count_item.setTextAlignment(Qt.AlignCenter)
+            self.specialty_table.setItem(row, 1, count_item)
+            self.specialty_table.setRowHeight(row, 40)
 
-        self.clinic_table.setRowCount(len(d["doctors_by_clinic"]))
-        for row, item in enumerate(d["doctors_by_clinic"]):
-            self.clinic_table.setItem(row, 0, QTableWidgetItem(item["name"]))
-            self.clinic_table.setItem(row, 1, QTableWidgetItem(str(item["count"])))
+        # Populate clinic table
+        doc_cl = d.get("doctors_by_clinic", [])
+        self.clinic_table.setRowCount(len(doc_cl))
+        for row, item in enumerate(doc_cl):
+            self.clinic_table.setItem(row, 0, QTableWidgetItem(item.get("name", "—")))
+            count_item = QTableWidgetItem(str(item.get("count", 0)))
+            count_item.setTextAlignment(Qt.AlignCenter)
+            self.clinic_table.setItem(row, 1, count_item)
+            self.clinic_table.setRowHeight(row, 40)

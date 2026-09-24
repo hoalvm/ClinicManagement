@@ -1,31 +1,46 @@
 import sys
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QMessageBox
-from frontend.style import APP_STYLE
-from frontend.api_client import api_client
-from frontend.login_window import LoginWindow
+
 from frontend.admin_dashboard import AdminDashboard
+from frontend.api.api_client import ApiClient
+from frontend.api_client import api_client
 from frontend.core.config import get_frontend_settings
 from frontend.core.session import SessionState
-from frontend.api.api_client import ApiClient
+from frontend.login_window import LoginWindow
 from frontend.main_window import MainWindow
+from frontend.style import APP_STYLE
 
 app = QApplication(sys.argv)
+app.setFont(QFont("Segoe UI", 10))
 app.setStyleSheet(APP_STYLE)
 
 dashboard = None
+login = None
+
+
+def show_login():
+    global login, dashboard
+    if dashboard:
+        dashboard.close()
+        dashboard = None
+    if not login:
+        login = LoginWindow(on_success=open_dashboard)
+    login.show()
+
 
 def open_dashboard():
-    global dashboard
+    global dashboard, login
     role = api_client.role
 
     if role == "ADMIN":
-        # Mở Admin Dashboard
         dashboard = AdminDashboard()
+        dashboard.logout_requested.connect(show_login)
         dashboard.show()
-        login.close()
+        if login:
+            login.close()
 
     elif role in ("PATIENT", "DOCTOR"):
-        # Mở Patient Portal (MainWindow) với session đã đăng nhập
         settings = get_frontend_settings()
         portal_client = ApiClient(
             base_url=settings.api_base_url,
@@ -48,7 +63,8 @@ def open_dashboard():
             current_user={"username": api_client.username, "role": role},
         )
         dashboard.show()
-        login.close()
+        if login:
+            login.close()
 
     else:
         QMessageBox.critical(
@@ -57,6 +73,7 @@ def open_dashboard():
             f"Tài khoản '{api_client.username}' (role: {role or 'không xác định'}) "
             f"không được hỗ trợ trong hệ thống này.",
         )
+
 
 login = LoginWindow(on_success=open_dashboard)
 login.show()
