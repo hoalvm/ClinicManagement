@@ -39,10 +39,20 @@ def update_specialty(specialty_id: int, data: schemas.SpecialtyUpdate, db: Sessi
     obj = db.query(Specialty).filter(Specialty.specialty_id == specialty_id).first()
     if not obj:
         raise HTTPException(404, "Không tìm thấy chuyên khoa")
+
+    if data.SpecialtyName and db.query(Specialty).filter(
+        Specialty.specialty_name == data.SpecialtyName, Specialty.specialty_id != specialty_id
+    ).first():
+        raise HTTPException(400, "Tên chuyên khoa đã tồn tại")
+
     mapping = {"SpecialtyName": "specialty_name", "Description": "description", "IsActive": "is_active"}
     for field, value in data.dict(exclude_unset=True).items():
         setattr(obj, mapping.get(field, field), value)
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(400, f"Không thể cập nhật chuyên khoa: {str(e)}")
     db.refresh(obj)
     return {
         "SpecialtyID": obj.specialty_id, "SpecialtyName": obj.specialty_name,

@@ -1,24 +1,6 @@
-"""SQLAlchemy engine and session – delegates URL building to core/config.py."""
+"""SQLAlchemy engine and session – unified with backend/app/db/session.py."""
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from backend.app.db.session import SessionLocal, engine, get_db
+from backend.app.models.base import Base
 
-from backend.app.core.config import get_settings
-
-settings = get_settings()
-
-engine = create_engine(
-    settings.database_url,
-    pool_pre_ping=True,
-    pool_recycle=1800,
-)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+__all__ = ["Base", "SessionLocal", "engine", "get_db"]

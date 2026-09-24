@@ -7,11 +7,14 @@ from .auth import verify_password, create_access_token
 from . import schemas
 from .routers import users, doctors, specialties, clinics, schedules, statistics, doctor_portal
 from backend.app.api.routes import api_router
+from backend.app.core.exceptions import register_exception_handlers
 
 # Import models so SQLAlchemy can resolve all table mappings
 import backend.app.models  # noqa: F401 – side-effect import
 
 app = FastAPI(title="Clinic Management API")
+
+register_exception_handlers(app)
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,6 +22,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
 
 
 @app.post("/auth/login", response_model=schemas.Token)
