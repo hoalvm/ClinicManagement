@@ -14,32 +14,8 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api_client import api_client
-
-
-class ModernStatCard(QFrame):
-    def __init__(self, title: str, value: object, accent_color: str):
-        super().__init__()
-        self.setObjectName("contentCard")
-        self.setStyleSheet(f"""
-            QFrame#contentCard {{
-                background-color: #ffffff;
-                border: 1px solid #e2e8f0;
-                border-top: 4px solid {accent_color};
-                border-radius: 10px;
-            }}
-        """)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(6)
-
-        self.title_label = QLabel(title)
-        self.title_label.setStyleSheet("color: #64748b; font-size: 12px; font-weight: 600;")
-
-        self.value_label = QLabel(str(value))
-        self.value_label.setStyleSheet("color: #0f172a; font-size: 28px; font-weight: 800;")
-
-        layout.addWidget(self.title_label)
-        layout.addWidget(self.value_label)
+from frontend.widgets.page_header import PageHeader
+from frontend.widgets.stat_card import ModernStatCard
 
 
 class StatisticsPage(QWidget):
@@ -50,17 +26,11 @@ class StatisticsPage(QWidget):
         self.main_layout.setSpacing(20)
 
         # ------------------- Header -------------------
-        header_box = QVBoxLayout()
-        header_box.setSpacing(4)
-        title_label = QLabel("Báo cáo & Thống kê")
-        title_label.setObjectName("pageTitle")
-        subtitle_label = QLabel(
-            "Số liệu tổng quan về người dùng, nhân sự y tế, cơ sở khám chữa bệnh và lịch trực"
+        self.header = PageHeader(
+            "Báo cáo & Thống kê",
+            "Số liệu tổng quan về người dùng, nhân sự y tế, cơ sở khám chữa bệnh và lịch trực",
         )
-        subtitle_label.setObjectName("pageSubtitle")
-        header_box.addWidget(title_label)
-        header_box.addWidget(subtitle_label)
-        self.main_layout.addLayout(header_box)
+        self.main_layout.addWidget(self.header)
 
         # ------------------- Stat Cards Grid -------------------
         self.cards_layout = QGridLayout()

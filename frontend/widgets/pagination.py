@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QWidg
 
 class PaginationWidget(QWidget):
     page_changed = Signal(int)
+    page_requested = page_changed
     page_size_changed = Signal(int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -73,6 +74,10 @@ class PaginationWidget(QWidget):
         self._previous.setEnabled(self._page > 1)
         self._next.setEnabled(self._total_pages > 0 and self._page < self._total_pages)
 
+    def update_state(self, page: int, total_pages: int, total: int) -> None:
+        """Alias for set_page matching the reception view interface."""
+        self.set_page(page, total_pages, total)
+
     def set_controls_enabled(self, enabled: bool) -> None:
         self._page_size.setEnabled(enabled)
         self._previous.setEnabled(enabled and self._page > 1)
@@ -88,3 +93,8 @@ class PaginationWidget(QWidget):
     def _go_next(self) -> None:
         if self._page < self._total_pages:
             self.page_changed.emit(self._page + 1)
+
+
+# Compatibility alias
+Pagination = PaginationWidget
+

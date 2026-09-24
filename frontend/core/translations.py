@@ -218,8 +218,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Search or select from the dropdown menu to choose a specialty.",
     },
     "spec_search_placeholder": {
-        "vi": "🔍 Tìm kiếm hoặc bấm mũi tên sổ xuống để chọn chuyên khoa (Tim mạch, Da liễu...)",
-        "en": "🔍 Search or click dropdown arrow to select specialty (Cardiology, Dermatology...)",
+        "vi": "Tìm kiếm hoặc bấm mũi tên sổ xuống để chọn chuyên khoa (Tim mạch, Da liễu...)",
+        "en": "Search or click dropdown arrow to select specialty (Cardiology, Dermatology...)",
     },
     "spec_combo_default": {
         "vi": "-- Bấm để chọn chuyên khoa trong danh sách sổ xuống --",
@@ -238,8 +238,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Select this specialty →",
     },
     "affiliated_doctors": {
-        "vi": "👨‍⚕️ {count} bác sĩ trực thuộc",
-        "en": "👨‍⚕️ {count} affiliated doctors",
+        "vi": "{count} bác sĩ trực thuộc",
+        "en": "{count} affiliated doctors",
     },
     "no_specialty_found": {
         "vi": "Không tìm thấy chuyên khoa",
@@ -468,8 +468,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     # --------------------------------------------------------------------------
     # Booking Modes (By Date vs By Doctor) & Reschedule Doctor
     # --------------------------------------------------------------------------
-    "mode_by_date": {"vi": "📅 Chọn theo ngày khám", "en": "📅 Book by Date"},
-    "mode_by_doctor": {"vi": "👨‍⚕️ Chọn theo bác sĩ", "en": "👨‍⚕️ Book by Doctor"},
+    "mode_by_date": {"vi": "Chọn theo ngày khám", "en": "Book by Date"},
+    "mode_by_doctor": {"vi": "Chọn theo bác sĩ", "en": "Book by Doctor"},
     "lbl_booking_mode": {"vi": "Phương thức đặt lịch:", "en": "Booking method:"},
     "lbl_choose_doctor_on_date": {
         "vi": "Bác sĩ có lịch khám ngày này:",

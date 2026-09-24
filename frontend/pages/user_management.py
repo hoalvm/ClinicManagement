@@ -20,6 +20,8 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api_client import api_client
+from frontend.widgets.page_header import PageHeader
+from frontend.widgets.status_badge import StatusBadgeDelegate
 
 
 class UserManagementPage(QWidget):
@@ -30,17 +32,11 @@ class UserManagementPage(QWidget):
         layout.setSpacing(18)
 
         # ------------------- Page Header -------------------
-        header_box = QVBoxLayout()
-        header_box.setSpacing(4)
-        title_label = QLabel("Quản lý tài khoản")
-        title_label.setObjectName("pageTitle")
-        subtitle_label = QLabel(
-            "Tạo mới, chỉnh sửa thông tin và quản lý trạng thái tài khoản người dùng"
+        self.header = PageHeader(
+            "Quản lý tài khoản",
+            "Tạo mới, chỉnh sửa thông tin và quản lý trạng thái tài khoản người dùng",
         )
-        subtitle_label.setObjectName("pageSubtitle")
-        header_box.addWidget(title_label)
-        header_box.addWidget(subtitle_label)
-        layout.addLayout(header_box)
+        layout.addWidget(self.header)
 
         # ------------------- Create Form Card -------------------
         form_card = QFrame()
@@ -146,6 +142,8 @@ class UserManagementPage(QWidget):
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.table.setItemDelegateForColumn(3, StatusBadgeDelegate(self.table))
+        self.table.setItemDelegateForColumn(4, StatusBadgeDelegate(self.table))
 
         table_card_layout.addWidget(self.table)
         layout.addWidget(table_card, 1)
@@ -170,30 +168,17 @@ class UserManagementPage(QWidget):
             item_name = QTableWidgetItem(u["FullName"])
             self.table.setItem(row, 2, item_name)
 
-            # Role pill
-            role_widget = QLabel(u["Role"])
-            role_widget.setAlignment(Qt.AlignCenter)
-            role_widget.setStyleSheet(
-                "background-color: #f1f5f9; color: #334155; border-radius: 4px; "
-                "font-size: 11px; font-weight: 600; padding: 2px 6px;"
-            )
-            self.table.setCellWidget(row, 3, role_widget)
+            # Role pill (rendered via delegate)
+            item_role = QTableWidgetItem(u["Role"])
+            item_role.setTextAlignment(Qt.AlignCenter)
+            self.table.setItem(row, 3, item_role)
 
-            # Status pill
+            # Status pill (rendered via delegate)
             is_active = u["IsActive"]
-            status_lbl = QLabel("Hoạt động" if is_active else "Đã khóa")
-            status_lbl.setAlignment(Qt.AlignCenter)
-            if is_active:
-                status_lbl.setStyleSheet(
-                    "background-color: #dcfce7; color: #15803d; border-radius: 4px; "
-                    "font-size: 11px; font-weight: 600; padding: 2px 6px;"
-                )
-            else:
-                status_lbl.setStyleSheet(
-                    "background-color: #fee2e2; color: #b91c1c; border-radius: 4px; "
-                    "font-size: 11px; font-weight: 600; padding: 2px 6px;"
-                )
-            self.table.setCellWidget(row, 4, status_lbl)
+            status_text = "Hoạt động" if is_active else "Đã khóa"
+            item_status = QTableWidgetItem(status_text)
+            item_status.setTextAlignment(Qt.AlignCenter)
+            self.table.setItem(row, 4, item_status)
 
             # Action buttons
             edit_btn = QPushButton("Sửa")

@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api_client import api_client
+from frontend.widgets.page_header import PageHeader
+from frontend.widgets.status_badge import StatusBadgeDelegate
 
 
 class DoctorManagementPage(QWidget):
@@ -28,17 +30,11 @@ class DoctorManagementPage(QWidget):
         layout.setSpacing(18)
 
         # ------------------- Header -------------------
-        header_box = QVBoxLayout()
-        header_box.setSpacing(4)
-        title_label = QLabel("Quản lý bác sĩ")
-        title_label.setObjectName("pageTitle")
-        subtitle_label = QLabel(
-            "Danh sách đội ngũ y bác sĩ, phân bổ chuyên khoa, cơ sở phòng khám và giấy phép hành nghề"
+        self.header = PageHeader(
+            "Quản lý bác sĩ",
+            "Danh sách đội ngũ y bác sĩ, phân bổ chuyên khoa, cơ sở phòng khám và giấy phép hành nghề",
         )
-        subtitle_label.setObjectName("pageSubtitle")
-        header_box.addWidget(title_label)
-        header_box.addWidget(subtitle_label)
-        layout.addLayout(header_box)
+        layout.addWidget(self.header)
 
         # ------------------- Create Form Card -------------------
         form_card = QFrame()
@@ -166,6 +162,7 @@ class DoctorManagementPage(QWidget):
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        self.table.setItemDelegateForColumn(5, StatusBadgeDelegate(self.table))
 
         table_card_layout.addWidget(self.table)
         layout.addWidget(table_card, 1)
@@ -209,21 +206,12 @@ class DoctorManagementPage(QWidget):
             self.table.setItem(row, 3, QTableWidgetItem(d.get("ClinicName") or "—"))
             self.table.setItem(row, 4, QTableWidgetItem(d.get("LicenseNumber") or "—"))
 
-            # Status pill
+            # Status pill (rendered via delegate)
             is_active = d["IsActive"]
-            status_lbl = QLabel("Hoạt động" if is_active else "Đã khóa")
-            status_lbl.setAlignment(Qt.AlignCenter)
-            if is_active:
-                status_lbl.setStyleSheet(
-                    "background-color: #dcfce7; color: #15803d; border-radius: 4px; "
-                    "font-size: 11px; font-weight: 600; padding: 2px 6px;"
-                )
-            else:
-                status_lbl.setStyleSheet(
-                    "background-color: #fee2e2; color: #b91c1c; border-radius: 4px; "
-                    "font-size: 11px; font-weight: 600; padding: 2px 6px;"
-                )
-            self.table.setCellWidget(row, 5, status_lbl)
+            status_text = "Hoạt động" if is_active else "Đã khóa"
+            item_status = QTableWidgetItem(status_text)
+            item_status.setTextAlignment(Qt.AlignCenter)
+            self.table.setItem(row, 5, item_status)
 
             # Action button
             del_btn = QPushButton("Khóa" if is_active else "Mở khóa")

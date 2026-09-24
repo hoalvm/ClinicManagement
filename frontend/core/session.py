@@ -17,6 +17,7 @@ class SessionState(QObject):
         super().__init__()
         self._access_token: str | None = None
         self._current_user: dict[str, Any] | None = None
+        self._doctor_profile: dict[str, Any] | None = None
 
     @property
     def access_token(self) -> str | None:
@@ -25,6 +26,25 @@ class SessionState(QObject):
     @property
     def current_user(self) -> dict[str, Any] | None:
         return self._current_user
+
+    @property
+    def role(self) -> str:
+        if self._current_user:
+            return str(self._current_user.get("role", "")).upper()
+        return ""
+
+    @property
+    def username(self) -> str:
+        if self._current_user:
+            return str(self._current_user.get("username", ""))
+        return ""
+
+    @property
+    def doctor_profile(self) -> dict[str, Any] | None:
+        return self._doctor_profile
+
+    def set_doctor_profile(self, profile: dict[str, Any] | None) -> None:
+        self._doctor_profile = dict(profile) if profile else None
 
     @property
     def is_authenticated(self) -> bool:
@@ -43,4 +63,10 @@ class SessionState(QObject):
     def clear(self) -> None:
         self._access_token = None
         self._current_user = None
+        self._doctor_profile = None
         self.cleared.emit()
+
+
+# Global shared session instance
+session_state = SessionState()
+
