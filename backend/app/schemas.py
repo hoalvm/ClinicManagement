@@ -8,7 +8,7 @@ class UserBase(BaseModel):
     FullName: str
     Phone: Optional[str] = None
     Email: Optional[str] = None
-    Role: str
+    Role: str = Field(..., pattern="^(PATIENT|DOCTOR|STAFF|ADMIN)$", description="PATIENT, DOCTOR, STAFF, ADMIN")
 
 class UserCreate(UserBase):
     Password: str
@@ -18,7 +18,7 @@ class UserUpdate(BaseModel):
     FullName: Optional[str] = None
     Phone: Optional[str] = None
     Email: Optional[str] = None
-    Role: Optional[str] = None
+    Role: Optional[str] = Field(None, pattern="^(PATIENT|DOCTOR|STAFF|ADMIN)$")
     IsActive: Optional[bool] = None
 
 class UserOut(UserBase):

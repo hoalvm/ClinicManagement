@@ -107,8 +107,8 @@ class ReceptionInvoicePage(Page[ReceptionInvoiceItem]):
 
 
 class ProcessPaymentRequest(APIModel):
-    payment_method: str = Field(pattern="^(CASH|CARD|BANK_TRANSFER)$")
-    amount: Decimal = Field(ge=0)
+    payment_method: str = Field(pattern="^(CASH|CARD)$")
+    amount: Decimal = Field(gt=0)
     notes: str | None = None
 
 
