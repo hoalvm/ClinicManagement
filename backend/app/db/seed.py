@@ -316,8 +316,22 @@ def _ensure_invoice(
     return invoice
 
 
+ADMIN_PASSWORD = "Admin123!"
+
+
 def seed_database(session: Session) -> None:
     """Insert or update the deterministic demo dataset in one transaction."""
+
+    # ── Admin account ──────────────────────────────────────────────────────────
+    _ensure_user(
+        session,
+        username="admin",
+        password=ADMIN_PASSWORD,
+        full_name="System Administrator",
+        phone="0900000000",
+        email="admin@clinic.local",
+        role="ADMIN",
+    )
 
     internal = _ensure_specialty(
         session, "Internal Medicine", "General adult medicine and follow-up care"

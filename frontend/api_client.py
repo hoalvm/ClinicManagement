@@ -1,11 +1,27 @@
+import base64
+import json
 import requests
 
 BASE_URL = "http://127.0.0.1:8000"
 
 
+def _decode_jwt_payload(token: str) -> dict:
+    """Decode JWT payload mà không cần verify signature."""
+    try:
+        payload_part = token.split(".")[1]
+        # Thêm padding nếu thiếu
+        padding = 4 - len(payload_part) % 4
+        payload_part += "=" * (padding % 4)
+        return json.loads(base64.urlsafe_b64decode(payload_part))
+    except Exception:
+        return {}
+
+
 class ApiClient:
     def __init__(self):
         self.token = None
+        self.role = None
+        self.username = None
 
     def login(self, username, password):
         try:
@@ -18,6 +34,9 @@ class ApiClient:
 
         if r.status_code == 200:
             self.token = r.json()["access_token"]
+            payload = _decode_jwt_payload(self.token)
+            self.role = payload.get("role", "").upper()
+            self.username = payload.get("sub", username)
             return True, None
         try:
             return False, r.json().get("detail", "Lỗi đăng nhập")

@@ -131,6 +131,16 @@ class MainWindow(QMainWindow):
         self.root_stack.setCurrentWidget(self.shell)
         self.navigate("dashboard", push=True)
 
+    def login_as(self, token: str, current_user: dict) -> None:
+        """Bỏ qua màn hình login và đi thẳng vào dashboard (dùng khi đã xác thực từ bên ngoài)."""
+        self.api_client.set_access_token(token)
+        self.session.set_authenticated(token, current_user)
+        self.sidebar.set_user(current_user)
+        self._handling_expiry = False
+        self._history.clear()
+        self.root_stack.setCurrentWidget(self.shell)
+        self.navigate("dashboard", push=True)
+
     def _registration_succeeded(self, username: str) -> None:
         self._show_login()
         self.login_view.set_username(username)
