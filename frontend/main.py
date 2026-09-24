@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from frontend.admin_dashboard import AdminDashboard
 from frontend.api.api_client import ApiClient
 from frontend.api_client import api_client
+from frontend.app import DoctorDashboard
 from frontend.core.config import get_frontend_settings
 from frontend.core.session import SessionState
 from frontend.login_window import LoginWindow
@@ -40,7 +41,29 @@ def open_dashboard():
         if login:
             login.close()
 
-    elif role in ("PATIENT", "DOCTOR"):
+    elif role == "DOCTOR":
+        profile_res = api_client.get("/api/v1/doctor/profile")
+        if profile_res.status_code == 200:
+            prof = profile_res.json()
+            session_data = {
+                "access_token": api_client.token,
+                "doctor_id": prof["doctor_id"],
+                "doctor_name": prof["doctor_name"],
+                "license_number": prof.get("license_number") or "N/A",
+            }
+            dashboard = DoctorDashboard(session_data)
+            dashboard.logout_requested.connect(show_login)
+            dashboard.show()
+            if login:
+                login.close()
+        else:
+            QMessageBox.warning(
+                login,
+                "Lỗi hồ sơ bác sĩ",
+                "Không tìm thấy hồ sơ bác sĩ tương ứng với tài khoản này.",
+            )
+
+    elif role == "PATIENT":
         settings = get_frontend_settings()
         portal_client = ApiClient(
             base_url=settings.api_base_url,
