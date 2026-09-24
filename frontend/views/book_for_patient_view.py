@@ -77,11 +77,9 @@ class BookForPatientView(BaseApiView):
         pt_form.addRow("Bệnh nhân cũ:", lookup_row)
 
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("VD: Nguyễn Văn A")
         pt_form.addRow("Họ và tên (*):", self.name_input)
 
         self.phone_input = QLineEdit()
-        self.phone_input.setPlaceholderText("VD: 0901234567")
         pt_form.addRow("Số điện thoại (*):", self.phone_input)
 
         self.gender_combo = QComboBox()
@@ -97,7 +95,6 @@ class BookForPatientView(BaseApiView):
         pt_form.addRow("Ngày sinh:", self.dob_edit)
 
         self.address_input = QLineEdit()
-        self.address_input.setPlaceholderText("VD: Quận 1, TP. Hồ Chí Minh")
         pt_form.addRow("Địa chỉ:", self.address_input)
 
         form_layout.addLayout(pt_form)
@@ -142,7 +139,6 @@ class BookForPatientView(BaseApiView):
         appt_form.addRow("Khung giờ (*):", time_row)
 
         self.reason_input = QTextEdit()
-        self.reason_input.setPlaceholderText("Mô tả triệu chứng hoặc lý do khám...")
         self.reason_input.setMaximumHeight(80)
         appt_form.addRow("Lý do khám:", self.reason_input)
 

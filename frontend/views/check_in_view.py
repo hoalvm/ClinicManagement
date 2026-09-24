@@ -66,7 +66,7 @@ class CheckInView(BaseApiView):
         search_row.addWidget(self.search_input, 3)
 
         self.queue_num_input = QLineEdit()
-        self.queue_num_input.setPlaceholderText("Số thứ tự (VD: A-01)")
+        self.queue_num_input.setPlaceholderText("Số thứ tự")
         self.queue_num_input.setMaximumWidth(140)
         search_row.addWidget(self.queue_num_input, 1)
 

@@ -63,7 +63,7 @@ class PaymentView(BaseApiView):
         lookup_layout.addWidget(lookup_label)
 
         self.inv_input = QLineEdit()
-        self.inv_input.setPlaceholderText("Nhập mã hóa đơn (VD: 1)...")
+        self.inv_input.setPlaceholderText("Nhập mã hóa đơn...")
         self.inv_input.returnPressed.connect(self._fetch_invoice)
         lookup_layout.addWidget(self.inv_input, 2)
 
@@ -138,7 +138,6 @@ class PaymentView(BaseApiView):
 
         cash_layout.addWidget(QLabel("Tiền khách đưa:"), 0, 0)
         self.cash_input = QLineEdit()
-        self.cash_input.setPlaceholderText("Nhập số tiền nhận được (VNĐ)...")
         self.cash_input.textChanged.connect(self._calculate_change)
         cash_layout.addWidget(self.cash_input, 0, 1)
 

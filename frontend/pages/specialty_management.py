@@ -45,45 +45,43 @@ class SpecialtyManagementPage(QWidget):
         form_title.setObjectName("sectionTitle")
         form_card_layout.addWidget(form_title)
 
-        inputs_layout = QHBoxLayout()
-        inputs_layout.setSpacing(12)
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(12)
 
         # Name
         col_n = QVBoxLayout()
-        col_n.setSpacing(4)
+        col_n.setSpacing(5)
         lbl_n = QLabel("Tên chuyên khoa")
         lbl_n.setObjectName("fieldLabel")
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("VD: Nội tổng quát, Da liễu...")
         col_n.addWidget(lbl_n)
         col_n.addWidget(self.name_input)
-        inputs_layout.addLayout(col_n, 3)
+        grid.addLayout(col_n, 0, 0)
 
         # Description
         col_d = QVBoxLayout()
-        col_d.setSpacing(4)
+        col_d.setSpacing(5)
         lbl_d = QLabel("Mô tả")
         lbl_d.setObjectName("fieldLabel")
         self.desc_input = QLineEdit()
-        self.desc_input.setPlaceholderText("Mô tả chức năng chuyên khoa...")
         col_d.addWidget(lbl_d)
         col_d.addWidget(self.desc_input)
-        inputs_layout.addLayout(col_d, 5)
+        grid.addLayout(col_d, 0, 1)
 
-        # Button
-        col_btn = QVBoxLayout()
-        col_btn.setSpacing(4)
-        lbl_space = QLabel(" ")
-        lbl_space.setObjectName("fieldLabel")
+        # Button row
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
         add_btn = QPushButton("Thêm chuyên khoa")
         add_btn.setObjectName("primaryButton")
         add_btn.setCursor(Qt.PointingHandCursor)
+        add_btn.setMinimumHeight(36)
+        add_btn.setMinimumWidth(150)
         add_btn.clicked.connect(self.add_specialty)
-        col_btn.addWidget(lbl_space)
-        col_btn.addWidget(add_btn)
-        inputs_layout.addLayout(col_btn, 2)
+        btn_layout.addWidget(add_btn)
 
-        form_card_layout.addLayout(inputs_layout)
+        form_card_layout.addLayout(grid)
+        form_card_layout.addLayout(btn_layout)
         layout.addWidget(form_card)
 
         # ------------------- Table Card -------------------

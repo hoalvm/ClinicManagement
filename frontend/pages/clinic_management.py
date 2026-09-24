@@ -45,56 +45,53 @@ class ClinicManagementPage(QWidget):
         form_title.setObjectName("sectionTitle")
         form_card_layout.addWidget(form_title)
 
-        inputs_layout = QHBoxLayout()
-        inputs_layout.setSpacing(12)
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(12)
 
         # Clinic Name
         col_n = QVBoxLayout()
-        col_n.setSpacing(4)
+        col_n.setSpacing(5)
         lbl_n = QLabel("Tên phòng khám")
         lbl_n.setObjectName("fieldLabel")
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("VD: Phòng khám Nội 1")
         col_n.addWidget(lbl_n)
         col_n.addWidget(self.name_input)
-        inputs_layout.addLayout(col_n, 3)
+        grid.addLayout(col_n, 0, 0)
 
         # Address
         col_a = QVBoxLayout()
-        col_a.setSpacing(4)
+        col_a.setSpacing(5)
         lbl_a = QLabel("Địa chỉ")
         lbl_a.setObjectName("fieldLabel")
         self.address_input = QLineEdit()
-        self.address_input.setPlaceholderText("VD: Tầng 2, Tòa nhà A")
         col_a.addWidget(lbl_a)
         col_a.addWidget(self.address_input)
-        inputs_layout.addLayout(col_a, 4)
+        grid.addLayout(col_a, 0, 1)
 
         # Phone
         col_p = QVBoxLayout()
-        col_p.setSpacing(4)
+        col_p.setSpacing(5)
         lbl_p = QLabel("Số điện thoại")
         lbl_p.setObjectName("fieldLabel")
         self.phone_input = QLineEdit()
-        self.phone_input.setPlaceholderText("VD: 028 1234 5678")
         col_p.addWidget(lbl_p)
         col_p.addWidget(self.phone_input)
-        inputs_layout.addLayout(col_p, 2)
+        grid.addLayout(col_p, 0, 2)
 
-        # Button
-        col_btn = QVBoxLayout()
-        col_btn.setSpacing(4)
-        lbl_space = QLabel(" ")
-        lbl_space.setObjectName("fieldLabel")
+        # Button row
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
         add_btn = QPushButton("Thêm phòng khám")
         add_btn.setObjectName("primaryButton")
         add_btn.setCursor(Qt.PointingHandCursor)
+        add_btn.setMinimumHeight(36)
+        add_btn.setMinimumWidth(150)
         add_btn.clicked.connect(self.add_clinic)
-        col_btn.addWidget(lbl_space)
-        col_btn.addWidget(add_btn)
-        inputs_layout.addLayout(col_btn, 2)
+        btn_layout.addWidget(add_btn)
 
-        form_card_layout.addLayout(inputs_layout)
+        form_card_layout.addLayout(grid)
+        form_card_layout.addLayout(btn_layout)
         layout.addWidget(form_card)
 
         # ------------------- Table Card -------------------

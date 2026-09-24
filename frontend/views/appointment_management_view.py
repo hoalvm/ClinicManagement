@@ -235,7 +235,6 @@ class AppointmentManagementView(BaseApiView):
         d_layout.addWidget(label)
 
         reason_input = QLineEdit()
-        reason_input.setPlaceholderText("VD: Bệnh nhân báo bận, đổi kế hoạch...")
         d_layout.addWidget(reason_input)
 
         btn_row = QHBoxLayout()
@@ -277,7 +276,6 @@ class AppointmentManagementView(BaseApiView):
         form.addRow("Giờ khám mới:", time_edit)
 
         reason_edit = QLineEdit()
-        reason_edit.setPlaceholderText("Ghi chú lý do đổi lịch")
         form.addRow("Lý do đổi:", reason_edit)
 
         btn_row = QHBoxLayout()

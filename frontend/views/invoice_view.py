@@ -185,7 +185,6 @@ class InvoiceManagementView(BaseApiView):
 
         form = QFormLayout()
         appt_input = QLineEdit()
-        appt_input.setPlaceholderText("Nhập mã lịch hẹn (VD: 101)")
         form.addRow("Mã lịch hẹn (*):", appt_input)
         d_layout.addLayout(form)
 
