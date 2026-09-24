@@ -6,6 +6,7 @@ from .database import get_db
 from .auth import verify_password, create_access_token
 from . import schemas
 from .routers import users, doctors, specialties, clinics, schedules, statistics
+from backend.app.api.routes import api_router
 
 # Import models so SQLAlchemy can resolve all table mappings
 import backend.app.models  # noqa: F401 – side-effect import
@@ -39,3 +40,4 @@ app.include_router(specialties.router)
 app.include_router(clinics.router)
 app.include_router(schedules.router)
 app.include_router(statistics.router)
+app.include_router(api_router)
