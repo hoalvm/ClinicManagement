@@ -1,8 +1,8 @@
 """API router for Doctor Portal operations: schedule, examination, prescription."""
 
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from typing import List, Optional, Tuple
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
@@ -23,16 +23,16 @@ router = APIRouter(prefix="/api/v1/doctor", tags=["Doctor Portal"])
 
 # ------------------- Schemas -------------------
 class PrescriptionItemIn(BaseModel):
-    medicine_name: str
-    dosage: Optional[str] = None
-    quantity: int
-    instructions: Optional[str] = None
+    medicine_name: str = Field(..., min_length=1, max_length=150)
+    dosage: Optional[str] = Field(None, max_length=255)
+    quantity: int = Field(..., gt=0, description="Số lượng thuốc phải lớn hơn 0")
+    instructions: Optional[str] = Field(None, max_length=500)
 
 
 class CompleteExamRequest(BaseModel):
-    symptoms: str
-    diagnosis: str
-    notes: Optional[str] = None
+    symptoms: str = Field(..., min_length=1, max_length=1000)
+    diagnosis: str = Field(..., min_length=1, max_length=1000)
+    notes: Optional[str] = Field(None, max_length=2000)
     prescription_items: Optional[List[PrescriptionItemIn]] = []
 
 
@@ -47,6 +47,25 @@ class DoctorLoginResponse(BaseModel):
     doctor_id: int
     doctor_name: str
     license_number: Optional[str] = "N/A"
+
+
+# ------------------- RBAC Dependency -------------------
+def require_doctor(
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+) -> Tuple[User, Optional[Doctor]]:
+    """Enforce that current_user has role DOCTOR or ADMIN."""
+    if current_user.role not in ("DOCTOR", "ADMIN"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Chỉ bác sĩ hoặc quản trị viên mới có quyền truy cập.",
+        )
+    doctor = db.query(Doctor).filter(Doctor.user_id == current_user.user_id).first()
+    if not doctor and current_user.role == "DOCTOR":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Không tìm thấy hồ sơ bác sĩ của tài khoản này.",
+        )
+    return current_user, doctor
 
 
 # ------------------- Endpoints -------------------
@@ -98,11 +117,31 @@ def get_doctor_profile(
 
 
 @router.get("/schedule")
-def get_schedule(doctor_id: int, db: Session = Depends(get_db)):
+def get_schedule(
+    doctor_id: Optional[int] = Query(None, description="Doctor ID"),
+    auth_info: Tuple[User, Optional[Doctor]] = Depends(require_doctor),
+    db: Session = Depends(get_db),
+):
+    current_user, current_doctor = auth_info
+
+    # Determine which doctor's schedule to view
+    target_doctor_id = doctor_id
+    if target_doctor_id is None and current_doctor is not None:
+        target_doctor_id = current_doctor.doctor_id
+    if target_doctor_id is None:
+        raise HTTPException(status_code=400, detail="Vui lòng chỉ định doctor_id")
+
+    # Enforce RBAC: doctor can only see their own schedule; admin can see any
+    if current_user.role == "DOCTOR" and current_doctor and current_doctor.doctor_id != target_doctor_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn không có quyền xem lịch làm việc của bác sĩ khác.",
+        )
+
     appts = (
         db.query(Appointment)
         .filter(
-            Appointment.doctor_id == doctor_id,
+            Appointment.doctor_id == target_doctor_id,
             Appointment.status.in_(["CHECKED_IN", "IN_PROGRESS", "CONFIRMED"]),
         )
         .order_by(Appointment.start_time.asc())
@@ -138,15 +177,31 @@ def get_schedule(doctor_id: int, db: Session = Depends(get_db)):
 
 @router.put("/appointments/{appointment_id}/accept")
 def accept_patient(
-    appointment_id: int, doctor_id: Optional[int] = None, db: Session = Depends(get_db)
+    appointment_id: int,
+    doctor_id: Optional[int] = None,
+    auth_info: Tuple[User, Optional[Doctor]] = Depends(require_doctor),
+    db: Session = Depends(get_db),
 ):
-    query = db.query(Appointment).filter(Appointment.appointment_id == appointment_id)
-    if doctor_id:
-        query = query.filter(Appointment.doctor_id == doctor_id)
-    appt = query.first()
+    current_user, current_doctor = auth_info
+    appt = db.query(Appointment).filter(Appointment.appointment_id == appointment_id).first()
 
     if not appt:
         raise HTTPException(status_code=404, detail="Không tìm thấy cuộc hẹn")
+
+    # Check ownership: doctor can only accept their own appointment
+    if current_user.role == "DOCTOR" and current_doctor and appt.doctor_id != current_doctor.doctor_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn không có quyền tiếp nhận ca khám của bác sĩ khác.",
+        )
+
+    # State validation
+    if appt.status in ("COMPLETED", "CANCELLED"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Không thể tiếp nhận ca khám có trạng thái {appt.status}.",
+        )
+
     appt.status = "IN_PROGRESS"
     db.commit()
     return {"message": "Đã tiếp nhận bệnh nhân thành công"}
@@ -154,8 +209,12 @@ def accept_patient(
 
 @router.post("/appointments/{appointment_id}/complete")
 def complete_examination(
-    appointment_id: int, payload: CompleteExamRequest, db: Session = Depends(get_db)
+    appointment_id: int,
+    payload: CompleteExamRequest,
+    auth_info: Tuple[User, Optional[Doctor]] = Depends(require_doctor),
+    db: Session = Depends(get_db),
 ):
+    current_user, current_doctor = auth_info
     appt = (
         db.query(Appointment)
         .filter(Appointment.appointment_id == appointment_id)
@@ -163,6 +222,46 @@ def complete_examination(
     )
     if not appt:
         raise HTTPException(status_code=404, detail="Không tìm thấy cuộc hẹn")
+
+    # Check ownership
+    if current_user.role == "DOCTOR" and current_doctor and appt.doctor_id != current_doctor.doctor_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn không có quyền hoàn tất ca khám của bác sĩ khác.",
+        )
+
+    # State validation
+    if appt.status == "COMPLETED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cuộc hẹn này đã được hoàn tất trước đó.",
+        )
+    if appt.status == "CANCELLED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Không thể hoàn tất ca khám đã bị hủy.",
+        )
+
+    # Check if medical record already exists
+    existing_record = (
+        db.query(MedicalRecord)
+        .filter(MedicalRecord.appointment_id == appt.appointment_id)
+        .first()
+    )
+    if existing_record:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Hồ sơ bệnh án cho cuộc hẹn này đã tồn tại.",
+        )
+
+    # Validate prescription item quantities
+    if payload.prescription_items:
+        for item in payload.prescription_items:
+            if item.quantity <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Số lượng thuốc '{item.medicine_name}' phải lớn hơn 0.",
+                )
 
     try:
         # 1. Ghi nhận Medical Record
@@ -196,6 +295,8 @@ def complete_examination(
         db.commit()
         return {"status": "success", "message": "Hoàn tất ca khám thành công!"}
 
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Lỗi cơ sở dữ liệu: {str(e)}")

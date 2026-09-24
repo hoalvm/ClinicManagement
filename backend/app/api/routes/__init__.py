@@ -10,6 +10,7 @@ from backend.app.api.routes import (
     invoices,
     medical_records,
     patients,
+    reception,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -20,5 +21,6 @@ api_router.include_router(catalog.router)
 api_router.include_router(medical_records.router)
 api_router.include_router(invoices.router)
 api_router.include_router(dashboard.router)
+api_router.include_router(reception.router)
 
 __all__ = ["api_router"]

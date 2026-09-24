@@ -39,6 +39,11 @@ class ConflictError(AppError):
         super().__init__(detail, status.HTTP_409_CONFLICT)
 
 
+class ValidationError(AppError):
+    def __init__(self, detail: str = "Validation error.") -> None:
+        super().__init__(detail, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+
 class InternalServerError(AppError):
     def __init__(self, detail: str = "An unexpected server error occurred.") -> None:
         super().__init__(detail, status.HTTP_500_INTERNAL_SERVER_ERROR)

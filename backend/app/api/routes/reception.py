@@ -31,11 +31,9 @@ router = APIRouter(prefix="/reception", tags=["Reception & Staff Operations"])
 def require_staff_or_admin(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
-    # Allow STAFF, RECEPTIONIST, ADMIN, and for convenience in demo/testing any active user with clinic staff tasks
-    allowed_roles = {"STAFF", "RECEPTIONIST", "ADMIN", "DOCTOR"}
+    allowed_roles = {"STAFF", "RECEPTIONIST", "ADMIN"}
     if current_user.role not in allowed_roles:
-        # If in dev/demo mode, allow access or raise
-        pass
+        raise AuthorizationError("Yêu cầu quyền nhân viên tiếp tân hoặc quản trị viên.")
     return current_user
 
 

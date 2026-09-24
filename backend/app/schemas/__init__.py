@@ -4,7 +4,7 @@ Re-exports legacy flat schemas so that `from . import schemas; schemas.UserOut`
 still works alongside the new sub-module layout.
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime, time
 
@@ -114,16 +114,16 @@ class DoctorOut(BaseModel):
 # ---------- DoctorSchedule ----------
 class ScheduleCreate(BaseModel):
     DoctorID: int
-    DayOfWeek: int
+    DayOfWeek: int = Field(..., ge=1, le=7, description="Thứ 2 (1) đến Chủ Nhật (7)")
     StartTime: time
     EndTime: time
-    SlotDuration: int = 30
+    SlotDuration: int = Field(30, gt=0, description="Thời lượng ca khám (phút) > 0")
 
 class ScheduleUpdate(BaseModel):
-    DayOfWeek: Optional[int] = None
+    DayOfWeek: Optional[int] = Field(None, ge=1, le=7)
     StartTime: Optional[time] = None
     EndTime: Optional[time] = None
-    SlotDuration: Optional[int] = None
+    SlotDuration: Optional[int] = Field(None, gt=0)
     IsActive: Optional[bool] = None
 
 class ScheduleOut(BaseModel):

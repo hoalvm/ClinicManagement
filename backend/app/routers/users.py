@@ -23,6 +23,13 @@ def get_users(db: Session = Depends(get_db), admin=Depends(require_admin)):
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), admin=Depends(require_admin)):
     if db.query(User).filter(User.username == user.Username).first():
         raise HTTPException(400, "Username đã tồn tại")
+
+    if user.Role == "DOCTOR":
+        raise HTTPException(
+            400,
+            "Vui lòng tạo tài khoản Bác sĩ tại mục 'Quản lý Bác sĩ' để thiết lập chuyên khoa và phòng khám.",
+        )
+
     new_user = User(
         username=user.Username,
         password_hash=auth.hash_password(user.Password),
@@ -32,6 +39,13 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db), admin=D
         role=user.Role,
     )
     db.add(new_user)
+    db.flush()
+
+    if user.Role == "PATIENT":
+        from backend.app.models import Patient
+        patient = Patient(user_id=new_user.user_id)
+        db.add(patient)
+
     db.commit()
     db.refresh(new_user)
     return {

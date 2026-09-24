@@ -36,6 +36,8 @@ def create_doctor(data: schemas.DoctorCreate, db: Session = Depends(get_db), adm
         raise HTTPException(400, "Chuyên khoa không tồn tại")
     if data.ClinicID and not db.query(Clinic).filter(Clinic.clinic_id == data.ClinicID).first():
         raise HTTPException(400, "Phòng khám không tồn tại")
+    if data.LicenseNumber and db.query(Doctor).filter(Doctor.license_number == data.LicenseNumber).first():
+        raise HTTPException(400, "Số chứng chỉ hành nghề đã tồn tại")
 
     new_user = User(
         username=data.Username,
@@ -55,7 +57,11 @@ def create_doctor(data: schemas.DoctorCreate, db: Session = Depends(get_db), adm
         license_number=data.LicenseNumber,
     )
     db.add(new_doctor)
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(400, f"Không thể tạo hồ sơ bác sĩ: {str(e)}")
     db.refresh(new_doctor)
     return _to_doctor_out(new_doctor)
 
@@ -65,13 +71,24 @@ def update_doctor(doctor_id: int, data: schemas.DoctorUpdate, db: Session = Depe
     doctor = db.query(Doctor).filter(Doctor.doctor_id == doctor_id).first()
     if not doctor:
         raise HTTPException(404, "Không tìm thấy bác sĩ")
+
+    if data.LicenseNumber and db.query(Doctor).filter(
+        Doctor.license_number == data.LicenseNumber, Doctor.doctor_id != doctor_id
+    ).first():
+        raise HTTPException(400, "Số chứng chỉ hành nghề đã được sử dụng bởi bác sĩ khác")
+
     mapping = {
         "SpecialtyID": "specialty_id", "ClinicID": "clinic_id",
         "LicenseNumber": "license_number", "IsActive": "is_active",
     }
     for field, value in data.dict(exclude_unset=True).items():
         setattr(doctor, mapping.get(field, field), value)
-    db.commit()
+
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(400, f"Không thể cập nhật hồ sơ bác sĩ: {str(e)}")
     db.refresh(doctor)
     return _to_doctor_out(doctor)
 
