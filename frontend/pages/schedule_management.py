@@ -42,7 +42,7 @@ class ScheduleManagementPage(QWidget):
         # ------------------- Header -------------------
         self.header = PageHeader(
             "Quản lý lịch làm việc",
-            "Xếp lịch khám bệnh định kỳ, phân ca làm việc và thiết lập thời lượng khám cho bác sĩ",
+            "Quản lý lịch làm việc của bác sĩ",
         )
         layout.addWidget(self.header)
 

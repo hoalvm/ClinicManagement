@@ -45,8 +45,8 @@ class PaymentView(BaseApiView):
         layout.setSpacing(20)
 
         self.header = PageHeader(
-            "Payment Processing",
-            "Collect clinic consultation fees, pharmacy charges, and issue receipts via Cash or Card.",
+            "Quầy thu ngân",
+            "Thu tiền viện phí và xuất biên lai thanh toán",
             parent=self,
         )
         layout.addWidget(self.header)
@@ -58,16 +58,16 @@ class PaymentView(BaseApiView):
         lookup_card.setStyleSheet("background: white; border: 1px solid #cbd5e1; border-radius: 12px; padding: 18px;")
         lookup_layout = QHBoxLayout(lookup_card)
 
-        lookup_label = QLabel("Invoice #:")
+        lookup_label = QLabel("Mã hóa đơn:")
         lookup_label.setStyleSheet("font-weight: 700; color: #0f172a;")
         lookup_layout.addWidget(lookup_label)
 
         self.inv_input = QLineEdit()
-        self.inv_input.setPlaceholderText("Enter Invoice ID (e.g. 1)")
+        self.inv_input.setPlaceholderText("Nhập mã hóa đơn (VD: 1)...")
         self.inv_input.returnPressed.connect(self._fetch_invoice)
         lookup_layout.addWidget(self.inv_input, 2)
 
-        self.btn_find = QPushButton("Load Invoice")
+        self.btn_find = QPushButton("Tìm hóa đơn")
         self.btn_find.setStyleSheet("background-color: #0f766e; color: white; font-weight: 600; padding: 6px 16px; border-radius: 6px;")
         self.btn_find.clicked.connect(self._fetch_invoice)
         lookup_layout.addWidget(self.btn_find)
@@ -81,28 +81,28 @@ class PaymentView(BaseApiView):
         settle_layout.setSpacing(16)
 
         # Bill details
-        self.lbl_inv_title = QLabel("Invoice Details")
+        self.lbl_inv_title = QLabel("Thông tin hóa đơn")
         self.lbl_inv_title.setStyleSheet("font-size: 16px; font-weight: 700; color: #0f172a;")
         settle_layout.addWidget(self.lbl_inv_title)
 
         grid = QGridLayout()
         grid.setSpacing(10)
 
-        grid.addWidget(QLabel("Patient:"), 0, 0)
+        grid.addWidget(QLabel("Bệnh nhân:"), 0, 0)
         self.lbl_patient = QLabel("—")
         self.lbl_patient.setStyleSheet("font-weight: 600; color: #1e293b;")
         grid.addWidget(self.lbl_patient, 0, 1)
 
-        grid.addWidget(QLabel("Doctor:"), 0, 2)
+        grid.addWidget(QLabel("Bác sĩ:"), 0, 2)
         self.lbl_doctor = QLabel("—")
         self.lbl_doctor.setStyleSheet("font-weight: 600; color: #1e293b;")
         grid.addWidget(self.lbl_doctor, 0, 3)
 
-        grid.addWidget(QLabel("Status:"), 1, 0)
+        grid.addWidget(QLabel("Trạng thái:"), 1, 0)
         self.badge_status = StatusBadge("UNPAID")
         grid.addWidget(self.badge_status, 1, 1)
 
-        grid.addWidget(QLabel("Total Due:"), 1, 2)
+        grid.addWidget(QLabel("Tổng cần thu:"), 1, 2)
         self.lbl_total = QLabel("0 ₫")
         self.lbl_total.setStyleSheet("font-size: 18px; font-weight: 800; color: #b91c1c;")
         grid.addWidget(self.lbl_total, 1, 3)
@@ -110,7 +110,7 @@ class PaymentView(BaseApiView):
         settle_layout.addLayout(grid)
 
         # Payment Method Selector
-        method_label = QLabel("Select Payment Method:")
+        method_label = QLabel("Hình thức thanh toán:")
         method_label.setStyleSheet("font-weight: 700; color: #0f172a; margin-top: 10px;")
         settle_layout.addWidget(method_label)
 
@@ -118,13 +118,13 @@ class PaymentView(BaseApiView):
         method_row = QHBoxLayout()
         method_row.setSpacing(24)
 
-        self.rb_cash = QRadioButton("Tiền mặt (CASH)")
+        self.rb_cash = QRadioButton("Tiền mặt")
         self.rb_cash.setChecked(True)
         self.rb_cash.toggled.connect(self._on_method_changed)
         self.method_group.addButton(self.rb_cash)
         method_row.addWidget(self.rb_cash)
 
-        self.rb_card = QRadioButton("Thẻ ngân hàng (CARD / POS)")
+        self.rb_card = QRadioButton("Thẻ ngân hàng")
         self.method_group.addButton(self.rb_card)
         method_row.addWidget(self.rb_card)
 
@@ -136,13 +136,13 @@ class PaymentView(BaseApiView):
         self.cash_box.setStyleSheet("background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;")
         cash_layout = QGridLayout(self.cash_box)
 
-        cash_layout.addWidget(QLabel("Tiền khách đưa (Cash Tendered):"), 0, 0)
+        cash_layout.addWidget(QLabel("Tiền khách đưa:"), 0, 0)
         self.cash_input = QLineEdit()
-        self.cash_input.setPlaceholderText("Enter amount received in VND…")
+        self.cash_input.setPlaceholderText("Nhập số tiền nhận được (VNĐ)...")
         self.cash_input.textChanged.connect(self._calculate_change)
         cash_layout.addWidget(self.cash_input, 0, 1)
 
-        cash_layout.addWidget(QLabel("Tiền thối lại (Change to return):"), 1, 0)
+        cash_layout.addWidget(QLabel("Tiền thối lại:"), 1, 0)
         self.lbl_change = QLabel("0 ₫")
         self.lbl_change.setStyleSheet("font-size: 16px; font-weight: 700; color: #15803d;")
         cash_layout.addWidget(self.lbl_change, 1, 1)
@@ -153,7 +153,7 @@ class PaymentView(BaseApiView):
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
 
-        self.btn_pay = QPushButton("Confirm Payment & Print Receipt")
+        self.btn_pay = QPushButton("Xác nhận thu tiền")
         self.btn_pay.setStyleSheet("background-color: #15803d; color: white; font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 8px;")
         self.btn_pay.clicked.connect(self._process_payment)
         btn_row.addWidget(self.btn_pay)
@@ -167,7 +167,7 @@ class PaymentView(BaseApiView):
         self.receipt_card.setStyleSheet("background: #f0fdf4; border: 2px dashed #16a34a; border-radius: 12px; padding: 24px;")
         receipt_layout = QVBoxLayout(self.receipt_card)
 
-        self.receipt_text = QLabel("Receipt Preview")
+        self.receipt_text = QLabel("Biên lai thu tiền")
         self.receipt_text.setStyleSheet("font-family: monospace; font-size: 13px; color: #14532d;")
         receipt_layout.addWidget(self.receipt_text)
 
@@ -187,7 +187,7 @@ class PaymentView(BaseApiView):
     def _fetch_invoice(self) -> None:
         inv_text = self.inv_input.text().strip()
         if not inv_text.isdigit():
-            self.feedback.show_message("Invalid ID", "Please enter a valid numeric invoice ID.", severity="danger")
+            self.feedback.show_message("Sai mã", "Vui lòng nhập mã hóa đơn hợp lệ dạng số.", severity="danger")
             return
 
         inv_id = int(inv_text)
@@ -195,7 +195,7 @@ class PaymentView(BaseApiView):
             f"get_inv_{inv_id}",
             lambda: self.api_client.get("/api/v1/reception/invoices", params={"keyword": str(inv_id)}),
             self._on_invoice_loaded,
-            loading_text="Fetching invoice details…",
+            loading_text="Đang tải thông tin hóa đơn...",
         )
 
     def _on_invoice_loaded(self, data: dict[str, Any]) -> None:
@@ -204,7 +204,7 @@ class PaymentView(BaseApiView):
         matched = next((i for i in items if i.get("invoice_id") == inv_id_target), None)
 
         if not matched:
-            self.feedback.show_message("Invoice Not Found", f"Could not find Invoice #{inv_id_target}.", severity="danger")
+            self.feedback.show_message("Không tìm thấy", f"Không tìm thấy hóa đơn #{inv_id_target}.", severity="danger")
             self.settlement_card.hide()
             return
 
@@ -212,8 +212,8 @@ class PaymentView(BaseApiView):
         self.settlement_card.show()
         self.receipt_card.hide()
 
-        self.lbl_inv_title.setText(f"Invoice INV-{matched.get('invoice_id'):04d}")
-        self.lbl_patient.setText(f"{matched.get('patient_name')} ({matched.get('patient_phone') or 'No phone'})")
+        self.lbl_inv_title.setText(f"Hóa đơn INV-{matched.get('invoice_id'):04d}")
+        self.lbl_patient.setText(f"{matched.get('patient_name')} ({matched.get('patient_phone') or 'Không có SĐT'})")
         self.lbl_doctor.setText(matched.get("doctor_name", ""))
         self.badge_status.set_status(matched.get("status", "UNPAID"))
 
@@ -224,7 +224,7 @@ class PaymentView(BaseApiView):
 
         if matched.get("status") == "PAID":
             self.btn_pay.setEnabled(False)
-            self.feedback.show_message("Already Settled", "This invoice has already been fully paid.", severity="info")
+            self.feedback.show_message("Đã thanh toán", "Hóa đơn này đã được thanh toán đầy đủ trước đó.", severity="info")
         else:
             self.btn_pay.setEnabled(True)
 
@@ -258,31 +258,32 @@ class PaymentView(BaseApiView):
             f"pay_inv_{inv_id}",
             lambda: self.api_client.post(f"/api/v1/reception/invoices/{inv_id}/pay", json=payload),
             self._on_payment_success,
-            loading_text="Finalizing payment…",
+            loading_text="Đang xử lý thanh toán...",
         )
 
     def _on_payment_success(self, res: dict[str, Any]) -> None:
         inv_id = res.get("invoice_id")
         total = float(res.get("total_amount", 0))
         method = res.get("payment_method", "CASH")
-        patient_name = res.get("patient_name", "Patient")
+        patient_name = res.get("patient_name", "Bệnh nhân")
+        method_str = "Tiền mặt" if method == "CASH" else "Thẻ ngân hàng"
 
-        self.feedback.show_message("Payment Successful", f"Payment for Invoice INV-{inv_id:04d} settled ({method})!", severity="success")
+        self.feedback.show_message("Thu tiền thành công", f"Hóa đơn INV-{inv_id:04d} đã được thanh toán thành công ({method_str})!", severity="success")
         self.settlement_card.hide()
 
         # Display Receipt
         receipt = f"""
 ==================================================
-              PHÒNG KHÁM ĐA KHOA / CLINIC
-            HÓA ĐƠN THANH TOÁN (PAYMENT RECEIPT)
+              PHÒNG KHÁM CLINICCARE
+               BIÊN LAI THU VIỆN PHÍ
 ==================================================
-Hóa đơn / Invoice: INV-{inv_id:04d}
-Bệnh nhân / Patient: {patient_name}
-Bác sĩ khám / Doctor: {res.get('doctor_name')}
-Phương thức / Method: {method}
+Mã hóa đơn: INV-{inv_id:04d}
+Bệnh nhân: {patient_name}
+Bác sĩ khám: {res.get('doctor_name')}
+Phương thức: {method_str}
 --------------------------------------------------
-TỔNG THANH TOÁN / TOTAL: {total:,.0f} ₫
-TRẠNG THÁI / STATUS: ĐÃ THANH TOÁN (PAID)
+TỔNG THANH TOÁN: {total:,.0f} ₫
+TRẠNG THÁI: ĐÃ THANH TOÁN
 ==================================================
            Cảm ơn Quý khách & Chúc mau khỏe!
 """

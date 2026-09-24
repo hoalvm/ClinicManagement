@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient
-from frontend.ui.icons import apply_line_icon
 from frontend.views.common import BaseApiView
 
 NULL_DATE = QDate(1752, 9, 14)
@@ -153,12 +152,6 @@ class RegisterView(BaseApiView):
         actions = QHBoxLayout()
         self.back_button = QPushButton("Back to login")
         self.back_button.setObjectName("secondaryButton")
-        apply_line_icon(
-            self.back_button,
-            "back",
-            active_color="#0F766E",
-            accessible_name="Back to login",
-        )
         self.register_button = QPushButton("Create account")
         self.register_button.setObjectName("primaryButton")
         self.register_button.setMinimumWidth(160)

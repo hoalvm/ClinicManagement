@@ -30,7 +30,7 @@ class SpecialtyManagementPage(QWidget):
         # ------------------- Header -------------------
         self.header = PageHeader(
             "Quản lý chuyên khoa",
-            "Danh mục các chuyên khoa y tế phục vụ khám chữa bệnh trong phòng khám",
+            "Danh mục chuyên khoa khám chữa bệnh",
         )
         layout.addWidget(self.header)
 

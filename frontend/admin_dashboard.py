@@ -26,7 +26,7 @@ class AdminDashboard(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ClinicCare - Admin Dashboard")
+        self.setWindowTitle("ClinicCare - Quản trị hệ thống")
         self.resize(1280, 800)
         self.setMinimumSize(1100, 680)
 
@@ -58,7 +58,7 @@ class AdminDashboard(QMainWindow):
 
         sidebar_layout.addSpacing(16)
 
-        nav_title = QLabel("MENU CHỨC NĂNG")
+        nav_title = QLabel("Chức năng")
         nav_title.setObjectName("sidebarSectionLabel")
         sidebar_layout.addWidget(nav_title)
 
@@ -86,7 +86,7 @@ class AdminDashboard(QMainWindow):
 
         user_role = QLabel("QUẢN TRỊ VIÊN")
         user_role.setStyleSheet("color: #2dd4bf; font-size: 10px; font-weight: 700;")
-        user_name = QLabel("Administrator")
+        user_name = QLabel("Quản trị viên")
         user_name.setStyleSheet("color: #ffffff; font-size: 13px; font-weight: 600;")
         user_layout.addWidget(user_role)
         user_layout.addWidget(user_name)

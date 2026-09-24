@@ -74,7 +74,7 @@ class ReceptionDashboard(QMainWindow):
 
         sidebar_layout.addSpacing(16)
 
-        nav_title = QLabel("MENU NGHIỆP VỤ")
+        nav_title = QLabel("Nghiệp vụ")
         nav_title.setObjectName("sidebarSectionLabel")
         sidebar_layout.addWidget(nav_title)
 
@@ -82,13 +82,13 @@ class ReceptionDashboard(QMainWindow):
         self.menu = QListWidget()
         self.menu.setObjectName("adminSidebar")
         self._menu_routes = [
-            ("dashboard", "Bàn tiếp đón chính"),
-            ("check_in", "Fast Check-in"),
-            ("book_for_patient", "Đặt lịch cho bệnh nhân"),
-            ("appointment_management", "Quản lý lịch hẹn"),
-            ("invoice_management", "Hóa đơn viện phí"),
-            ("payment", "Quầy thu ngân"),
-            ("payment_history", "Lịch sử thanh toán"),
+            ("dashboard", "Bàn tiếp đón"),
+            ("check_in", "Tiếp nhận nhanh"),
+            ("book_for_patient", "Đặt lịch khám"),
+            ("appointment_management", "Lịch hẹn"),
+            ("invoice_management", "Hóa đơn"),
+            ("payment", "Thu ngân"),
+            ("payment_history", "Lịch sử thu phí"),
         ]
         for _, label in self._menu_routes:
             self.menu.addItem(label)

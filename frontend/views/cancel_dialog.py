@@ -69,9 +69,9 @@ class CancelAppointmentDialog(QDialog):
         date_str = appointment.get("appointment_date", "")
         time_str = f"{appointment.get('start_time', '')} - {appointment.get('end_time', '')}"
 
-        card_layout.addWidget(QLabel(f"<b>Bác sĩ:</b> {doc_name} ({spec_name})"))
-        card_layout.addWidget(QLabel(f"<b>Ngày khám:</b> {date_str}"))
-        card_layout.addWidget(QLabel(f"<b>Khung giờ:</b> {time_str}"))
+        card_layout.addWidget(QLabel(f"<b>{t('field_doctor')}:</b> {doc_name} ({spec_name})"))
+        card_layout.addWidget(QLabel(f"<b>{t('field_date')}:</b> {date_str}"))
+        card_layout.addWidget(QLabel(f"<b>{t('field_time')}:</b> {time_str}"))
         layout.addWidget(summary_card)
 
         # Reason input
@@ -114,7 +114,7 @@ class CancelAppointmentDialog(QDialog):
         reason = self.reason_edit.toPlainText().strip()
         self.error_label.setVisible(False)
         self.confirm_button.setEnabled(False)
-        self.confirm_button.setText("Đang xử lý…")
+        self.confirm_button.setText(t("processing"))
 
         try:
             result = self.api_client.post(
@@ -127,9 +127,9 @@ class CancelAppointmentDialog(QDialog):
             self.error_label.setText(exc.message)
             self.error_label.setVisible(True)
             self.confirm_button.setEnabled(True)
-            self.confirm_button.setText("Xác nhận hủy")
+            self.confirm_button.setText(t("confirm_cancel_btn"))
         except Exception as exc:
             self.error_label.setText(str(exc))
             self.error_label.setVisible(True)
             self.confirm_button.setEnabled(True)
-            self.confirm_button.setText("Xác nhận hủy")
+            self.confirm_button.setText(t("confirm_cancel_btn"))

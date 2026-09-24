@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.core.i18n import get_i18n, t
-from frontend.ui.icons import line_icon
 
 
 class CalendarDialog(QDialog):
@@ -74,7 +73,6 @@ class CalendarDialog(QDialog):
 
         self.select_btn = QPushButton(t("calendar_dialog_select", default="Chọn ngày này"))
         self.select_btn.setObjectName("primaryButton")
-        self.select_btn.setIcon(line_icon("calendar", "#ffffff", size=16))
         self.select_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.select_btn.clicked.connect(self._on_confirmed)
         btn_layout.addWidget(self.select_btn)

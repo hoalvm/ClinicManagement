@@ -30,7 +30,7 @@ class ClinicManagementPage(QWidget):
         # ------------------- Header -------------------
         self.header = PageHeader(
             "Quản lý phòng khám",
-            "Danh mục cơ sở phòng khám, phòng chức năng và thông tin liên hệ",
+            "Danh mục các cơ sở phòng khám",
         )
         layout.addWidget(self.header)
 

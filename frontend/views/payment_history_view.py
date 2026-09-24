@@ -38,9 +38,9 @@ class PaymentHistoryView(BaseApiView):
         layout.setSpacing(16)
 
         self.header = PageHeader(
-            "Payment History",
-            "Comprehensive audit log of all settled payments, payment methods (Cash/Card), and receipts.",
-            action_label="Refresh",
+            "Lịch sử thu phí",
+            "Nhật ký giao dịch thanh toán viện phí",
+            action_label="Làm mới",
             parent=self,
         )
         self.header.action_clicked.connect(self.load_payments)
@@ -53,16 +53,18 @@ class PaymentHistoryView(BaseApiView):
         filter_bar.setSpacing(12)
 
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search patient name, phone, or invoice #…")
+        self.search_input.setPlaceholderText("Tìm kiếm theo tên bệnh nhân, SĐT hoặc mã HĐ...")
         self.search_input.returnPressed.connect(self._apply_filter)
         filter_bar.addWidget(self.search_input, 2)
 
         self.method_combo = QComboBox()
-        self.method_combo.addItems(["All Payment Methods", "CASH", "CARD"])
+        self.method_combo.addItem("Tất cả phương thức", None)
+        self.method_combo.addItem("Tiền mặt", "CASH")
+        self.method_combo.addItem("Thẻ ngân hàng", "CARD")
         self.method_combo.currentIndexChanged.connect(self._apply_filter)
         filter_bar.addWidget(self.method_combo, 1)
 
-        self.btn_filter = QPushButton("Filter")
+        self.btn_filter = QPushButton("Lọc")
         self.btn_filter.clicked.connect(self._apply_filter)
         filter_bar.addWidget(self.btn_filter)
 
@@ -72,7 +74,7 @@ class PaymentHistoryView(BaseApiView):
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
-            "Payment ID", "Invoice #", "Patient Name", "Doctor", "Amount Paid", "Method", "Date & Time"
+            "Mã GD", "Mã HĐ", "Bệnh nhân", "Bác sĩ", "Số tiền", "Phương thức", "Thời gian"
         ])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -80,8 +82,8 @@ class PaymentHistoryView(BaseApiView):
         layout.addWidget(self.table)
 
         self.empty_state = EmptyState(
-            "No payments recorded",
-            "Settled patient payments will appear here in chronological order.",
+            "Chưa có dữ liệu thanh toán",
+            "Các giao dịch thanh toán đã hoàn tất sẽ hiển thị tại đây.",
             parent=self,
         )
         layout.addWidget(self.empty_state)
@@ -104,8 +106,7 @@ class PaymentHistoryView(BaseApiView):
         self.load_payments()
 
     def load_payments(self) -> None:
-        method_text = self.method_combo.currentText()
-        method_param = None if method_text == "All Payment Methods" else method_text
+        method_param = self.method_combo.currentData()
         keyword_param = self.search_input.text().strip() or None
 
         params = {
@@ -121,7 +122,7 @@ class PaymentHistoryView(BaseApiView):
             "load_payments",
             lambda: self.api_client.get("/api/v1/reception/payments", params=params),
             self._on_payments_loaded,
-            loading_text="Loading payment records…",
+            loading_text="Đang tải dữ liệu thu phí...",
         )
 
     def _on_payments_loaded(self, data: dict[str, Any]) -> None:
@@ -154,7 +155,8 @@ class PaymentHistoryView(BaseApiView):
             self.table.setItem(row, 3, QTableWidgetItem(doctor_name))
             self.table.setItem(row, 4, QTableWidgetItem(f"{amount:,.0f} ₫"))
 
-            method_item = QTableWidgetItem(method)
+            method_label = "Tiền mặt" if method == "CASH" else ("Thẻ" if method == "CARD" else method)
+            method_item = QTableWidgetItem(method_label)
             method_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(row, 5, method_item)
 

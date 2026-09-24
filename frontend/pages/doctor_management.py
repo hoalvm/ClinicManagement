@@ -32,7 +32,7 @@ class DoctorManagementPage(QWidget):
         # ------------------- Header -------------------
         self.header = PageHeader(
             "Quản lý bác sĩ",
-            "Danh sách đội ngũ y bác sĩ, phân bổ chuyên khoa, cơ sở phòng khám và giấy phép hành nghề",
+            "Danh sách và thông tin bác sĩ",
         )
         layout.addWidget(self.header)
 

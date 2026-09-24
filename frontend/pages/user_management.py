@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 
 from frontend.api_client import api_client
 from frontend.widgets.page_header import PageHeader
-from frontend.widgets.status_badge import StatusBadgeDelegate
+from frontend.widgets.status_badge import STATUS_LABELS_VN, StatusBadgeDelegate
 
 
 class UserManagementPage(QWidget):
@@ -34,7 +34,7 @@ class UserManagementPage(QWidget):
         # ------------------- Page Header -------------------
         self.header = PageHeader(
             "Quản lý tài khoản",
-            "Tạo mới, chỉnh sửa thông tin và quản lý trạng thái tài khoản người dùng",
+            "Quản trị danh sách và phân quyền tài khoản",
         )
         layout.addWidget(self.header)
 
@@ -92,7 +92,10 @@ class UserManagementPage(QWidget):
         lbl_r = QLabel("Vai trò")
         lbl_r.setObjectName("fieldLabel")
         self.role_input = QComboBox()
-        self.role_input.addItems(["PATIENT", "DOCTOR", "STAFF", "ADMIN"])
+        self.role_input.addItem("Bệnh nhân", "PATIENT")
+        self.role_input.addItem("Bác sĩ", "DOCTOR")
+        self.role_input.addItem("Nhân viên", "STAFF")
+        self.role_input.addItem("Quản trị viên", "ADMIN")
         col_r.addWidget(lbl_r)
         col_r.addWidget(self.role_input)
         inputs_layout.addLayout(col_r, 2)
@@ -169,7 +172,8 @@ class UserManagementPage(QWidget):
             self.table.setItem(row, 2, item_name)
 
             # Role pill (rendered via delegate)
-            item_role = QTableWidgetItem(u["Role"])
+            role_code = u["Role"]
+            item_role = QTableWidgetItem(STATUS_LABELS_VN.get(role_code, role_code))
             item_role.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(row, 3, item_role)
 
@@ -219,7 +223,7 @@ class UserManagementPage(QWidget):
             "Username": username,
             "FullName": self.fullname_input.text().strip(),
             "Password": password,
-            "Role": self.role_input.currentText(),
+            "Role": self.role_input.currentData() or self.role_input.currentText(),
         }
         r = api_client.post("/users/", json=payload)
         if r.status_code == 200:

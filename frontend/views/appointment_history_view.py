@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient
-from frontend.ui.icons import apply_line_icon, line_icon
+from frontend.core.i18n import get_i18n, t
 from frontend.views.common import (
     BaseApiView,
     configure_table,
@@ -37,25 +37,19 @@ class AppointmentHistoryView(BaseApiView):
     appointment_requested = Signal(int)
     book_requested = Signal()
 
-    _DEFAULT_SUBTITLE = "Find and review your upcoming and previous clinic visits."
-
     def __init__(self, api_client: ApiClient, parent: QWidget | None = None) -> None:
         super().__init__(api_client, parent)
         self._page = 1
+        self._total_appointments = 0
 
         root = QVBoxLayout(self)
         root.setContentsMargins(28, 24, 28, 24)
         root.setSpacing(14)
 
-        self.header = PageHeader("Appointment History", self._DEFAULT_SUBTITLE)
-        from frontend.core.i18n import get_i18n, t
-
+        self.header = PageHeader(t("appointment_history_title"), t("appointment_history_subtitle"))
         self.book_button = QPushButton(t("btn_new_booking"))
         self.book_button.setObjectName("primaryButton")
         self.book_button.clicked.connect(self.book_requested.emit)
-        get_i18n().language_changed.connect(
-            lambda _: self.book_button.setText(t("btn_new_booking"))
-        )
         self.header.add_action(self.book_button)
         root.addWidget(self.header)
 
@@ -67,54 +61,28 @@ class AppointmentHistoryView(BaseApiView):
         filters.setVerticalSpacing(10)
 
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Search doctor, specialty, clinic, or reason")
+        self.search.setPlaceholderText(t("appointment_search_placeholder"))
         self.search.setClearButtonEnabled(True)
         self.search.setAccessibleName("Search appointment history")
-        search_action = self.search.addAction(
-            line_icon("search", "#64748B", active_color="#0F766E"),
-            QLineEdit.ActionPosition.LeadingPosition,
-        )
-        search_action.setToolTip("Search appointments")
         filters.addWidget(self.search, 0, 0, 1, 5)
 
-        status_label = QLabel("Status")
-        status_label.setObjectName("fieldLabel")
+        self.status_label = QLabel(t("field_payment_status"))
+        self.status_label.setObjectName("fieldLabel")
         self.status = QComboBox()
         self.status.setMinimumWidth(170)
         self.status.setAccessibleName("Filter appointments by status")
-        self.status.addItems(
-            [
-                "All",
-                "PENDING",
-                "CONFIRMED",
-                "CHECKED_IN",
-                "IN_PROGRESS",
-                "COMPLETED",
-                "CANCELLED",
-            ]
-        )
-        status_label.setBuddy(self.status)
+        self._populate_status_combo()
+        self.status_label.setBuddy(self.status)
 
-        self.refresh_button = QPushButton("Refresh")
+        self.refresh_button = QPushButton(t("btn_refresh"))
         self.refresh_button.setObjectName("secondaryButton")
-        apply_line_icon(
-            self.refresh_button,
-            "refresh",
-            active_color="#0F766E",
-            accessible_name="Refresh appointment history",
-        )
-        self.details_button = QPushButton("View Details")
+        self.refresh_button.setAccessibleName("Refresh appointment history")
+        self.details_button = QPushButton(t("btn_view_details"))
         self.details_button.setObjectName("primaryButton")
+        self.details_button.setAccessibleName("View selected appointment details")
         self.details_button.setEnabled(False)
-        apply_line_icon(
-            self.details_button,
-            "eye",
-            "#FFFFFF",
-            disabled_color="#94A3B8",
-            accessible_name="View selected appointment details",
-        )
 
-        filters.addWidget(status_label, 1, 0)
+        filters.addWidget(self.status_label, 1, 0)
         filters.addWidget(self.status, 1, 1)
         filters.setColumnStretch(2, 1)
         filters.addWidget(self.refresh_button, 1, 3)
@@ -130,17 +98,24 @@ class AppointmentHistoryView(BaseApiView):
         )
         self.model: QStandardItemModel = configure_table(
             self.table,
-            ["Date", "Time", "Doctor", "Specialty", "Clinic", "Reason", "Status"],
+            [
+                t("field_date"),
+                t("field_time"),
+                t("field_doctor"),
+                t("field_specialty"),
+                t("field_clinic"),
+                t("field_reason"),
+                t("field_payment_status"),
+            ],
             stretch_column=5,
             column_widths={0: 112, 1: 120, 2: 170, 3: 150, 4: 190, 6: 132},
         )
         self.table.setItemDelegateForColumn(6, StatusBadgeDelegate(self.table))
 
         self.empty_state = EmptyState(
-            "No appointments found",
-            "Try changing the search text or status filter, then refresh the list.",
-            icon="calendar",
-            action_text="Refresh results",
+            t("no_appointments_found"),
+            t("no_appointments_desc"),
+            action_text=t("btn_refresh"),
         )
         self.empty_state.setAccessibleName("No appointment results")
 
@@ -166,6 +141,57 @@ class AppointmentHistoryView(BaseApiView):
         self.pagination.page_changed.connect(self._change_page)
         self.pagination.page_size_changed.connect(self._page_size_changed)
 
+        get_i18n().language_changed.connect(self.retranslate_ui)
+
+    def _populate_status_combo(self) -> None:
+        status_items = [
+            (t("status_all"), "All"),
+            (t("status_pending"), "PENDING"),
+            (t("status_confirmed"), "CONFIRMED"),
+            (t("status_checked_in"), "CHECKED_IN"),
+            (t("status_in_progress"), "IN_PROGRESS"),
+            (t("status_completed"), "COMPLETED"),
+            (t("status_cancelled"), "CANCELLED"),
+        ]
+        curr_data = self.status.currentData()
+        self.status.blockSignals(True)
+        self.status.clear()
+        for label, val in status_items:
+            self.status.addItem(label, val)
+        idx = self.status.findData(curr_data)
+        if idx >= 0:
+            self.status.setCurrentIndex(idx)
+        self.status.blockSignals(False)
+
+    def retranslate_ui(self) -> None:
+        """Update all text in AppointmentHistoryView according to current language."""
+        self.header.set_title(t("appointment_history_title"))
+        if self._total_appointments > 0:
+            self.header.set_subtitle(t("appointments_count", count=self._total_appointments))
+        else:
+            self.header.set_subtitle(t("appointment_history_subtitle"))
+        self.book_button.setText(t("btn_new_booking"))
+        self.search.setPlaceholderText(t("appointment_search_placeholder"))
+        self.status_label.setText(t("field_payment_status"))
+        self._populate_status_combo()
+        self.refresh_button.setText(t("btn_refresh"))
+        self.details_button.setText(t("btn_view_details"))
+        self.empty_state.set_title(t("no_appointments_found"))
+        self.empty_state.set_description(t("no_appointments_desc"))
+        self.empty_state.set_action(t("btn_refresh"))
+
+        headers = [
+            t("field_date"),
+            t("field_time"),
+            t("field_doctor"),
+            t("field_specialty"),
+            t("field_clinic"),
+            t("field_reason"),
+            t("field_payment_status"),
+        ]
+        for col, h in enumerate(headers):
+            self.model.setHeaderData(col, Qt.Orientation.Horizontal, h)
+
     def activate(self) -> None:
         self.load()
 
@@ -177,11 +203,10 @@ class AppointmentHistoryView(BaseApiView):
         keyword = self.search.text().strip()
         if keyword:
             params["keyword"] = keyword
-        if self.status.currentText() != "All":
-            params["status"] = self.status.currentText()
+        status_val = self.status.currentData() or "All"
+        if status_val != "All":
+            params["status"] = status_val
 
-        # A prior empty result must not masquerade as the current loading or
-        # error state. Existing rows remain visible but cannot be activated.
         self.content_stack.setCurrentWidget(self.table)
         self.details_button.setEnabled(False)
         self.run_api_task(
@@ -197,7 +222,7 @@ class AppointmentHistoryView(BaseApiView):
                 self.empty_state.action_button,
                 self.pagination,
             ),
-            loading_text="Loading appointments...",
+            loading_text=t("loading"),
             on_finished=self._sync_details_button,
         )
 
@@ -228,13 +253,13 @@ class AppointmentHistoryView(BaseApiView):
 
         self._page = int(page.get("page", self._page))
         total = int(page.get("total", 0))
+        self._total_appointments = total
         self.pagination.set_page(
             self._page,
             int(page.get("total_pages", 0)),
             total,
         )
-        noun = "appointment" if total == 1 else "appointments"
-        self.header.set_subtitle(f"{total:,} {noun} found")
+        self.header.set_subtitle(t("appointments_count", count=total))
         self.table.clearSelection()
         self.details_button.setEnabled(False)
         self.content_stack.setCurrentWidget(self.table if items else self.empty_state)
@@ -282,6 +307,7 @@ class AppointmentHistoryView(BaseApiView):
 
     def clear_data(self) -> None:
         self._page = 1
+        self._total_appointments = 0
         self.search.clear()
         was_blocked = self.status.blockSignals(True)
         try:
@@ -291,6 +317,6 @@ class AppointmentHistoryView(BaseApiView):
         self.model.removeRows(0, self.model.rowCount())
         self.table.clearSelection()
         self.pagination.reset()
-        self.header.set_subtitle(self._DEFAULT_SUBTITLE)
+        self.header.set_subtitle(t("appointment_history_subtitle"))
         self.content_stack.setCurrentWidget(self.table)
         self.details_button.setEnabled(False)

@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
-
-from frontend.ui.icons import line_icon
 
 
 class StatCard(QFrame):
@@ -56,12 +54,17 @@ class StatCard(QFrame):
         text_layout.setSpacing(2)
         self._value = QLabel(str(value) if value is not None else "—")
         self._value.setObjectName("statValue")
-        label = QLabel(title)
-        label.setObjectName("statTitle")
+        self._title_label = QLabel(title)
+        self._title_label.setObjectName("statTitle")
         text_layout.addWidget(self._value)
-        text_layout.addWidget(label)
+        text_layout.addWidget(self._title_label)
 
         layout.addLayout(text_layout, 1)
+
+    def set_title(self, title: str) -> None:
+        self._title = title
+        self._title_label.setText(title)
+        self.setAccessibleName(f"{self._title}: {self._value.text()}. Open related records")
 
     def set_value(self, value: object) -> None:
         self._value.setText(str(value))

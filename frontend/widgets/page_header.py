@@ -13,8 +13,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from frontend.ui.icons import apply_line_icon
-
 
 class PageHeader(QFrame):
     """Reusable page heading that keeps navigation and actions aligned."""
@@ -39,19 +37,9 @@ class PageHeader(QFrame):
         root.setSpacing(14)
 
         self.back_button = QPushButton(back_text)
-        # The existing stylesheet immediately supplies a safe fallback.  The
-        # property lets the refreshed theme make this a compact header action.
         self.back_button.setObjectName("secondaryButton")
         self.back_button.setProperty("compact", True)
         self.back_button.setAccessibleName(back_text or "Go back")
-        apply_line_icon(
-            self.back_button,
-            "back",
-            "#475569",
-            active_color="#0F766E",
-            disabled_color="#94A3B8",
-            accessible_name=back_text or "Go back",
-        )
         self.back_button.clicked.connect(self.back_requested)
         self.back_button.setVisible(show_back)
         root.addWidget(self.back_button, 0, Qt.AlignmentFlag.AlignTop)

@@ -47,7 +47,7 @@ class LoginWindow(QWidget):
         title_label.setAlignment(Qt.AlignCenter)
         card_layout.addWidget(title_label)
 
-        subtitle_label = QLabel("Đăng nhập để truy cập hệ thống quản lý phòng khám")
+        subtitle_label = QLabel("Đăng nhập để tiếp tục")
         subtitle_label.setStyleSheet("color: #64748b; font-size: 13px;")
         subtitle_label.setAlignment(Qt.AlignCenter)
         subtitle_label.setWordWrap(True)
@@ -71,7 +71,7 @@ class LoginWindow(QWidget):
         user_label = QLabel("Tên đăng nhập")
         user_label.setObjectName("fieldLabel")
         self.username_input = QLineEdit()
-        self.username_input.setPlaceholderText("Nhập username...")
+        self.username_input.setPlaceholderText("Nhập tên đăng nhập...")
         self.username_input.returnPressed.connect(self.handle_login)
         user_box.addWidget(user_label)
         user_box.addWidget(self.username_input)

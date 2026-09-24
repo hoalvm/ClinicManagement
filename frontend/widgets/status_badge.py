@@ -74,6 +74,91 @@ STATUS_COLORS = MappingProxyType(
     }
 )
 
+STATUS_LABELS_VN: Final[dict[str, str]] = {
+    "PAID": "Đã thanh toán",
+    "UNPAID": "Chưa thanh toán",
+    "COMPLETED": "Hoàn thành",
+    "CONFIRMED": "Đã xác nhận",
+    "CHECKED_IN": "Chờ khám",
+    "SCHEDULED": "Đã đặt",
+    "IN_PROGRESS": "Đang khám",
+    "PENDING": "Chờ xử lý",
+    "OVERDUE": "Quá hạn",
+    "CANCELLED": "Đã hủy",
+    "CANCELED": "Đã hủy",
+    "FAILED": "Thất bại",
+    "ACTIVE": "Hoạt động",
+    "INACTIVE": "Đã khóa",
+    "HOAT_DONG": "Hoạt động",
+    "HOẠT ĐỘNG": "Hoạt động",
+    "DA_KHOA": "Đã khóa",
+    "ĐÃ KHÓA": "Đã khóa",
+    "DANG_KHAM": "Đang khám",
+    "ĐANG KHÁM": "Đang khám",
+    "HOAN_TAT": "Hoàn thành",
+    "HOÀN TẤT": "Hoàn thành",
+    "CHO_KHAM": "Chờ khám",
+    "CHỜ KHÁM": "Chờ khám",
+    "DA_THANH_TOAN": "Đã thanh toán",
+    "ĐÃ THANH TOÁN": "Đã thanh toán",
+    "CHUA_THANH_TOAN": "Chưa thanh toán",
+    "CHƯA THANH TOÁN": "Chưa thanh toán",
+    "PATIENT": "Bệnh nhân",
+    "DOCTOR": "Bác sĩ",
+    "STAFF": "Nhân viên",
+    "ADMIN": "Quản trị viên",
+    "CASH": "Tiền mặt",
+    "CARD": "Thẻ",
+    "TRANSFER": "Chuyển khoản",
+}
+
+STATUS_LABELS_EN: Final[dict[str, str]] = {
+    "PAID": "Paid",
+    "UNPAID": "Unpaid",
+    "COMPLETED": "Completed",
+    "CONFIRMED": "Confirmed",
+    "CHECKED_IN": "Checked In",
+    "SCHEDULED": "Scheduled",
+    "IN_PROGRESS": "In Progress",
+    "PENDING": "Pending",
+    "OVERDUE": "Overdue",
+    "CANCELLED": "Cancelled",
+    "CANCELED": "Cancelled",
+    "FAILED": "Failed",
+    "ACTIVE": "Active",
+    "INACTIVE": "Locked",
+    "HOAT_DONG": "Active",
+    "HOẠT ĐỘNG": "Active",
+    "DA_KHOA": "Locked",
+    "ĐÃ KHÓA": "Locked",
+    "DANG_KHAM": "In Progress",
+    "ĐANG KHÁM": "In Progress",
+    "HOAN_TAT": "Completed",
+    "HOÀN TẤT": "Completed",
+    "CHO_KHAM": "Checked In",
+    "CHỜ KHÁM": "Checked In",
+    "DA_THANH_TOAN": "Paid",
+    "ĐÃ THANH TOÁN": "Paid",
+    "CHUA_THANH_TOAN": "Unpaid",
+    "CHƯA THANH TOÁN": "Unpaid",
+    "PATIENT": "Patient",
+    "DOCTOR": "Doctor",
+    "STAFF": "Staff",
+    "ADMIN": "Admin",
+    "CASH": "Cash",
+    "CARD": "Card",
+    "TRANSFER": "Transfer",
+}
+
+
+def _current_lang() -> str:
+    try:
+        from frontend.core.i18n import get_i18n
+
+        return get_i18n().current_language
+    except Exception:
+        return "vi"
+
 
 def normalize_status(value: object) -> str:
     """Convert API- or display-style status values to a stable lookup key."""
@@ -83,11 +168,24 @@ def normalize_status(value: object) -> str:
     return str(value).strip().upper().replace("-", "_").replace(" ", "_")
 
 
-def display_status(value: object) -> str:
+def display_status(value: object, lang: str | None = None) -> str:
     """Return a compact human-readable label for a status value."""
 
+    if value is None or str(value).strip() == "":
+        return "—"
     normalized = normalize_status(value)
-    return normalized.replace("_", " ").title() if normalized else "—"
+    if not normalized:
+        return "—"
+
+    target_lang = lang or _current_lang()
+    if target_lang == "en":
+        if normalized in STATUS_LABELS_EN:
+            return STATUS_LABELS_EN[normalized]
+        return normalized.replace("_", " ").title()
+    else:
+        if normalized in STATUS_LABELS_VN:
+            return STATUS_LABELS_VN[normalized]
+        return str(value).strip()
 
 
 def status_colors(value: object) -> StatusColors:

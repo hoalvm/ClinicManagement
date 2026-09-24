@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 from frontend.core.config import get_frontend_settings
 from frontend.widgets.feedback_banner import FeedbackBanner
 from frontend.widgets.page_header import PageHeader
-from frontend.widgets.status_badge import StatusBadgeDelegate
+from frontend.widgets.status_badge import STATUS_LABELS_VN, StatusBadgeDelegate
 
 API_URL = f"{get_frontend_settings().api_base_url.rstrip('/')}/api/v1/doctor"
 
@@ -154,9 +154,9 @@ class DoctorScheduleView(QWidget):
         # Header
         self.header = PageHeader(
             "Lịch tiếp nhận khám bệnh",
-            "Danh sách bệnh nhân đã đăng ký, đã check-in và chờ khám",
+            "Hàng đợi khám hôm nay",
         )
-        btn_refresh = QPushButton("Làm mới danh sách")
+        btn_refresh = QPushButton("Làm mới")
         btn_refresh.setObjectName("secondaryButton")
         btn_refresh.setCursor(Qt.PointingHandCursor)
         btn_refresh.clicked.connect(self.load_schedule)
@@ -228,7 +228,7 @@ class DoctorScheduleView(QWidget):
 
             # Status pill (rendered via delegate)
             status_text = appt.get("Status", "CHECKED_IN")
-            item_status = QTableWidgetItem(status_text)
+            item_status = QTableWidgetItem(STATUS_LABELS_VN.get(status_text, status_text))
             item_status.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(row, 4, item_status)
 
@@ -426,7 +426,7 @@ class MedicalExamView(QWidget):
         right_col.addWidget(card_pres, 1)
 
         # Finish Button
-        self.btn_finish = QPushButton("HOÀN TẤT CA KHÁM (COMPLETED)")
+        self.btn_finish = QPushButton("Hoàn tất khám")
         self.btn_finish.setObjectName("primaryButton")
         self.btn_finish.setCursor(Qt.PointingHandCursor)
         self.btn_finish.setMinimumHeight(44)

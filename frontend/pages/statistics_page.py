@@ -28,7 +28,7 @@ class StatisticsPage(QWidget):
         # ------------------- Header -------------------
         self.header = PageHeader(
             "Báo cáo & Thống kê",
-            "Số liệu tổng quan về người dùng, nhân sự y tế, cơ sở khám chữa bệnh và lịch trực",
+            "Tổng quan số liệu phòng khám",
         )
         self.main_layout.addWidget(self.header)
 
@@ -112,9 +112,9 @@ class StatisticsPage(QWidget):
         cards_data = [
             ("TỔNG TÀI KHOẢN", d.get("total_users", 0), "#0284c7"),
             ("BÁC SĨ HOẠT ĐỘNG", d.get("total_doctors", 0), "#0f766e"),
-            ("CƠ SỞ PHÒNG KHÁM", d.get("total_clinics", 0), "#d97706"),
-            ("CHUYÊN KHOA Y TẾ", d.get("total_specialties", 0), "#7c3aed"),
-            ("CA LỊCH LÀM VIỆC", d.get("total_schedules", 0), "#059669"),
+            ("PHÒNG KHÁM", d.get("total_clinics", 0), "#d97706"),
+            ("CHUYÊN KHOA", d.get("total_specialties", 0), "#7c3aed"),
+            ("CA LỊCH TRỰC", d.get("total_schedules", 0), "#059669"),
         ]
 
         for i, (title, value, color) in enumerate(cards_data):

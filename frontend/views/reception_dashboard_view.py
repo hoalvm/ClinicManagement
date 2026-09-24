@@ -47,9 +47,9 @@ class ReceptionDashboardView(BaseApiView):
 
         # Page Header
         self.header = PageHeader(
-            "Reception Desk",
-            "Real-time patient check-in, appointments, and billing workflow.",
-            action_label="Refresh Data",
+            "Bàn tiếp đón",
+            "Tổng quan tiếp nhận bệnh nhân và hàng đợi hôm nay",
+            action_label="Làm mới",
             parent=self,
         )
         self.header.action_clicked.connect(self.refresh)
@@ -64,26 +64,26 @@ class ReceptionDashboardView(BaseApiView):
         quick_actions_layout.setContentsMargins(16, 14, 16, 14)
         quick_actions_layout.setSpacing(12)
 
-        quick_label = QLabel("Quick Actions:")
+        quick_label = QLabel("Thao tác nhanh:")
         quick_label.setStyleSheet("font-weight: 700; color: #1e293b; font-size: 13px;")
         quick_actions_layout.addWidget(quick_label)
 
-        self.btn_check_in = QPushButton("Fast Check-In")
+        self.btn_check_in = QPushButton("Tiếp nhận nhanh")
         self.btn_check_in.setStyleSheet("background-color: #0f766e; color: white; border-radius: 8px; padding: 8px 14px; font-weight: 600;")
         self.btn_check_in.clicked.connect(lambda: self.navigate_requested.emit("check_in"))
         quick_actions_layout.addWidget(self.btn_check_in)
 
-        self.btn_book = QPushButton("Book For Patient")
+        self.btn_book = QPushButton("Đặt lịch khám")
         self.btn_book.setStyleSheet("background-color: #0369a1; color: white; border-radius: 8px; padding: 8px 14px; font-weight: 600;")
         self.btn_book.clicked.connect(lambda: self.navigate_requested.emit("book_for_patient"))
         quick_actions_layout.addWidget(self.btn_book)
 
-        self.btn_invoice = QPushButton("Create / Manage Invoices")
+        self.btn_invoice = QPushButton("Lập hóa đơn")
         self.btn_invoice.setStyleSheet("background-color: #d97706; color: white; border-radius: 8px; padding: 8px 14px; font-weight: 600;")
         self.btn_invoice.clicked.connect(lambda: self.navigate_requested.emit("invoice_management"))
         quick_actions_layout.addWidget(self.btn_invoice)
 
-        self.btn_payments = QPushButton("Payment Desk")
+        self.btn_payments = QPushButton("Thu ngân")
         self.btn_payments.setStyleSheet("background-color: #15803d; color: white; border-radius: 8px; padding: 8px 14px; font-weight: 600;")
         self.btn_payments.clicked.connect(lambda: self.navigate_requested.emit("payment"))
         quick_actions_layout.addWidget(self.btn_payments)
@@ -95,10 +95,10 @@ class ReceptionDashboardView(BaseApiView):
         stats_row_1 = QHBoxLayout()
         stats_row_1.setSpacing(16)
 
-        self.card_today = StatCard("Today's Appointments", "0", tone="brand", parent=self)
-        self.card_pending = StatCard("Pending Confirmation", "0", tone="warning", parent=self)
-        self.card_checked_in = StatCard("Waiting (Checked In)", "0", tone="info", parent=self)
-        self.card_unpaid = StatCard("Unpaid Invoices", "0", tone="danger", parent=self)
+        self.card_today = StatCard("Lịch hẹn hôm nay", "0", tone="brand", parent=self)
+        self.card_pending = StatCard("Chờ xác nhận", "0", tone="warning", parent=self)
+        self.card_checked_in = StatCard("Đang chờ khám", "0", tone="info", parent=self)
+        self.card_unpaid = StatCard("Chưa thanh toán", "0", tone="danger", parent=self)
 
         stats_row_1.addWidget(self.card_today)
         stats_row_1.addWidget(self.card_pending)
@@ -107,14 +107,14 @@ class ReceptionDashboardView(BaseApiView):
         self.layout.addLayout(stats_row_1)
 
         # Waiting Room / Checked-In Queue Section
-        section_label = QLabel("Currently Checked-In & Waiting for Consultation")
+        section_label = QLabel("Bệnh nhân đang chờ khám")
         section_label.setStyleSheet("font-weight: 700; font-size: 15px; color: #0f172a; margin-top: 10px;")
         self.layout.addWidget(section_label)
 
         self.queue_table = QTableWidget()
         self.queue_table.setColumnCount(6)
         self.queue_table.setHorizontalHeaderLabels([
-            "Appt #", "Patient Name", "Phone", "Doctor", "Time Slot", "Action"
+            "Mã hẹn", "Họ và tên", "Số điện thoại", "Bác sĩ", "Giờ khám", "Thao tác"
         ])
         self.queue_table.horizontalHeader().setStretchLastSection(True)
         self.queue_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -123,8 +123,8 @@ class ReceptionDashboardView(BaseApiView):
         self.layout.addWidget(self.queue_table)
 
         self.empty_queue = EmptyState(
-            "No patients currently waiting",
-            "When arriving patients check in, they will appear in this active waiting queue.",
+            "Hiện không có bệnh nhân chờ khám",
+            "Bệnh nhân đã tiếp nhận sẽ hiển thị tại danh sách này.",
             parent=self,
         )
         self.layout.addWidget(self.empty_queue)
@@ -145,7 +145,7 @@ class ReceptionDashboardView(BaseApiView):
             "fetch_stats",
             lambda: self.api_client.get("/api/v1/reception/dashboard"),
             self._on_stats_loaded,
-            loading_text="Updating reception dashboard…",
+            loading_text="Đang cập nhật dữ liệu...",
         )
 
     def _on_stats_loaded(self, data: dict[str, Any]) -> None:
@@ -175,7 +175,7 @@ class ReceptionDashboardView(BaseApiView):
                 self.queue_table.setItem(row, 3, QTableWidgetItem(doctor.get("full_name", "")))
                 self.queue_table.setItem(row, 4, QTableWidgetItem(start_time))
 
-                action_btn = QPushButton("Create Bill")
+                action_btn = QPushButton("Lập hóa đơn")
                 action_btn.setStyleSheet("background-color: #0f766e; color: white; border-radius: 6px; padding: 4px 8px; font-weight: 600; font-size: 11px;")
                 action_btn.clicked.connect(lambda _, a_id=appt_id: self.create_invoice_requested.emit(a_id))
                 self.queue_table.setCellWidget(row, 5, action_btn)
