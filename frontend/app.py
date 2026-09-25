@@ -164,8 +164,8 @@ class DoctorScheduleView(QWidget):
         table_card = QFrame()
         table_card.setObjectName("contentCard")
         card_layout = QVBoxLayout(table_card)
-        card_layout.setContentsMargins(16, 16, 16, 16)
-        card_layout.setSpacing(10)
+        card_layout.setContentsMargins(20, 18, 20, 18)
+        card_layout.setSpacing(12)
 
         card_title = QLabel("Hàng đợi khám hôm nay")
         card_title.setObjectName("sectionTitle")
@@ -304,8 +304,8 @@ class MedicalExamView(QWidget):
         card_pat = QFrame()
         card_pat.setObjectName("contentCard")
         pat_card_layout = QVBoxLayout(card_pat)
-        pat_card_layout.setContentsMargins(18, 16, 18, 16)
-        pat_card_layout.setSpacing(10)
+        pat_card_layout.setContentsMargins(20, 18, 20, 18)
+        pat_card_layout.setSpacing(12)
 
         lbl_pat_title = QLabel("Thông tin bệnh nhân")
         lbl_pat_title.setObjectName("sectionTitle")
@@ -331,8 +331,8 @@ class MedicalExamView(QWidget):
         card_exam = QFrame()
         card_exam.setObjectName("contentCard")
         exam_card_layout = QVBoxLayout(card_exam)
-        exam_card_layout.setContentsMargins(18, 16, 18, 16)
-        exam_card_layout.setSpacing(10)
+        exam_card_layout.setContentsMargins(20, 18, 20, 18)
+        exam_card_layout.setSpacing(12)
 
         lbl_exam_title = QLabel("Ghi nhận chẩn đoán lâm sàng")
         lbl_exam_title.setObjectName("sectionTitle")
@@ -373,8 +373,8 @@ class MedicalExamView(QWidget):
         card_pres = QFrame()
         card_pres.setObjectName("contentCard")
         pres_card_layout = QVBoxLayout(card_pres)
-        pres_card_layout.setContentsMargins(18, 16, 18, 16)
-        pres_card_layout.setSpacing(10)
+        pres_card_layout.setContentsMargins(20, 18, 20, 18)
+        pres_card_layout.setSpacing(12)
 
         lbl_pres_title = QLabel("Kê đơn thuốc điện tử")
         lbl_pres_title.setObjectName("sectionTitle")
@@ -550,33 +550,50 @@ class DoctorDashboard(QMainWindow):
         # Top Bar
         top_bar = QFrame()
         top_bar.setStyleSheet(
-            "background-color: #0f172a; border-bottom: 1px solid #1e293b; padding: 4px 16px;"
+            "background-color: #0f172a; border-bottom: 1px solid #1e293b;"
         )
         top_bar_layout = QHBoxLayout(top_bar)
-        top_bar_layout.setContentsMargins(12, 10, 12, 10)
+        top_bar_layout.setContentsMargins(20, 12, 20, 12)
+        top_bar_layout.setSpacing(12)
 
-        brand_lbl = QLabel("CLINICCARE")
-        brand_lbl.setStyleSheet(
-            "color: #ffffff; font-size: 16px; font-weight: 800; letter-spacing: 1px;"
+        brand_mark = QLabel("C")
+        brand_mark.setAlignment(Qt.AlignCenter)
+        brand_mark.setFixedSize(32, 32)
+        brand_mark.setStyleSheet(
+            "background-color: #0f766e; color: #ffffff; border-radius: 6px; font-size: 16px; font-weight: 800;"
         )
+        top_bar_layout.addWidget(brand_mark)
+
+        brand_lbl = QLabel("ClinicCare")
+        brand_lbl.setStyleSheet(
+            "color: #ffffff; font-size: 16px; font-weight: 700;"
+        )
+        top_bar_layout.addWidget(brand_lbl)
+
+        sep = QLabel("•")
+        sep.setStyleSheet("color: #475569; font-size: 14px;")
+        top_bar_layout.addWidget(sep)
+
         sub_lbl = QLabel(
-            f"Phân hệ Bác sĩ • {self.doctor_name} (CCHN: {self.license_number})"
+            f"Bác sĩ {self.doctor_name}  (CCHN: {self.license_number})"
         )
         sub_lbl.setStyleSheet("color: #94a3b8; font-size: 12px; font-weight: 500;")
-
-        top_bar_layout.addWidget(brand_lbl)
-        top_bar_layout.addSpacing(8)
         top_bar_layout.addWidget(sub_lbl)
+
         top_bar_layout.addStretch(1)
 
         self.btn_schedule_tab = QPushButton("Lịch khám")
-        self.btn_schedule_tab.setObjectName("secondaryButton")
+        self.btn_schedule_tab.setStyleSheet(
+            "background-color: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 6px; padding: 6px 14px; font-weight: 600;"
+        )
         self.btn_schedule_tab.setCursor(Qt.PointingHandCursor)
         self.btn_schedule_tab.clicked.connect(self.go_to_schedule)
         top_bar_layout.addWidget(self.btn_schedule_tab)
 
         btn_logout = QPushButton("Đăng xuất")
-        btn_logout.setObjectName("logoutButton")
+        btn_logout.setStyleSheet(
+            "background-color: transparent; color: #f87171; border: 1px solid #7f1d1d; border-radius: 6px; padding: 6px 14px; font-weight: 600;"
+        )
         btn_logout.setCursor(Qt.PointingHandCursor)
         btn_logout.clicked.connect(self.handle_logout)
         top_bar_layout.addWidget(btn_logout)

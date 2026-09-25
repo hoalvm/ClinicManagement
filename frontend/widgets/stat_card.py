@@ -43,15 +43,18 @@ class StatCard(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 16)
         layout.setSpacing(14)
+        layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         # Clean vertical accent indicator
         accent_bar = QFrame()
         accent_bar.setFixedWidth(4)
+        accent_bar.setFixedHeight(38)
         accent_bar.setStyleSheet(f"background-color: {accent_color}; border-radius: 2px;")
-        layout.addWidget(accent_bar)
+        layout.addWidget(accent_bar, 0, Qt.AlignmentFlag.AlignVCenter)
 
         text_layout = QVBoxLayout()
         text_layout.setSpacing(2)
+        text_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         self._value = QLabel(str(value) if value is not None else "—")
         self._value.setObjectName("statValue")
         self._title_label = QLabel(title)

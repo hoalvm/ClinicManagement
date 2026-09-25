@@ -44,18 +44,32 @@ class AdminDashboard(QMainWindow):
         sidebar_layout.setSpacing(12)
 
         # Brand header
-        brand_layout = QVBoxLayout()
-        brand_layout.setSpacing(2)
-        brand_title = QLabel("CLINICCARE")
-        brand_title.setStyleSheet(
-            "color: #ffffff; font-size: 18px; font-weight: 800; letter-spacing: 1px;"
-        )
-        brand_sub = QLabel("HỆ THỐNG QUẢN TRỊ")
-        brand_sub.setStyleSheet("color: #94a3b8; font-size: 11px; font-weight: 600;")
-        brand_layout.addWidget(brand_title)
-        brand_layout.addWidget(brand_sub)
-        sidebar_layout.addLayout(brand_layout)
+        brand_row = QWidget()
+        brand_layout = QHBoxLayout(brand_row)
+        brand_layout.setContentsMargins(0, 0, 0, 0)
+        brand_layout.setSpacing(10)
 
+        brand_mark = QLabel("C")
+        brand_mark.setAlignment(Qt.AlignCenter)
+        brand_mark.setFixedSize(36, 36)
+        brand_mark.setStyleSheet(
+            "background-color: #0f766e; color: #ffffff; border-radius: 8px; font-size: 18px; font-weight: 800;"
+        )
+        brand_layout.addWidget(brand_mark)
+
+        brand_text = QWidget()
+        brand_text_layout = QVBoxLayout(brand_text)
+        brand_text_layout.setContentsMargins(0, 0, 0, 0)
+        brand_text_layout.setSpacing(1)
+        brand_title = QLabel("ClinicCare")
+        brand_title.setStyleSheet("color: #ffffff; font-size: 16px; font-weight: 700;")
+        brand_sub = QLabel("Quản trị hệ thống")
+        brand_sub.setStyleSheet("color: #94a3b8; font-size: 11px; font-weight: 500;")
+        brand_text_layout.addWidget(brand_title)
+        brand_text_layout.addWidget(brand_sub)
+        brand_layout.addWidget(brand_text, 1)
+
+        sidebar_layout.addWidget(brand_row)
         sidebar_layout.addSpacing(16)
 
         nav_title = QLabel("Chức năng")
@@ -79,16 +93,30 @@ class AdminDashboard(QMainWindow):
 
         # Bottom User Info & Logout
         user_card = QFrame()
-        user_card.setStyleSheet(
-            "background-color: #1e293b; border-radius: 8px; padding: 6px;"
-        )
-        user_layout = QVBoxLayout(user_card)
-        user_layout.setContentsMargins(10, 10, 10, 10)
-        user_layout.setSpacing(2)
+        user_card.setObjectName("sidebarUser")
+        user_card.setStyleSheet("background-color: #1e293b; border-radius: 8px; border: 1px solid #334155;")
+        user_card_layout = QHBoxLayout(user_card)
+        user_card_layout.setContentsMargins(10, 8, 10, 8)
+        user_card_layout.setSpacing(10)
 
-        user_role = QLabel("QUẢN TRỊ VIÊN")
-        user_role.setStyleSheet("color: #2dd4bf; font-size: 10px; font-weight: 700;")
-        user_layout.addWidget(user_role)
+        avatar = QLabel("AD")
+        avatar.setFixedSize(34, 34)
+        avatar.setAlignment(Qt.AlignCenter)
+        avatar.setStyleSheet(
+            "background-color: #0f766e; color: #ffffff; border-radius: 6px; font-size: 12px; font-weight: 700;"
+        )
+        user_card_layout.addWidget(avatar)
+
+        info_layout = QVBoxLayout()
+        info_layout.setContentsMargins(0, 0, 0, 0)
+        info_layout.setSpacing(1)
+        name_lbl = QLabel("Quản trị viên")
+        name_lbl.setStyleSheet("color: #ffffff; font-size: 13px; font-weight: 600;")
+        role_lbl = QLabel("Toàn quyền hệ thống")
+        role_lbl.setStyleSheet("color: #94a3b8; font-size: 11px;")
+        info_layout.addWidget(name_lbl)
+        info_layout.addWidget(role_lbl)
+        user_card_layout.addLayout(info_layout, 1)
         sidebar_layout.addWidget(user_card)
 
         self.logout_btn = QPushButton("Đăng xuất")

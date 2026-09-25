@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -24,7 +24,7 @@ from frontend.views.common import BaseApiView
 from frontend.widgets.empty_state import EmptyState
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.pagination import Pagination
-from frontend.widgets.status_badge import StatusBadge
+from frontend.widgets.status_badge import StatusBadgeDelegate
 
 
 class InvoiceManagementView(BaseApiView):
@@ -83,6 +83,7 @@ class InvoiceManagementView(BaseApiView):
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setItemDelegateForColumn(6, StatusBadgeDelegate(self.table))
         layout.addWidget(self.table)
 
         self.empty_state = EmptyState(
@@ -153,26 +154,51 @@ class InvoiceManagementView(BaseApiView):
             amount_val = inv.get("total_amount", 0)
             status = inv.get("status", "UNPAID")
 
-            self.table.setItem(row, 0, QTableWidgetItem(f"INV-{inv_id:04d}"))
-            self.table.setItem(row, 1, QTableWidgetItem(f"#{appt_id}"))
-            self.table.setItem(row, 2, QTableWidgetItem(patient_name))
-            self.table.setItem(row, 3, QTableWidgetItem(patient_phone))
-            self.table.setItem(row, 4, QTableWidgetItem(doctor_name))
-            self.table.setItem(row, 5, QTableWidgetItem(f"{float(amount_val):,.0f} ₫"))
+            item_inv = QTableWidgetItem(f"INV-{inv_id:04d}")
+            item_inv.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 0, item_inv)
 
-            badge = StatusBadge(status)
-            self.table.setCellWidget(row, 6, badge)
+            item_appt = QTableWidgetItem(f"#{appt_id}")
+            item_appt.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 1, item_appt)
+
+            self.table.setItem(row, 2, QTableWidgetItem(patient_name))
+
+            item_phone = QTableWidgetItem(patient_phone)
+            item_phone.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 3, item_phone)
+
+            self.table.setItem(row, 4, QTableWidgetItem(doctor_name))
+
+            item_amount = QTableWidgetItem(f"{float(amount_val):,.0f} ₫")
+            item_amount.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.table.setItem(row, 5, item_amount)
+
+            item_status = QTableWidgetItem(status)
+            item_status.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 6, item_status)
+
+            action_widget = QWidget()
+            act_layout = QHBoxLayout(action_widget)
+            act_layout.setContentsMargins(6, 4, 6, 4)
+            act_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             if status == "UNPAID":
                 btn_pay = QPushButton("Thu phí")
-                btn_pay.setStyleSheet("background-color: #15803d; color: white; border-radius: 6px; padding: 4px 10px; font-weight: 600; font-size: 11px;")
+                btn_pay.setCursor(Qt.PointingHandCursor)
+                btn_pay.setFixedHeight(28)
+                btn_pay.setStyleSheet("background-color: #15803d; color: white; border-radius: 6px; padding: 4px 14px; font-weight: 600; font-size: 11px;")
                 btn_pay.clicked.connect(lambda _, i_id=inv_id: self.pay_invoice_requested.emit(i_id))
-                self.table.setCellWidget(row, 7, btn_pay)
+                act_layout.addWidget(btn_pay)
             else:
                 method = "Tiền mặt" if inv.get('payment_method') == "CASH" else "Thẻ"
                 paid_label = QLabel(f"Đã thu ({method})")
-                paid_label.setStyleSheet("color: #166534; font-size: 11px; font-weight: 600; padding: 4px;")
-                self.table.setCellWidget(row, 7, paid_label)
+                paid_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                paid_label.setStyleSheet("color: #166534; font-size: 11px; font-weight: 600;")
+                act_layout.addWidget(paid_label)
+
+            self.table.setCellWidget(row, 7, action_widget)
+            self.table.setRowHeight(row, 44)
 
     def _create_invoice_dialog(self) -> None:
         dialog = QDialog(self)

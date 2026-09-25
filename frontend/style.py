@@ -159,7 +159,7 @@ QSpinBox:focus,
 QTimeEdit:focus,
 QDateEdit:focus,
 QTextEdit:focus {
-    border: 2px solid #0f766e;
+    border: 1px solid #0f766e;
     background-color: #ffffff;
 }
 
@@ -177,11 +177,11 @@ QTextEdit:disabled {
 /* ComboBox dropdown styling */
 QComboBox::drop-down {
     subcontrol-origin: padding;
-    subcontrol-position: top right;
+    subcontrol-position: center right;
     width: 28px;
     border-left: 1px solid #e2e8f0;
-    border-top-right-radius: 8px;
-    border-bottom-right-radius: 8px;
+    border-top-right-radius: 7px;
+    border-bottom-right-radius: 7px;
     background-color: #f8fafc;
 }
 
@@ -195,6 +195,7 @@ QComboBox::down-arrow {
     border-left: 4px solid transparent;
     border-right: 4px solid transparent;
     border-top: 5px solid #64748b;
+    margin: 0;
 }
 
 QComboBox QAbstractItemView {
@@ -252,6 +253,7 @@ QPushButton {
     font-size: 13px;
     font-weight: 600;
     min-height: 20px;
+    text-align: center;
 }
 
 QPushButton:hover {
@@ -414,9 +416,10 @@ QListWidget#adminSidebar {
 
 QListWidget#adminSidebar::item {
     color: #94a3b8;
-    padding: 11px 16px;
-    border-radius: 8px;
-    margin: 3px 0;
+    padding: 10px 14px;
+    border-radius: 6px;
+    border-left: 3px solid transparent;
+    margin: 2px 0;
     font-size: 13px;
     font-weight: 500;
 }
@@ -424,12 +427,14 @@ QListWidget#adminSidebar::item {
 QListWidget#adminSidebar::item:hover {
     background-color: #1e293b;
     color: #f8fafc;
+    border-left: 3px solid #334155;
 }
 
 QListWidget#adminSidebar::item:selected {
-    background-color: #0f766e;
+    background-color: #1e293b;
     color: #ffffff;
     font-weight: 600;
+    border-left: 3px solid #0f766e;
 }
 
 /* =========================================================================
@@ -546,7 +551,7 @@ QPushButton#logoutButton {
     border: 1px solid #334155;
     border-radius: 8px;
     padding: 8px 14px;
-    text-align: left;
+    text-align: center;
     font-size: 12px;
 }
 
@@ -589,7 +594,7 @@ QLabel#statusBadge {
     border-radius: 10px;
     font-size: 11px;
     font-weight: 600;
-    padding: 2px 10px;
+    padding: 0px;
 }
 
 /* =========================================================================

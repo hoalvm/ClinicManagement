@@ -44,11 +44,12 @@ class PageHeader(QFrame):
         self.back_button.setAccessibleName(back_text or "Go back")
         self.back_button.clicked.connect(self.back_requested)
         self.back_button.setVisible(show_back)
-        root.addWidget(self.back_button, 0, Qt.AlignmentFlag.AlignTop)
+        root.addWidget(self.back_button, 0, Qt.AlignmentFlag.AlignVCenter)
 
         text_layout = QVBoxLayout()
         text_layout.setContentsMargins(0, 0, 0, 0)
         text_layout.setSpacing(4)
+        text_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         self.title_label = QLabel(title)
         self.title_label.setObjectName("pageTitle")
         self.title_label.setWordWrap(True)
@@ -66,6 +67,7 @@ class PageHeader(QFrame):
         self.actions_layout = QHBoxLayout()
         self.actions_layout.setContentsMargins(0, 0, 0, 0)
         self.actions_layout.setSpacing(8)
+        self.actions_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         root.addLayout(self.actions_layout)
 
         self.action_button: QPushButton | None = None

@@ -39,8 +39,8 @@ class SpecialtyManagementPage(QWidget):
         form_card = QFrame()
         form_card.setObjectName("contentCard")
         form_card_layout = QVBoxLayout(form_card)
-        form_card_layout.setContentsMargins(20, 16, 20, 18)
-        form_card_layout.setSpacing(12)
+        form_card_layout.setContentsMargins(20, 18, 20, 18)
+        form_card_layout.setSpacing(14)
 
         form_title = QLabel("Thêm chuyên khoa")
         form_title.setObjectName("sectionTitle")
@@ -89,8 +89,8 @@ class SpecialtyManagementPage(QWidget):
         table_card = QFrame()
         table_card.setObjectName("contentCard")
         table_card_layout = QVBoxLayout(table_card)
-        table_card_layout.setContentsMargins(16, 16, 16, 16)
-        table_card_layout.setSpacing(10)
+        table_card_layout.setContentsMargins(20, 18, 20, 18)
+        table_card_layout.setSpacing(12)
 
         table_title = QLabel("Danh sách chuyên khoa")
         table_title.setObjectName("sectionTitle")
@@ -141,7 +141,7 @@ class SpecialtyManagementPage(QWidget):
 
             # Status pill (rendered via delegate)
             is_active = s["IsActive"]
-            status_text = "Hoạt động" if is_active else "Đã khóa"
+            status_text = "ACTIVE" if is_active else "INACTIVE"
             item_status = QTableWidgetItem(status_text)
             item_status.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(row, 3, item_status)

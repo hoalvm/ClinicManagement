@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -168,13 +168,33 @@ class ReceptionDashboardView(BaseApiView):
                 doctor = item.get("doctor", {})
                 start_time = str(item.get("start_time", ""))[:5]
 
-                self.queue_table.setItem(row, 0, QTableWidgetItem(f"#{appt_id}"))
+                item_id = QTableWidgetItem(f"#{appt_id}")
+                item_id.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.queue_table.setItem(row, 0, item_id)
+
                 self.queue_table.setItem(row, 1, QTableWidgetItem(patient.get("full_name", "")))
-                self.queue_table.setItem(row, 2, QTableWidgetItem(patient.get("phone", "") or "—"))
+
+                item_phone = QTableWidgetItem(patient.get("phone", "") or "—")
+                item_phone.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.queue_table.setItem(row, 2, item_phone)
+
                 self.queue_table.setItem(row, 3, QTableWidgetItem(doctor.get("full_name", "")))
-                self.queue_table.setItem(row, 4, QTableWidgetItem(start_time))
+
+                item_time = QTableWidgetItem(start_time)
+                item_time.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.queue_table.setItem(row, 4, item_time)
+
+                action_widget = QWidget()
+                act_layout = QHBoxLayout(action_widget)
+                act_layout.setContentsMargins(6, 4, 6, 4)
+                act_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
                 action_btn = QPushButton("Lập hóa đơn")
-                action_btn.setStyleSheet("background-color: #0f766e; color: white; border-radius: 6px; padding: 4px 8px; font-weight: 600; font-size: 11px;")
+                action_btn.setCursor(Qt.PointingHandCursor)
+                action_btn.setFixedHeight(28)
+                action_btn.setStyleSheet("background-color: #0f766e; color: white; border-radius: 6px; padding: 4px 12px; font-weight: 600; font-size: 11px;")
                 action_btn.clicked.connect(lambda _, a_id=appt_id: self.create_invoice_requested.emit(a_id))
-                self.queue_table.setCellWidget(row, 5, action_btn)
+                act_layout.addWidget(action_btn)
+
+                self.queue_table.setCellWidget(row, 5, action_widget)
+                self.queue_table.setRowHeight(row, 44)

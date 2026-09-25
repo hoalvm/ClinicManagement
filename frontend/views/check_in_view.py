@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -141,17 +141,40 @@ class CheckInView(BaseApiView):
             patient = appt.get("patient", {})
             doctor = appt.get("doctor", {})
 
-            self.results_table.setItem(row, 0, QTableWidgetItem(f"#{appt_id}"))
-            self.results_table.setItem(row, 1, QTableWidgetItem(appt_date))
-            self.results_table.setItem(row, 2, QTableWidgetItem(start_time))
+            item_id = QTableWidgetItem(f"#{appt_id}")
+            item_id.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.results_table.setItem(row, 0, item_id)
+
+            item_date = QTableWidgetItem(appt_date)
+            item_date.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.results_table.setItem(row, 1, item_date)
+
+            item_time = QTableWidgetItem(start_time)
+            item_time.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.results_table.setItem(row, 2, item_time)
+
             self.results_table.setItem(row, 3, QTableWidgetItem(patient.get("full_name", "")))
-            self.results_table.setItem(row, 4, QTableWidgetItem(patient.get("phone", "") or "—"))
+
+            item_phone = QTableWidgetItem(patient.get("phone", "") or "—")
+            item_phone.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.results_table.setItem(row, 4, item_phone)
+
             self.results_table.setItem(row, 5, QTableWidgetItem(doctor.get("full_name", "")))
 
+            action_widget = QWidget()
+            act_layout = QHBoxLayout(action_widget)
+            act_layout.setContentsMargins(6, 4, 6, 4)
+            act_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
             btn = QPushButton("Tiếp nhận")
-            btn.setStyleSheet("background-color: #0f766e; color: white; border-radius: 6px; padding: 6px 12px; font-weight: 600;")
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setFixedHeight(28)
+            btn.setStyleSheet("background-color: #0f766e; color: white; border-radius: 6px; padding: 4px 14px; font-weight: 600; font-size: 11px;")
             btn.clicked.connect(lambda _, a_id=appt_id: self._execute_check_in(a_id))
-            self.results_table.setCellWidget(row, 6, btn)
+            act_layout.addWidget(btn)
+
+            self.results_table.setCellWidget(row, 6, action_widget)
+            self.results_table.setRowHeight(row, 44)
 
     def _execute_check_in(self, appt_id: int) -> None:
         queue_no = self.queue_num_input.text().strip() or None

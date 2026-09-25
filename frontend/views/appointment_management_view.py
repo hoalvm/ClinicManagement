@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
@@ -27,7 +27,7 @@ from frontend.views.common import BaseApiView
 from frontend.widgets.empty_state import EmptyState
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.pagination import Pagination
-from frontend.widgets.status_badge import StatusBadge
+from frontend.widgets.status_badge import StatusBadgeDelegate
 
 
 class AppointmentManagementView(BaseApiView):
@@ -93,6 +93,7 @@ class AppointmentManagementView(BaseApiView):
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setItemDelegateForColumn(5, StatusBadgeDelegate(self.table))
         layout.addWidget(self.table)
 
         self.empty_state = EmptyState(
@@ -164,45 +165,66 @@ class AppointmentManagementView(BaseApiView):
             doctor = appt.get("doctor", {})
             status = appt.get("status", "PENDING")
 
-            self.table.setItem(row, 0, QTableWidgetItem(f"#{appt_id}"))
-            self.table.setItem(row, 1, QTableWidgetItem(f"{appt_date} {start_time}"))
+            item_id = QTableWidgetItem(f"#{appt_id}")
+            item_id.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 0, item_id)
+
+            item_dt = QTableWidgetItem(f"{appt_date} {start_time}")
+            item_dt.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 1, item_dt)
+
             self.table.setItem(row, 2, QTableWidgetItem(patient.get("full_name", "")))
-            self.table.setItem(row, 3, QTableWidgetItem(patient.get("phone", "") or "—"))
+
+            item_phone = QTableWidgetItem(patient.get("phone", "") or "—")
+            item_phone.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 3, item_phone)
+
             self.table.setItem(row, 4, QTableWidgetItem(doctor.get("full_name", "")))
 
-            badge = StatusBadge(status)
-            self.table.setCellWidget(row, 5, badge)
+            item_status = QTableWidgetItem(status)
+            item_status.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 5, item_status)
 
             # Actions cell container
             actions_widget = QWidget()
             actions_layout = QHBoxLayout(actions_widget)
             actions_layout.setContentsMargins(4, 2, 4, 2)
             actions_layout.setSpacing(6)
+            actions_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             if status == "PENDING":
                 btn_confirm = QPushButton("Xác nhận")
+                btn_confirm.setCursor(Qt.PointingHandCursor)
+                btn_confirm.setMinimumHeight(28)
                 btn_confirm.setStyleSheet("background-color: #0f766e; color: white; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-weight: 600;")
                 btn_confirm.clicked.connect(lambda _, a_id=appt_id: self._confirm_appointment(a_id))
                 actions_layout.addWidget(btn_confirm)
 
             if status in ("PENDING", "CONFIRMED"):
                 btn_checkin = QPushButton("Tiếp nhận")
+                btn_checkin.setCursor(Qt.PointingHandCursor)
+                btn_checkin.setMinimumHeight(28)
                 btn_checkin.setStyleSheet("background-color: #0284c7; color: white; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-weight: 600;")
                 btn_checkin.clicked.connect(lambda _, a_id=appt_id: self._check_in_appointment(a_id))
                 actions_layout.addWidget(btn_checkin)
 
             if status not in ("COMPLETED", "CANCELLED"):
                 btn_reschedule = QPushButton("Đổi lịch")
+                btn_reschedule.setCursor(Qt.PointingHandCursor)
+                btn_reschedule.setMinimumHeight(28)
                 btn_reschedule.setStyleSheet("background-color: #e2e8f0; color: #334155; border-radius: 6px; padding: 4px 8px; font-size: 11px;")
                 btn_reschedule.clicked.connect(lambda _, a=appt: self._reschedule_dialog(a))
                 actions_layout.addWidget(btn_reschedule)
 
                 btn_cancel = QPushButton("Hủy")
+                btn_cancel.setCursor(Qt.PointingHandCursor)
+                btn_cancel.setMinimumHeight(28)
                 btn_cancel.setStyleSheet("background-color: #fee2e2; color: #b91c1c; border-radius: 6px; padding: 4px 8px; font-size: 11px;")
                 btn_cancel.clicked.connect(lambda _, a_id=appt_id: self._cancel_dialog(a_id))
                 actions_layout.addWidget(btn_cancel)
 
             self.table.setCellWidget(row, 6, actions_widget)
+            self.table.setRowHeight(row, 44)
 
     def _confirm_appointment(self, appt_id: int) -> None:
         self.run_api_task(
