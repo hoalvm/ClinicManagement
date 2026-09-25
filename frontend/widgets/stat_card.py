@@ -37,6 +37,7 @@ class StatCard(QFrame):
             "warning": "#B45309",
             "info": "#0369A1",
             "success": "#15803D",
+            "danger": "#B91C1C",
         }
         accent_color = colors.get(tone, "#0F766E")
 

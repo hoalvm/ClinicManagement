@@ -594,7 +594,40 @@ QLabel#statusBadge {
     border-radius: 10px;
     font-size: 11px;
     font-weight: 600;
-    padding: 0px;
+    padding: 3px 10px;
+    min-width: 64px;
+}
+
+/* =========================================================================
+   10b. EMPTY STATE & QUICK ACTIONS BOX
+   ========================================================================= */
+QFrame#emptyState {
+    background-color: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 12px;
+}
+
+QLabel#emptyStateTitle {
+    color: #334155;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+QLabel#emptyStateDescription {
+    color: #64748b;
+    font-size: 12px;
+}
+
+QFrame#quickActionsBox {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+}
+
+QFrame#filterCard {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
 }
 
 /* =========================================================================

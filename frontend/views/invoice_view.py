@@ -9,10 +9,13 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -37,7 +40,12 @@ class InvoiceManagementView(BaseApiView):
         self._current_page = 1
         self._page_size = 15
 
-        layout = QVBoxLayout(self)
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
 
@@ -53,26 +61,29 @@ class InvoiceManagementView(BaseApiView):
         layout.addWidget(self.loading)
 
         # Filters
-        filter_bar = QHBoxLayout()
-        filter_bar.setSpacing(12)
+        filter_card = QFrame()
+        filter_card.setObjectName("filterCard")
+        filter_layout = QHBoxLayout(filter_card)
+        filter_layout.setContentsMargins(16, 10, 16, 10)
+        filter_layout.setSpacing(12)
 
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Tìm kiếm theo tên bệnh nhân, SĐT hoặc mã HĐ...")
+        self.search_input.setPlaceholderText("Tìm theo tên bệnh nhân, SĐT hoặc mã HĐ...")
         self.search_input.returnPressed.connect(self._apply_filter)
-        filter_bar.addWidget(self.search_input, 2)
+        filter_layout.addWidget(self.search_input, 2)
 
         self.status_combo = QComboBox()
         self.status_combo.addItem("Tất cả hóa đơn", "")
         self.status_combo.addItem("Chưa thanh toán", "UNPAID")
         self.status_combo.addItem("Đã thanh toán", "PAID")
         self.status_combo.currentIndexChanged.connect(self._apply_filter)
-        filter_bar.addWidget(self.status_combo, 1)
+        filter_layout.addWidget(self.status_combo, 1)
 
         self.btn_filter = QPushButton("Lọc")
         self.btn_filter.clicked.connect(self._apply_filter)
-        filter_bar.addWidget(self.btn_filter)
+        filter_layout.addWidget(self.btn_filter)
 
-        layout.addLayout(filter_bar)
+        layout.addWidget(filter_card)
 
         # Invoices Table
         self.table = QTableWidget()
@@ -80,7 +91,18 @@ class InvoiceManagementView(BaseApiView):
         self.table.setHorizontalHeaderLabels([
             "Mã HĐ", "Mã hẹn", "Bệnh nhân", "Số điện thoại", "Bác sĩ", "Tổng tiền", "Trạng thái", "Thao tác"
         ])
-        self.table.horizontalHeader().setStretchLastSection(True)
+        hdr = self.table.horizontalHeader()
+        hdr.setStretchLastSection(False)
+        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
+        hdr.setSectionResizeMode(7, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(6, 110)
+        self.table.setColumnWidth(7, 120)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setItemDelegateForColumn(6, StatusBadgeDelegate(self.table))
@@ -97,6 +119,11 @@ class InvoiceManagementView(BaseApiView):
         self.pagination = Pagination(parent=self)
         self.pagination.page_requested.connect(self._go_to_page)
         layout.addWidget(self.pagination)
+
+        scroll.setWidget(container)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(scroll)
 
     def showEvent(self, event: Any) -> None:
         super().showEvent(event)
@@ -187,11 +214,14 @@ class InvoiceManagementView(BaseApiView):
                 btn_pay = QPushButton("Thu phí")
                 btn_pay.setCursor(Qt.PointingHandCursor)
                 btn_pay.setFixedHeight(28)
-                btn_pay.setStyleSheet("background-color: #15803d; color: white; border-radius: 6px; padding: 4px 14px; font-weight: 600; font-size: 11px;")
+                btn_pay.setStyleSheet(
+                    "background-color: #15803d; color: white; border-radius: 6px; "
+                    "padding: 4px 14px; font-weight: 600; font-size: 11px;"
+                )
                 btn_pay.clicked.connect(lambda _, i_id=inv_id: self.pay_invoice_requested.emit(i_id))
                 act_layout.addWidget(btn_pay)
             else:
-                method = "Tiền mặt" if inv.get('payment_method') == "CASH" else "Thẻ"
+                method = "Tiền mặt" if inv.get("payment_method") == "CASH" else "Thẻ"
                 paid_label = QLabel(f"Đã thu ({method})")
                 paid_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 paid_label.setStyleSheet("color: #166534; font-size: 11px; font-weight: 600;")
@@ -237,9 +267,9 @@ class InvoiceManagementView(BaseApiView):
 
         btn_row = QHBoxLayout()
         btn_cancel = QPushButton("Hủy")
+        btn_cancel.setObjectName("secondaryButton")
         btn_cancel.clicked.connect(dialog.reject)
         btn_submit = QPushButton("Tạo hóa đơn")
-        btn_submit.setStyleSheet("background-color: #0f766e; color: white; font-weight: bold; padding: 8px 16px;")
         btn_submit.clicked.connect(dialog.accept)
         btn_row.addWidget(btn_cancel)
         btn_row.addWidget(btn_submit)

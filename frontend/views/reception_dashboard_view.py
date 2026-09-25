@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QPushButton,
     QScrollArea,
@@ -114,9 +115,18 @@ class ReceptionDashboardView(BaseApiView):
         self.queue_table.setHorizontalHeaderLabels([
             "Mã hẹn", "Họ và tên", "Số điện thoại", "Bác sĩ", "Giờ khám", "Thao tác"
         ])
-        self.queue_table.horizontalHeader().setStretchLastSection(True)
+        hdr = self.queue_table.horizontalHeader()
+        hdr.setStretchLastSection(False)
+        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+        self.queue_table.setColumnWidth(5, 130)
         self.queue_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.queue_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.queue_table.setAlternatingRowColors(True)
         self.queue_table.setMinimumHeight(240)
         content_layout.addWidget(self.queue_table)
 

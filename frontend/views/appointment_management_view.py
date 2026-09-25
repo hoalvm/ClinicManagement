@@ -10,11 +10,13 @@ from PySide6.QtWidgets import (
     QDateEdit,
     QDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QTimeEdit,
@@ -42,7 +44,12 @@ class AppointmentManagementView(BaseApiView):
         self._page_size = 15
         self._current_items: list[dict[str, Any]] = []
 
-        layout = QVBoxLayout(self)
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        container = QWidget()
+
+        layout = QVBoxLayout(container)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
 
@@ -59,7 +66,10 @@ class AppointmentManagementView(BaseApiView):
         layout.addWidget(self.loading)
 
         # Filter Controls Bar
-        filter_bar = QHBoxLayout()
+        filter_card = QFrame()
+        filter_card.setObjectName("filterCard")
+        filter_bar = QHBoxLayout(filter_card)
+        filter_bar.setContentsMargins(16, 10, 16, 10)
         filter_bar.setSpacing(12)
 
         self.search_input = QLineEdit()
@@ -81,7 +91,7 @@ class AppointmentManagementView(BaseApiView):
         self.btn_refresh.clicked.connect(self._apply_filter)
         filter_bar.addWidget(self.btn_refresh)
 
-        layout.addLayout(filter_bar)
+        layout.addWidget(filter_card)
 
         # Table
         self.table = QTableWidget()
@@ -89,8 +99,17 @@ class AppointmentManagementView(BaseApiView):
         self.table.setHorizontalHeaderLabels([
             "Mã hẹn", "Thời gian", "Bệnh nhân", "Số điện thoại", "Bác sĩ", "Trạng thái", "Thao tác"
         ])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setStretchLastSection(True)
+        hdr = self.table.horizontalHeader()
+        hdr.setStretchLastSection(False)
+        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+        hdr.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(5, 110)
+        self.table.setColumnWidth(6, 220)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setItemDelegateForColumn(5, StatusBadgeDelegate(self.table))
@@ -108,6 +127,11 @@ class AppointmentManagementView(BaseApiView):
         self.pagination = Pagination(parent=self)
         self.pagination.page_requested.connect(self._go_to_page)
         layout.addWidget(self.pagination)
+
+        scroll.setWidget(container)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(scroll)
 
     def showEvent(self, event: Any) -> None:
         super().showEvent(event)

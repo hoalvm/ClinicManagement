@@ -8,9 +8,11 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -31,7 +33,12 @@ class CheckInView(BaseApiView):
     def __init__(self, api_client: ApiClient, parent: QWidget | None = None) -> None:
         super().__init__(api_client, parent)
 
-        layout = QVBoxLayout(self)
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(18)
 
@@ -48,15 +55,17 @@ class CheckInView(BaseApiView):
 
         # Fast Intake Search Box
         intake_card = QFrame()
-        intake_card.setObjectName("intakeCard")
-        intake_card.setStyleSheet("background: white; border: 1px solid #cbd5e1; border-radius: 12px; padding: 16px;")
+        intake_card.setObjectName("filterCard")
         intake_layout = QVBoxLayout(intake_card)
+        intake_layout.setContentsMargins(16, 14, 16, 14)
+        intake_layout.setSpacing(10)
 
         card_title = QLabel("Tìm kiếm lịch hẹn")
         card_title.setStyleSheet("font-size: 14px; font-weight: 700; color: #0f172a;")
         intake_layout.addWidget(card_title)
 
         search_row = QHBoxLayout()
+        search_row.setSpacing(10)
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("SĐT, họ tên hoặc mã hẹn...")
         self.search_input.returnPressed.connect(self.search_and_load)
@@ -68,7 +77,6 @@ class CheckInView(BaseApiView):
         search_row.addWidget(self.queue_num_input, 1)
 
         self.btn_search = QPushButton("Tìm kiếm")
-        self.btn_search.setStyleSheet("background-color: #0f766e; color: white; font-weight: 600; padding: 8px 16px; border-radius: 8px;")
         self.btn_search.clicked.connect(self.search_and_load)
         search_row.addWidget(self.btn_search)
 
@@ -85,10 +93,19 @@ class CheckInView(BaseApiView):
         self.results_table.setHorizontalHeaderLabels([
             "Mã hẹn", "Ngày khám", "Giờ khám", "Bệnh nhân", "Số điện thoại", "Bác sĩ", "Thao tác"
         ])
-        self.results_table.horizontalHeader().setStretchLastSection(True)
+        hdr = self.results_table.horizontalHeader()
+        hdr.setStretchLastSection(False)
+        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
+        self.results_table.setColumnWidth(6, 120)
         self.results_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.results_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.results_table.setMinimumHeight(200)
+        self.results_table.setMinimumHeight(220)
         layout.addWidget(self.results_table)
 
         self.empty_results = EmptyState(
@@ -98,6 +115,13 @@ class CheckInView(BaseApiView):
         )
         layout.addWidget(self.empty_results)
         self.empty_results.hide()
+
+        layout.addStretch(1)
+        scroll.setWidget(container)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(scroll)
 
     def showEvent(self, event: Any) -> None:
         super().showEvent(event)
@@ -176,7 +200,10 @@ class CheckInView(BaseApiView):
             btn = QPushButton("Tiếp nhận")
             btn.setCursor(Qt.PointingHandCursor)
             btn.setFixedHeight(28)
-            btn.setStyleSheet("background-color: #0f766e; color: white; border-radius: 6px; padding: 4px 14px; font-weight: 600; font-size: 11px;")
+            btn.setStyleSheet(
+                "background-color: #0f766e; color: white; border-radius: 6px; "
+                "padding: 4px 14px; font-weight: 600; font-size: 11px;"
+            )
             btn.clicked.connect(lambda _, a_id=appt_id: self._execute_check_in(a_id))
             act_layout.addWidget(btn)
 
