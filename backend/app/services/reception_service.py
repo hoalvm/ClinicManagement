@@ -10,13 +10,11 @@ from backend.app.core.clock import clinic_now
 from backend.app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from backend.app.models import (
     Appointment,
-    Clinic,
     Doctor,
     Invoice,
     InvoiceItem,
     Patient,
     Payment,
-    Specialty,
     User,
 )
 from backend.app.schemas.reception import (
@@ -189,12 +187,17 @@ class ReceptionService:
             count_stmt = count_stmt.where(Appointment.doctor_id == doctor_id)
 
         if keyword and keyword.strip():
-            pat = f"%{keyword.strip()}%"
-            filter_or = or_(
+            raw_kw = keyword.strip()
+            pat = f"%{raw_kw}%"
+            conds = [
                 User.full_name.ilike(pat),
                 User.phone.ilike(pat),
                 Appointment.reason.ilike(pat),
-            )
+            ]
+            clean_digits = raw_kw.lstrip("#").strip()
+            if clean_digits.isdigit():
+                conds.append(Appointment.appointment_id == int(clean_digits))
+            filter_or = or_(*conds)
             base = base.where(filter_or)
             count_stmt = count_stmt.where(filter_or)
 
@@ -375,11 +378,18 @@ class ReceptionService:
             count_stmt = count_stmt.where(Invoice.status == status)
 
         if keyword and keyword.strip():
-            pat = f"%{keyword.strip()}%"
-            filt = or_(
+            raw_kw = keyword.strip()
+            pat = f"%{raw_kw}%"
+            conds = [
                 User.full_name.ilike(pat),
                 User.phone.ilike(pat),
-            )
+            ]
+            clean_digits = raw_kw.lstrip("#").upper().replace("INV-", "").replace("INV", "").strip()
+            if clean_digits.isdigit():
+                num_val = int(clean_digits)
+                conds.append(Invoice.invoice_id == num_val)
+                conds.append(Invoice.appointment_id == num_val)
+            filt = or_(*conds)
             base = base.where(filt)
             count_stmt = count_stmt.where(filt)
 
@@ -422,6 +432,38 @@ class ReceptionService:
             page_size=page_size,
             total=total,
             total_pages=total_pages,
+        )
+
+    def get_invoice(self, invoice_id: int) -> ReceptionInvoiceItem:
+        stmt = (
+            select(Invoice)
+            .where(Invoice.invoice_id == invoice_id)
+            .options(
+                joinedload(Invoice.appointment).joinedload(Appointment.patient).joinedload(Patient.user),
+                joinedload(Invoice.appointment).joinedload(Appointment.doctor).joinedload(Doctor.user),
+                joinedload(Invoice.payment),
+            )
+        )
+        inv = self.session.execute(stmt).unique().scalar_one_or_none()
+        if not inv:
+            raise NotFoundError(f"Invoice #{invoice_id} not found.")
+        appt = inv.appointment
+        pt_user = appt.patient.user if appt and appt.patient else None
+        dr_user = appt.doctor.user if appt and appt.doctor else None
+        payment = inv.payment
+
+        return ReceptionInvoiceItem(
+            invoice_id=inv.invoice_id,
+            appointment_id=inv.appointment_id,
+            created_at=inv.created_at,
+            total_amount=inv.total_amount,
+            status=inv.status,
+            patient_name=pt_user.full_name if pt_user else "Patient",
+            patient_phone=pt_user.phone if pt_user else None,
+            doctor_name=dr_user.full_name if dr_user else "Doctor",
+            appointment_date=appt.appointment_date if appt else date.today(),
+            payment_method=payment.payment_method if payment else None,
+            paid_at=payment.payment_date if payment else None,
         )
 
     def create_invoice(self, req: CreateInvoiceRequest) -> ReceptionInvoiceItem:
@@ -556,11 +598,18 @@ class ReceptionService:
             count_stmt = count_stmt.where(Payment.payment_method == payment_method)
 
         if keyword and keyword.strip():
-            pat = f"%{keyword.strip()}%"
-            filt = or_(
+            raw_kw = keyword.strip()
+            pat = f"%{raw_kw}%"
+            conds = [
                 User.full_name.ilike(pat),
                 User.phone.ilike(pat),
-            )
+            ]
+            clean_digits = raw_kw.lstrip("#").upper().replace("INV-", "").replace("INV", "").replace("PAY-", "").strip()
+            if clean_digits.isdigit():
+                num_val = int(clean_digits)
+                conds.append(Payment.payment_id == num_val)
+                conds.append(Invoice.invoice_id == num_val)
+            filt = or_(*conds)
             base = base.where(filt)
             count_stmt = count_stmt.where(filt)
 

@@ -8,7 +8,7 @@ from frontend.api.api_client import ApiClient
 from frontend.api_client import api_client
 from frontend.app import DoctorDashboard
 from frontend.core.config import get_frontend_settings
-from frontend.core.session import SessionState
+from frontend.core.session import SessionState, session_state
 from frontend.login_window import LoginWindow
 from frontend.main_window import MainWindow
 from frontend.reception_dashboard import ReceptionDashboard
@@ -66,7 +66,22 @@ def open_dashboard():
             )
 
     elif role == "STAFF":
-        dashboard = ReceptionDashboard()
+        settings = get_frontend_settings()
+        staff_client = ApiClient(
+            base_url=settings.api_base_url,
+            timeout=settings.api_timeout_seconds,
+        )
+        staff_client.set_access_token(api_client.token)
+
+        session_state.set_authenticated(
+            access_token=api_client.token,
+            current_user={
+                "username": api_client.username,
+                "role": role,
+            },
+        )
+
+        dashboard = ReceptionDashboard(api_client=staff_client)
         dashboard.logout_requested.connect(show_login)
         dashboard.show()
         if login:

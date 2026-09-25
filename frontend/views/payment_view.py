@@ -185,33 +185,42 @@ class PaymentView(BaseApiView):
 
     def _fetch_invoice(self) -> None:
         inv_text = self.inv_input.text().strip()
-        if not inv_text.isdigit():
-            self.feedback.show_message("Sai mã", "Vui lòng nhập mã hóa đơn hợp lệ dạng số.", severity="danger")
+        if not inv_text:
+            self.feedback.show_message("Thiếu thông tin", "Vui lòng nhập mã hóa đơn hoặc số điện thoại bệnh nhân.", severity="info")
             return
 
-        inv_id = int(inv_text)
-        self.run_api_task(
-            f"get_inv_{inv_id}",
-            lambda: self.api_client.get("/api/v1/reception/invoices", params={"keyword": str(inv_id)}),
-            self._on_invoice_loaded,
-            loading_text="Đang tải thông tin hóa đơn...",
-        )
+        clean_id = inv_text.lstrip("#").upper().replace("INV-", "").replace("INV", "").strip()
+        if clean_id.isdigit():
+            inv_id = int(clean_id)
+            self.run_api_task(
+                f"get_inv_{inv_id}",
+                lambda: self.api_client.get(f"/api/v1/reception/invoices/{inv_id}"),
+                self._show_invoice_details,
+                loading_text="Đang tải thông tin hóa đơn...",
+            )
+        else:
+            self.run_api_task(
+                f"search_inv_{inv_text}",
+                lambda: self.api_client.get("/api/v1/reception/invoices", params={"keyword": inv_text}),
+                self._on_invoice_search_loaded,
+                loading_text="Đang tìm kiếm hóa đơn...",
+            )
 
-    def _on_invoice_loaded(self, data: dict[str, Any]) -> None:
+    def _on_invoice_search_loaded(self, data: dict[str, Any]) -> None:
         items = data.get("items", [])
-        inv_id_target = int(self.inv_input.text().strip())
-        matched = next((i for i in items if i.get("invoice_id") == inv_id_target), None)
-
-        if not matched:
-            self.feedback.show_message("Không tìm thấy", f"Không tìm thấy hóa đơn #{inv_id_target}.", severity="danger")
+        if not items:
+            self.feedback.show_message("Không tìm thấy", "Không tìm thấy hóa đơn phù hợp với từ khóa.", severity="danger")
             self.settlement_card.hide()
             return
+        self._show_invoice_details(items[0])
 
+    def _show_invoice_details(self, matched: dict[str, Any]) -> None:
         self._current_invoice = matched
         self.settlement_card.show()
         self.receipt_card.hide()
 
-        self.lbl_inv_title.setText(f"Hóa đơn INV-{matched.get('invoice_id'):04d}")
+        inv_id = matched.get("invoice_id", 0)
+        self.lbl_inv_title.setText(f"Hóa đơn INV-{inv_id:04d}")
         self.lbl_patient.setText(f"{matched.get('patient_name')} ({matched.get('patient_phone') or 'Không có SĐT'})")
         self.lbl_doctor.setText(matched.get("doctor_name", ""))
         self.badge_status.set_status(matched.get("status", "UNPAID"))
@@ -226,6 +235,7 @@ class PaymentView(BaseApiView):
             self.feedback.show_message("Đã thanh toán", "Hóa đơn này đã được thanh toán đầy đủ trước đó.", severity="info")
         else:
             self.btn_pay.setEnabled(True)
+            self.feedback.clear()
 
     def _on_method_changed(self) -> None:
         is_cash = self.rb_cash.isChecked()

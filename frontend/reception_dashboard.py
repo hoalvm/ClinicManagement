@@ -39,8 +39,17 @@ class ReceptionDashboard(QMainWindow):
             base_url=settings.api_base_url,
             timeout=settings.api_timeout_seconds,
         )
-        if session_state.access_token:
-            self.api_client.set_access_token(session_state.access_token)
+        if not self.api_client.token:
+            if session_state.access_token:
+                self.api_client.set_access_token(session_state.access_token)
+            else:
+                from frontend.api_client import api_client as legacy_client
+                if legacy_client.token:
+                    self.api_client.set_access_token(legacy_client.token)
+                    session_state.set_authenticated(
+                        access_token=legacy_client.token,
+                        current_user={"username": legacy_client.username, "role": legacy_client.role or "STAFF"},
+                    )
 
         self.setWindowTitle("ClinicCare - Quầy Tiếp Đón & Thu Ngân")
         self.resize(1280, 800)

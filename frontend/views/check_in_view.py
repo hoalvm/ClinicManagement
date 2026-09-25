@@ -128,6 +128,13 @@ class CheckInView(BaseApiView):
         if not items:
             self.results_table.hide()
             self.empty_results.show()
+            checked_in = [i for i in all_items if i.get("status") == "CHECKED_IN"]
+            if checked_in:
+                self.feedback.show_message(
+                    "Đã tiếp nhận",
+                    f"Lịch hẹn #{checked_in[0].get('appointment_id')} của bệnh nhân {checked_in[0].get('patient', {}).get('full_name')} đã được tiếp nhận trước đó.",
+                    severity="info",
+                )
             return
 
         self.empty_results.hide()

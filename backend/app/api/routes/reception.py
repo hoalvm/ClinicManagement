@@ -145,6 +145,15 @@ def list_invoices(
     )
 
 
+@router.get("/invoices/{invoice_id}", response_model=ReceptionInvoiceItem)
+def get_invoice(
+    invoice_id: int,
+    session: DatabaseSession,
+    staff: StaffUser,
+) -> ReceptionInvoiceItem:
+    return ReceptionService(session).get_invoice(invoice_id)
+
+
 @router.post("/invoices", response_model=ReceptionInvoiceItem)
 def create_invoice(
     body: CreateInvoiceRequest,
