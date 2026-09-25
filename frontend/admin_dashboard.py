@@ -65,14 +65,16 @@ class AdminDashboard(QMainWindow):
         # Menu List
         self.menu = QListWidget()
         self.menu.setObjectName("adminSidebar")
-        self.menu.addItems([
-            "Quản lý tài khoản",
-            "Quản lý bác sĩ",
-            "Quản lý chuyên khoa",
-            "Quản lý phòng khám",
-            "Quản lý lịch làm việc",
-            "Thống kê tổng quan",
-        ])
+        self.menu.addItems(
+            [
+                "Tài khoản",
+                "Bác sĩ",
+                "Chuyên khoa",
+                "Phòng khám",
+                "Lịch trực",
+                "Thống kê",
+            ]
+        )
         sidebar_layout.addWidget(self.menu, 1)
 
         # Bottom User Info & Logout
@@ -86,10 +88,7 @@ class AdminDashboard(QMainWindow):
 
         user_role = QLabel("QUẢN TRỊ VIÊN")
         user_role.setStyleSheet("color: #2dd4bf; font-size: 10px; font-weight: 700;")
-        user_name = QLabel("Quản trị viên")
-        user_name.setStyleSheet("color: #ffffff; font-size: 13px; font-weight: 600;")
         user_layout.addWidget(user_role)
-        user_layout.addWidget(user_name)
         sidebar_layout.addWidget(user_card)
 
         self.logout_btn = QPushButton("Đăng xuất")

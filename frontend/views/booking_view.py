@@ -366,7 +366,7 @@ class BookingView(BaseApiView):
 
         # Top navigation
         top_nav = QHBoxLayout()
-        self.step2_back_btn = QPushButton("← Đổi chuyên khoa")
+        self.step2_back_btn = QPushButton("Đổi chuyên khoa")
         self.step2_back_btn.setObjectName("secondaryButton")
         self.step2_back_btn.clicked.connect(lambda: self._go_to_step(0))
         top_nav.addWidget(self.step2_back_btn)
@@ -446,7 +446,7 @@ class BookingView(BaseApiView):
         self.step2_date_edit.dateChanged.connect(self._load_doctors_for_date)
         s2_date_row.addWidget(self.step2_date_edit)
 
-        self.s2_open_cal_btn = QPushButton(t("btn_open_calendar", default="📅 Mở lịch"))
+        self.s2_open_cal_btn = QPushButton(t("btn_open_calendar", default="Chọn ngày"))
         self.s2_open_cal_btn.setObjectName("secondaryButton")
         self.s2_open_cal_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.s2_open_cal_btn.clicked.connect(self._open_s2_calendar_dialog)
@@ -738,7 +738,7 @@ class BookingView(BaseApiView):
 
             card_layout.addLayout(info_layout, 1)
 
-            btn = QPushButton(t("select_this_specialty", default="Chọn lịch khám →"))
+            btn = QPushButton(t("select_this_specialty", default="Chọn lịch khám"))
             btn.setObjectName("primaryButton")
             btn.clicked.connect(lambda _, d=doc: self._select_doctor_only(d))
             card_layout.addWidget(btn)
@@ -775,7 +775,7 @@ class BookingView(BaseApiView):
                     et = str(item.get("end_time", ""))[:5]
                     parts.append(f"{day_name} ({st} - {et})")
                 schedule_text = ", ".join(parts)
-                self.doc_schedule_lbl.setText(f"🗓 <b>{t('doctor_schedule_info')}</b> {schedule_text}")
+                self.doc_schedule_lbl.setText(f"<b>{t('doctor_schedule_info')}</b> {schedule_text}")
                 self.doc_schedule_lbl.show()
             else:
                 if hasattr(self, "doc_schedule_lbl"):
@@ -798,7 +798,7 @@ class BookingView(BaseApiView):
         layout.setSpacing(12)
 
         top_nav = QHBoxLayout()
-        self.step3_back_btn = QPushButton("← Đổi bác sĩ")
+        self.step3_back_btn = QPushButton("Đổi bác sĩ")
         self.step3_back_btn.setObjectName("secondaryButton")
         self.step3_back_btn.clicked.connect(lambda: self._go_to_step(1))
         top_nav.addWidget(self.step3_back_btn)
@@ -884,7 +884,7 @@ class BookingView(BaseApiView):
         self.slot_date_edit.dateChanged.connect(self._load_available_slots)
         date_row.addWidget(self.slot_date_edit)
 
-        self.open_cal_btn = QPushButton(t("btn_open_calendar", default="📅 Mở lịch"))
+        self.open_cal_btn = QPushButton(t("btn_open_calendar", default="Chọn ngày"))
         self.open_cal_btn.setObjectName("secondaryButton")
         self.open_cal_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.open_cal_btn.setToolTip("Nhấp để mở bảng lịch chọn ngày trực quan")
@@ -913,7 +913,7 @@ class BookingView(BaseApiView):
         self.slot_selected_lbl.setStyleSheet("font-weight: 600; color: #334155;")
         bottom_row.addWidget(self.slot_selected_lbl, 1)
 
-        self.to_confirm_btn = QPushButton("Tiếp tục: Xác nhận đặt lịch →")
+        self.to_confirm_btn = QPushButton("Tiếp tục")
         self.to_confirm_btn.setObjectName("primaryButton")
         self.to_confirm_btn.setEnabled(False)
         self.to_confirm_btn.clicked.connect(lambda: self._go_to_step(3))
@@ -1078,7 +1078,7 @@ class BookingView(BaseApiView):
 
     def _select_slot(self, start_t: str, end_t: str, active_btn: QPushButton) -> None:
         self.selected_slot = (start_t, end_t)
-        self.slot_selected_lbl.setText(f"✓ Đã chọn: {start_t} - {end_t}")
+        self.slot_selected_lbl.setText(f"Đã chọn: {start_t} - {end_t}")
         self.to_confirm_btn.setEnabled(True)
 
         for btn, _, _ in self._slot_buttons:
@@ -1100,7 +1100,7 @@ class BookingView(BaseApiView):
         layout.setSpacing(14)
 
         top_nav = QHBoxLayout()
-        self.step4_back_btn = QPushButton("← Chọn lại giờ khám")
+        self.step4_back_btn = QPushButton("Đổi giờ khám")
         self.step4_back_btn.setObjectName("secondaryButton")
         self.step4_back_btn.clicked.connect(lambda: self._go_to_step(2))
         top_nav.addWidget(self.step4_back_btn)
@@ -1139,7 +1139,7 @@ class BookingView(BaseApiView):
         actions_row = QHBoxLayout()
         actions_row.addStretch(1)
 
-        self.submit_booking_btn = QPushButton("✓ Xác nhận đặt lịch khám")
+        self.submit_booking_btn = QPushButton("Xác nhận đặt lịch")
         self.submit_booking_btn.setObjectName("primaryButton")
         self.submit_booking_btn.setMinimumHeight(44)
         self.submit_booking_btn.setStyleSheet(
@@ -1293,7 +1293,7 @@ class BookingView(BaseApiView):
         if hasattr(self, "s2_date_lbl"):
             self.s2_date_lbl.setText(t("field_appointment_date", default="Chọn ngày khám:"))
         if hasattr(self, "s2_open_cal_btn"):
-            self.s2_open_cal_btn.setText(t("btn_open_calendar", default="📅 Mở lịch"))
+            self.s2_open_cal_btn.setText(t("btn_open_calendar", default="Chọn ngày"))
         self._update_s2_quick_chip_labels()
         if hasattr(self, "step2_date_edit") and hasattr(self, "step2_day_of_week_lbl"):
             day_num = self.step2_date_edit.date().dayOfWeek()
@@ -1311,7 +1311,7 @@ class BookingView(BaseApiView):
         if hasattr(self, "date_lbl"):
             self.date_lbl.setText(t("field_appointment_date", default="Chọn ngày khám:"))
         if hasattr(self, "open_cal_btn"):
-            self.open_cal_btn.setText(t("btn_open_calendar", default="📅 Mở lịch"))
+            self.open_cal_btn.setText(t("btn_open_calendar", default="Chọn ngày"))
         self._update_quick_chip_labels()
         if hasattr(self, "slot_date_edit") and hasattr(self, "day_of_week_lbl"):
             day_num = self.slot_date_edit.date().dayOfWeek()

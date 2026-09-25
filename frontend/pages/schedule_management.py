@@ -1,6 +1,6 @@
 """Modern, clean Schedule Management page for Admin."""
 
-from PySide6.QtCore import QTime, Qt
+from PySide6.QtCore import Qt, QTime
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -41,8 +41,8 @@ class ScheduleManagementPage(QWidget):
 
         # ------------------- Header -------------------
         self.header = PageHeader(
-            "Quản lý lịch làm việc",
-            "Quản lý lịch làm việc của bác sĩ",
+            "Lịch trực",
+            "Phân ca làm việc của bác sĩ",
         )
         layout.addWidget(self.header)
 
@@ -53,7 +53,7 @@ class ScheduleManagementPage(QWidget):
         form_card_layout.setContentsMargins(20, 16, 20, 18)
         form_card_layout.setSpacing(12)
 
-        form_title = QLabel("Thêm lịch làm việc mới")
+        form_title = QLabel("Thêm ca trực")
         form_title.setObjectName("sectionTitle")
         form_card_layout.addWidget(form_title)
 
@@ -120,10 +120,11 @@ class ScheduleManagementPage(QWidget):
         # Button row
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
-        add_btn = QPushButton("Thêm lịch làm việc")
+        add_btn = QPushButton("Thêm mới")
         add_btn.setObjectName("primaryButton")
         add_btn.setCursor(Qt.PointingHandCursor)
         add_btn.setMinimumHeight(36)
+        add_btn.setMinimumWidth(120)
         add_btn.clicked.connect(self.add_schedule)
         btn_layout.addWidget(add_btn)
 

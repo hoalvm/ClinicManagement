@@ -20,7 +20,7 @@ class LanguageSelector(QWidget):
         layout.setSpacing(8)
 
         if show_label:
-            self.label = QLabel("🌐 Ngôn ngữ:")
+            self.label = QLabel("Ngôn ngữ:")
             self.label.setStyleSheet("color: #64748b; font-size: 12px; font-weight: 600;")
             layout.addWidget(self.label)
         else:
@@ -74,8 +74,8 @@ class LanguageSelector(QWidget):
             "}"
         )
 
-        self.combo.addItem("🇻🇳 Tiếng Việt", "vi")
-        self.combo.addItem("🇬🇧 English", "en")
+        self.combo.addItem("Tiếng Việt", "vi")
+        self.combo.addItem("English", "en")
 
         self._sync_to_current_language()
         self.combo.currentIndexChanged.connect(self._on_selection_changed)
@@ -93,7 +93,7 @@ class LanguageSelector(QWidget):
         self.combo.blockSignals(False)
 
         if self.label:
-            self.label.setText("🌐 " + ("Ngôn ngữ:" if current == "vi" else "Language:"))
+            self.label.setText("Ngôn ngữ:" if current == "vi" else "Language:")
 
     def _on_selection_changed(self, index: int) -> None:
         lang = self.combo.itemData(index)

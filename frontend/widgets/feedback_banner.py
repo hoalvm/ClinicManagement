@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 
@@ -18,10 +17,9 @@ class FeedbackBanner(QFrame):
         layout.setContentsMargins(14, 11, 14, 11)
         layout.setSpacing(10)
 
-        self._indicator = QLabel("i")
+        self._indicator = QLabel()
         self._indicator.setObjectName("feedbackTitle")
-        self._indicator.setFixedWidth(16)
-        self._indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._indicator.hide()
 
         text_layout = QVBoxLayout()
         text_layout.setSpacing(2)
@@ -33,14 +31,12 @@ class FeedbackBanner(QFrame):
         text_layout.addWidget(self._title)
         text_layout.addWidget(self._message)
 
-        layout.addWidget(self._indicator, 0)
         layout.addLayout(text_layout, 1)
         self.hide()
 
     def show_message(self, title: str, message: str, *, severity: str = "info") -> None:
         normalized = severity if severity in {"error", "success", "info"} else "info"
         self.setProperty("severity", normalized)
-        self._indicator.setText({"error": "!", "success": "✓", "info": "i"}[normalized])
         self._title.setText(title)
         self._message.setText(message)
         self.setAccessibleName(f"{title}. {message}")

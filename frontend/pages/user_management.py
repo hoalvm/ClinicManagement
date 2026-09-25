@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFormLayout,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -33,8 +34,8 @@ class UserManagementPage(QWidget):
 
         # ------------------- Page Header -------------------
         self.header = PageHeader(
-            "Quản lý tài khoản",
-            "Quản trị danh sách và phân quyền tài khoản",
+            "Tài khoản",
+            "Quản trị danh sách và phân quyền",
         )
         layout.addWidget(self.header)
 
@@ -45,7 +46,7 @@ class UserManagementPage(QWidget):
         form_card_layout.setContentsMargins(20, 16, 20, 18)
         form_card_layout.setSpacing(12)
 
-        form_title = QLabel("Thêm tài khoản mới")
+        form_title = QLabel("Thêm tài khoản")
         form_title.setObjectName("sectionTitle")
         form_card_layout.addWidget(form_title)
 
@@ -100,11 +101,11 @@ class UserManagementPage(QWidget):
 
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
-        add_btn = QPushButton("Thêm tài khoản")
+        add_btn = QPushButton("Thêm mới")
         add_btn.setObjectName("primaryButton")
         add_btn.setCursor(Qt.PointingHandCursor)
         add_btn.setMinimumHeight(36)
-        add_btn.setMinimumWidth(140)
+        add_btn.setMinimumWidth(120)
         add_btn.clicked.connect(self.add_user)
         btn_layout.addWidget(add_btn)
 

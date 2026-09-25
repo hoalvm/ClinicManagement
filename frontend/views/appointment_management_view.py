@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -49,9 +48,9 @@ class AppointmentManagementView(BaseApiView):
 
         # Header
         self.header = PageHeader(
-            "Quản lý lịch hẹn",
-            "Theo dõi, xác nhận và tiếp nhận bệnh nhân theo lịch hẹn",
-            action_label="+ Lịch hẹn mới",
+            "Lịch hẹn",
+            "Theo dõi và xử lý lịch khám của bệnh nhân",
+            action_label="Đặt lịch mới",
             parent=self,
         )
         self.header.action_clicked.connect(self.book_requested)
@@ -78,7 +77,7 @@ class AppointmentManagementView(BaseApiView):
         self.status_combo.currentIndexChanged.connect(self._apply_filter)
         filter_bar.addWidget(self.status_combo, 1)
 
-        self.btn_refresh = QPushButton("Lọc / Làm mới")
+        self.btn_refresh = QPushButton("Lọc")
         self.btn_refresh.clicked.connect(self._apply_filter)
         filter_bar.addWidget(self.btn_refresh)
 

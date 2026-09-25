@@ -1,11 +1,8 @@
 """Modern, clean Doctor Dashboard and clinical examination view."""
 
-import sys
 import httpx
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
-    QApplication,
-    QDialog,
     QFormLayout,
     QFrame,
     QHBoxLayout,

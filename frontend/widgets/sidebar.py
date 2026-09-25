@@ -67,7 +67,7 @@ class Sidebar(QFrame):
         self._overview_label = self._section_label("OVERVIEW")
         self._layout.addWidget(self._overview_label)
         self._buttons: dict[str, QPushButton] = {}
-        self._add_navigation_button("dashboard", "Dashboard")
+        self._add_navigation_button("dashboard", self._ITEMS[0][1])
 
         self._layout.addSpacing(8)
         self._care_label = self._section_label("MY CARE")
@@ -139,7 +139,7 @@ class Sidebar(QFrame):
         self._brand_mark = QLabel("C")
         self._brand_mark.setObjectName("sidebarBrandMark")
         self._brand_mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._brand_mark.setFixedSize(40, 40)
+        self._brand_mark.setFixedSize(36, 36)
         self._brand_mark.setAccessibleName("ClinicCare")
         brand_layout.addWidget(self._brand_mark)
 
@@ -149,7 +149,7 @@ class Sidebar(QFrame):
         brand_text_layout.setSpacing(0)
         self._brand_label = QLabel("ClinicCare")
         self._brand_label.setObjectName("brandLabel")
-        self._brand_subtitle = QLabel("Patient Portal")
+        self._brand_subtitle = QLabel("Cổng bệnh nhân")
         self._brand_subtitle.setObjectName("sidebarSubtitle")
         brand_text_layout.addWidget(self._brand_label)
         brand_text_layout.addWidget(self._brand_subtitle)

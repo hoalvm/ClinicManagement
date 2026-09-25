@@ -176,9 +176,9 @@ class LoginView(BaseApiView):
         self.hero_title.setText(t("tagline"))
         self.hero_text.setText(t("tagline_desc"))
         features = [
-            f"✓  {t('hero_bullet_1')}",
-            f"✓  {t('hero_bullet_2')}",
-            f"✓  {t('hero_bullet_3')}",
+            f"•  {t('hero_bullet_1')}",
+            f"•  {t('hero_bullet_2')}",
+            f"•  {t('hero_bullet_3')}",
         ]
         for lbl, feat in zip(self.feature_labels, features, strict=False):
             lbl.setText(feat)

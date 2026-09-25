@@ -66,7 +66,7 @@ class AppointmentHistoryView(BaseApiView):
         self.search.setAccessibleName("Search appointment history")
         filters.addWidget(self.search, 0, 0, 1, 5)
 
-        self.status_label = QLabel(t("field_payment_status"))
+        self.status_label = QLabel(t("field_status", default="Trạng thái"))
         self.status_label.setObjectName("fieldLabel")
         self.status = QComboBox()
         self.status.setMinimumWidth(170)
@@ -170,15 +170,15 @@ class AppointmentHistoryView(BaseApiView):
             self.header.set_subtitle(t("appointments_count", count=self._total_appointments))
         else:
             self.header.set_subtitle(t("appointment_history_subtitle"))
-        self.book_button.setText(t("btn_new_booking"))
+        self.book_button.setText(t("btn_new_booking", default="Đặt lịch"))
         self.search.setPlaceholderText(t("appointment_search_placeholder"))
-        self.status_label.setText(t("field_payment_status"))
+        self.status_label.setText(t("field_status", default="Trạng thái"))
         self._populate_status_combo()
-        self.refresh_button.setText(t("btn_refresh"))
-        self.details_button.setText(t("btn_view_details"))
+        self.refresh_button.setText(t("btn_refresh", default="Làm mới"))
+        self.details_button.setText(t("btn_view_details", default="Chi tiết"))
         self.empty_state.set_title(t("no_appointments_found"))
         self.empty_state.set_description(t("no_appointments_desc"))
-        self.empty_state.set_action(t("btn_refresh"))
+        self.empty_state.set_action(t("btn_refresh", default="Làm mới"))
 
         headers = [
             t("field_date"),
@@ -187,7 +187,7 @@ class AppointmentHistoryView(BaseApiView):
             t("field_specialty"),
             t("field_clinic"),
             t("field_reason"),
-            t("field_payment_status"),
+            t("field_status", default="Trạng thái"),
         ]
         for col, h in enumerate(headers):
             self.model.setHeaderData(col, Qt.Orientation.Horizontal, h)

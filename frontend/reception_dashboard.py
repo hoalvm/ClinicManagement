@@ -82,13 +82,13 @@ class ReceptionDashboard(QMainWindow):
         self.menu = QListWidget()
         self.menu.setObjectName("adminSidebar")
         self._menu_routes = [
-            ("dashboard", "Bàn tiếp đón"),
-            ("check_in", "Tiếp nhận nhanh"),
-            ("book_for_patient", "Đặt lịch khám"),
+            ("dashboard", "Tiếp đón"),
+            ("check_in", "Check-in"),
+            ("book_for_patient", "Đặt lịch"),
             ("appointment_management", "Lịch hẹn"),
             ("invoice_management", "Hóa đơn"),
-            ("payment", "Thu ngân"),
-            ("payment_history", "Lịch sử thu phí"),
+            ("payment", "Thu phí"),
+            ("payment_history", "Lịch sử thu"),
         ]
         for _, label in self._menu_routes:
             self.menu.addItem(label)

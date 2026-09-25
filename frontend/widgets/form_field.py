@@ -4,12 +4,10 @@ from __future__ import annotations
 
 from typing import TypeVar
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QLabel,
     QLineEdit,
-    QSpinBox,
     QTextEdit,
     QVBoxLayout,
     QWidget,

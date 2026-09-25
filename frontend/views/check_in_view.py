@@ -4,12 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QFrame,
-    QGridLayout,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -23,7 +21,6 @@ from frontend.api.api_client import ApiClient
 from frontend.views.common import BaseApiView
 from frontend.widgets.empty_state import EmptyState
 from frontend.widgets.page_header import PageHeader
-from frontend.widgets.status_badge import StatusBadge
 
 
 class CheckInView(BaseApiView):
@@ -39,8 +36,8 @@ class CheckInView(BaseApiView):
         layout.setSpacing(18)
 
         self.header = PageHeader(
-            "Tiếp nhận nhanh",
-            "Xác nhận bệnh nhân đến khám và cấp số thứ tự",
+            "Tiếp nhận",
+            "Xác nhận có mặt và cấp số khám",
             action_label="Làm mới",
             parent=self,
         )
@@ -55,13 +52,13 @@ class CheckInView(BaseApiView):
         intake_card.setStyleSheet("background: white; border: 1px solid #cbd5e1; border-radius: 12px; padding: 16px;")
         intake_layout = QVBoxLayout(intake_card)
 
-        card_title = QLabel("Tìm kiếm lịch hẹn tiếp nhận")
+        card_title = QLabel("Tìm kiếm lịch hẹn")
         card_title.setStyleSheet("font-size: 14px; font-weight: 700; color: #0f172a;")
         intake_layout.addWidget(card_title)
 
         search_row = QHBoxLayout()
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Nhập số điện thoại, họ tên hoặc mã lịch hẹn...")
+        self.search_input.setPlaceholderText("SĐT, họ tên hoặc mã hẹn...")
         self.search_input.returnPressed.connect(self.search_and_load)
         search_row.addWidget(self.search_input, 3)
 
@@ -79,7 +76,7 @@ class CheckInView(BaseApiView):
         layout.addWidget(intake_card)
 
         # Results table for check-in
-        results_label = QLabel("Danh sách lịch hẹn chờ tiếp nhận")
+        results_label = QLabel("Lịch hẹn chờ tiếp nhận")
         results_label.setStyleSheet("font-size: 13px; font-weight: 700; color: #334155; margin-top: 6px;")
         layout.addWidget(results_label)
 
@@ -95,8 +92,8 @@ class CheckInView(BaseApiView):
         layout.addWidget(self.results_table)
 
         self.empty_results = EmptyState(
-            "Không có lịch hẹn cần tiếp nhận",
-            "Tìm kiếm người bệnh theo tên, SĐT hoặc mã lịch hẹn.",
+            "Không có lịch hẹn chờ tiếp nhận",
+            "Tìm kiếm theo SĐT, họ tên hoặc mã hẹn.",
             parent=self,
         )
         layout.addWidget(self.empty_results)
@@ -143,7 +140,6 @@ class CheckInView(BaseApiView):
             start_time = str(appt.get("start_time", ""))[:5]
             patient = appt.get("patient", {})
             doctor = appt.get("doctor", {})
-            status = appt.get("status", "CONFIRMED")
 
             self.results_table.setItem(row, 0, QTableWidgetItem(f"#{appt_id}"))
             self.results_table.setItem(row, 1, QTableWidgetItem(appt_date))

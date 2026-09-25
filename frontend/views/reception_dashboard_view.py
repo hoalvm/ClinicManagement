@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -23,7 +22,6 @@ from frontend.views.common import BaseApiView
 from frontend.widgets.empty_state import EmptyState
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.stat_card import StatCard
-from frontend.widgets.status_badge import StatusBadge
 
 
 class ReceptionDashboardView(BaseApiView):
@@ -41,21 +39,21 @@ class ReceptionDashboardView(BaseApiView):
         scroll.setFrameShape(QFrame.Shape.NoFrame)
 
         container = QWidget()
-        self.layout = QVBoxLayout(container)
-        self.layout.setContentsMargins(24, 24, 24, 24)
-        self.layout.setSpacing(20)
+        content_layout = QVBoxLayout(container)
+        content_layout.setContentsMargins(24, 24, 24, 24)
+        content_layout.setSpacing(20)
 
         # Page Header
         self.header = PageHeader(
-            "Bàn tiếp đón",
-            "Tổng quan tiếp nhận bệnh nhân và hàng đợi hôm nay",
+            "Tiếp đón",
+            "Hàng đợi tiếp nhận và chỉ số hoạt động trong ngày",
             action_label="Làm mới",
             parent=self,
         )
         self.header.action_clicked.connect(self.refresh)
-        self.layout.addWidget(self.header)
-        self.layout.addWidget(self.feedback)
-        self.layout.addWidget(self.loading)
+        content_layout.addWidget(self.header)
+        content_layout.addWidget(self.feedback)
+        content_layout.addWidget(self.loading)
 
         # Quick Actions Row
         quick_actions_box = QFrame()
@@ -64,16 +62,16 @@ class ReceptionDashboardView(BaseApiView):
         quick_actions_layout.setContentsMargins(16, 14, 16, 14)
         quick_actions_layout.setSpacing(12)
 
-        quick_label = QLabel("Thao tác nhanh:")
+        quick_label = QLabel("Thao tác:")
         quick_label.setStyleSheet("font-weight: 700; color: #1e293b; font-size: 13px;")
         quick_actions_layout.addWidget(quick_label)
 
-        self.btn_check_in = QPushButton("Tiếp nhận nhanh")
+        self.btn_check_in = QPushButton("Tiếp nhận")
         self.btn_check_in.setStyleSheet("background-color: #0f766e; color: white; border-radius: 8px; padding: 8px 14px; font-weight: 600;")
         self.btn_check_in.clicked.connect(lambda: self.navigate_requested.emit("check_in"))
         quick_actions_layout.addWidget(self.btn_check_in)
 
-        self.btn_book = QPushButton("Đặt lịch khám")
+        self.btn_book = QPushButton("Đặt lịch")
         self.btn_book.setStyleSheet("background-color: #0369a1; color: white; border-radius: 8px; padding: 8px 14px; font-weight: 600;")
         self.btn_book.clicked.connect(lambda: self.navigate_requested.emit("book_for_patient"))
         quick_actions_layout.addWidget(self.btn_book)
@@ -83,13 +81,13 @@ class ReceptionDashboardView(BaseApiView):
         self.btn_invoice.clicked.connect(lambda: self.navigate_requested.emit("invoice_management"))
         quick_actions_layout.addWidget(self.btn_invoice)
 
-        self.btn_payments = QPushButton("Thu ngân")
+        self.btn_payments = QPushButton("Thu phí")
         self.btn_payments.setStyleSheet("background-color: #15803d; color: white; border-radius: 8px; padding: 8px 14px; font-weight: 600;")
         self.btn_payments.clicked.connect(lambda: self.navigate_requested.emit("payment"))
         quick_actions_layout.addWidget(self.btn_payments)
 
         quick_actions_layout.addStretch(1)
-        self.layout.addWidget(quick_actions_box)
+        content_layout.addWidget(quick_actions_box)
 
         # Stat Cards Grid
         stats_row_1 = QHBoxLayout()
@@ -104,12 +102,12 @@ class ReceptionDashboardView(BaseApiView):
         stats_row_1.addWidget(self.card_pending)
         stats_row_1.addWidget(self.card_checked_in)
         stats_row_1.addWidget(self.card_unpaid)
-        self.layout.addLayout(stats_row_1)
+        content_layout.addLayout(stats_row_1)
 
         # Waiting Room / Checked-In Queue Section
         section_label = QLabel("Bệnh nhân đang chờ khám")
         section_label.setStyleSheet("font-weight: 700; font-size: 15px; color: #0f172a; margin-top: 10px;")
-        self.layout.addWidget(section_label)
+        content_layout.addWidget(section_label)
 
         self.queue_table = QTableWidget()
         self.queue_table.setColumnCount(6)
@@ -120,18 +118,19 @@ class ReceptionDashboardView(BaseApiView):
         self.queue_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.queue_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.queue_table.setMinimumHeight(240)
-        self.layout.addWidget(self.queue_table)
+        content_layout.addWidget(self.queue_table)
 
         self.empty_queue = EmptyState(
             "Hiện không có bệnh nhân chờ khám",
             "Bệnh nhân đã tiếp nhận sẽ hiển thị tại danh sách này.",
             parent=self,
         )
-        self.layout.addWidget(self.empty_queue)
+        content_layout.addWidget(self.empty_queue)
         self.empty_queue.hide()
 
-        self.layout.addStretch(1)
+        content_layout.addStretch(1)
 
+        scroll.setWidget(container)
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.addWidget(scroll)

@@ -31,8 +31,8 @@ class DoctorManagementPage(QWidget):
 
         # ------------------- Header -------------------
         self.header = PageHeader(
-            "Quản lý bác sĩ",
-            "Danh sách và thông tin bác sĩ",
+            "Bác sĩ",
+            "Danh sách và hồ sơ bác sĩ",
         )
         layout.addWidget(self.header)
 
@@ -43,7 +43,7 @@ class DoctorManagementPage(QWidget):
         form_card_layout.setContentsMargins(20, 16, 20, 18)
         form_card_layout.setSpacing(12)
 
-        form_title = QLabel("Thêm thông tin bác sĩ mới")
+        form_title = QLabel("Thêm bác sĩ")
         form_title.setObjectName("sectionTitle")
         form_card_layout.addWidget(form_title)
 
@@ -111,11 +111,11 @@ class DoctorManagementPage(QWidget):
         # Button row
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
-        add_btn = QPushButton("Thêm bác sĩ")
+        add_btn = QPushButton("Thêm mới")
         add_btn.setObjectName("primaryButton")
         add_btn.setCursor(Qt.PointingHandCursor)
         add_btn.setMinimumHeight(36)
-        add_btn.setMinimumWidth(130)
+        add_btn.setMinimumWidth(120)
         add_btn.clicked.connect(self.add_doctor)
         btn_layout.addWidget(add_btn)
 

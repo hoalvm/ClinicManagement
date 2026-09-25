@@ -3,6 +3,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -29,8 +30,8 @@ class SpecialtyManagementPage(QWidget):
 
         # ------------------- Header -------------------
         self.header = PageHeader(
-            "Quản lý chuyên khoa",
-            "Danh mục chuyên khoa khám chữa bệnh",
+            "Chuyên khoa",
+            "Danh mục chuyên khoa y tế",
         )
         layout.addWidget(self.header)
 
@@ -41,7 +42,7 @@ class SpecialtyManagementPage(QWidget):
         form_card_layout.setContentsMargins(20, 16, 20, 18)
         form_card_layout.setSpacing(12)
 
-        form_title = QLabel("Thêm chuyên khoa mới")
+        form_title = QLabel("Thêm chuyên khoa")
         form_title.setObjectName("sectionTitle")
         form_card_layout.addWidget(form_title)
 
@@ -72,11 +73,11 @@ class SpecialtyManagementPage(QWidget):
         # Button row
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
-        add_btn = QPushButton("Thêm chuyên khoa")
+        add_btn = QPushButton("Thêm mới")
         add_btn.setObjectName("primaryButton")
         add_btn.setCursor(Qt.PointingHandCursor)
         add_btn.setMinimumHeight(36)
-        add_btn.setMinimumWidth(150)
+        add_btn.setMinimumWidth(120)
         add_btn.clicked.connect(self.add_specialty)
         btn_layout.addWidget(add_btn)
 

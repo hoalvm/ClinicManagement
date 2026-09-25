@@ -518,7 +518,8 @@ QPushButton#navButton {
     color: #94a3b8;
     background-color: transparent;
     border: none;
-    border-radius: 8px;
+    border-left: 3px solid transparent;
+    border-radius: 6px;
     text-align: left;
     padding: 10px 14px;
     min-height: 20px;
@@ -529,11 +530,13 @@ QPushButton#navButton {
 QPushButton#navButton:hover {
     color: #f8fafc;
     background-color: #1e293b;
+    border-left: 3px solid #334155;
 }
 
 QPushButton#navButton:checked {
     color: #ffffff;
-    background-color: #0f766e;
+    background-color: #1e293b;
+    border-left: 3px solid #0f766e;
     font-weight: 600;
 }
 
@@ -654,5 +657,53 @@ QToolTip {
 
 QDialogButtonBox QPushButton {
     min-width: 80px;
+}
+
+/* =========================================================================
+   13. FEEDBACK BANNER (Minimalist Accent Card)
+   ========================================================================= */
+QFrame#feedbackBanner {
+    border-radius: 8px;
+    padding: 10px 14px;
+}
+
+QFrame#feedbackBanner[severity="info"] {
+    background-color: #f0fdfa;
+    border: 1px solid #ccfbf1;
+    border-left: 4px solid #0f766e;
+}
+
+QFrame#feedbackBanner[severity="success"] {
+    background-color: #f0fdf4;
+    border: 1px solid #dcfce7;
+    border-left: 4px solid #16a34a;
+}
+
+QFrame#feedbackBanner[severity="error"] {
+    background-color: #fef2f2;
+    border: 1px solid #fee2e2;
+    border-left: 4px solid #dc2626;
+}
+
+QLabel#feedbackTitle {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+QFrame#feedbackBanner[severity="info"] QLabel#feedbackTitle {
+    color: #0f766e;
+}
+
+QFrame#feedbackBanner[severity="success"] QLabel#feedbackTitle {
+    color: #166534;
+}
+
+QFrame#feedbackBanner[severity="error"] QLabel#feedbackTitle {
+    color: #991b1b;
+}
+
+QLabel#feedbackText {
+    font-size: 12px;
+    color: #334155;
 }
 """

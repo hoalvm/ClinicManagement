@@ -18,6 +18,7 @@ class PageHeader(QFrame):
     """Reusable page heading that keeps navigation and actions aligned."""
 
     back_requested = Signal()
+    action_clicked = Signal()
 
     def __init__(
         self,
@@ -27,6 +28,7 @@ class PageHeader(QFrame):
         *,
         show_back: bool = False,
         back_text: str = "Back",
+        action_label: str | None = None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("pageHeader")
@@ -65,6 +67,13 @@ class PageHeader(QFrame):
         self.actions_layout.setContentsMargins(0, 0, 0, 0)
         self.actions_layout.setSpacing(8)
         root.addLayout(self.actions_layout)
+
+        self.action_button: QPushButton | None = None
+        if action_label:
+            self.action_button = QPushButton(action_label)
+            self.action_button.setObjectName("primaryButton")
+            self.action_button.clicked.connect(self.action_clicked.emit)
+            self.add_action(self.action_button)
 
     @property
     def title(self) -> str:

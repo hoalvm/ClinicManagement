@@ -143,11 +143,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "MY CARE",
     },
     "nav_dashboard": {
-        "vi": "Bảng điều khiển",
+        "vi": "Tổng quan",
         "en": "Dashboard",
     },
     "nav_booking": {
-        "vi": "Đặt lịch khám",
+        "vi": "Đặt lịch",
         "en": "Book Appointment",
     },
     "nav_appointments": {
@@ -155,15 +155,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Appointments",
     },
     "nav_profile": {
-        "vi": "Hồ sơ cá nhân",
+        "vi": "Hồ sơ",
         "en": "My Profile",
     },
     "nav_medical_history": {
-        "vi": "Lịch sử bệnh án",
+        "vi": "Bệnh án",
         "en": "Medical History",
     },
     "nav_invoice_history": {
-        "vi": "Lịch sử hóa đơn",
+        "vi": "Hóa đơn",
         "en": "Invoice History",
     },
     "nav_logout": {
@@ -226,16 +226,16 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "-- Click to select specialty from dropdown list --",
     },
     "spec_continue_btn": {
-        "vi": "Tiếp tục chọn bác sĩ →",
-        "en": "Continue to Doctor Selection →",
+        "vi": "Tiếp tục",
+        "en": "Continue",
     },
     "spec_divider_lbl": {
         "vi": "Hoặc bấm chọn trực tiếp chuyên khoa bên dưới:",
         "en": "Or select directly from the specialties below:",
     },
     "select_this_specialty": {
-        "vi": "Chọn chuyên khoa này →",
-        "en": "Select this specialty →",
+        "vi": "Chọn chuyên khoa",
+        "en": "Select specialty",
     },
     "affiliated_doctors": {
         "vi": "{count} bác sĩ trực thuộc",
@@ -250,8 +250,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Try searching with different keywords.",
     },
     "step_2_back": {
-        "vi": "← Đổi chuyên khoa",
-        "en": "← Change specialty",
+        "vi": "Đổi chuyên khoa",
+        "en": "Change specialty",
     },
     "step_2_title": {
         "vi": "Bước 2: Chọn bác sĩ",
@@ -270,16 +270,16 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Clinic",
     },
     "select_this_doctor": {
-        "vi": "Chọn bác sĩ này →",
-        "en": "Select this doctor →",
+        "vi": "Chọn bác sĩ",
+        "en": "Select doctor",
     },
     "no_doctors_found": {
         "vi": "Không có bác sĩ nào cho chuyên khoa này",
         "en": "No doctors found for this specialty",
     },
     "step_3_back": {
-        "vi": "← Chọn lại bác sĩ",
-        "en": "← Change doctor",
+        "vi": "Đổi bác sĩ",
+        "en": "Change doctor",
     },
     "step_3_title": {
         "vi": "Bước 3: Chọn ngày và giờ khám",
@@ -306,8 +306,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Please choose another date matching the doctor's shift schedule.",
     },
     "step_4_back": {
-        "vi": "← Chọn lại giờ khám",
-        "en": "← Change time slot",
+        "vi": "Đổi giờ khám",
+        "en": "Change time slot",
     },
     "step_4_title": {
         "vi": "Bước 4: Xác nhận thông tin đặt lịch",
@@ -350,8 +350,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Describe specific symptoms, health condition, or visit request...",
     },
     "confirm_booking_btn": {
-        "vi": "✓ Xác nhận đặt lịch khám",
-        "en": "✓ Confirm Appointment Booking",
+        "vi": "Xác nhận đặt lịch",
+        "en": "Confirm Booking",
     },
     "booking_success_title": {
         "vi": "Đặt lịch khám thành công!",
@@ -377,8 +377,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Cancel",
     },
     "btn_new_booking": {
-        "vi": "+ Đặt lịch khám mới",
-        "en": "+ Book Appointment",
+        "vi": "Đặt lịch mới",
+        "en": "Book Appointment",
     },
     "cancel_dialog_title": {
         "vi": "Hủy lịch hẹn khám bệnh",
@@ -560,7 +560,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "th_price": {"vi": "Đơn giá", "en": "Price"},
     "th_line_total": {"vi": "Thành tiền", "en": "Total"},
     "sec_payment_info": {"vi": "Thông tin thanh toán", "en": "Payment information"},
-    "field_payment_status": {"vi": "Trạng thái", "en": "Payment status"},
+    "field_status": {"vi": "Trạng thái", "en": "Status"},
+    "field_appointment_status": {"vi": "Trạng thái", "en": "Status"},
+    "field_payment_status": {"vi": "Trạng thái thanh toán", "en": "Payment status"},
     "field_payment_method": {"vi": "Phương thức", "en": "Payment method"},
     "field_payment_date": {"vi": "Thời gian thanh toán", "en": "Payment date"},
     "payment_pending_title": {"vi": "Chưa thanh toán", "en": "Payment pending"},
@@ -592,7 +594,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Review the visit, care provider, and clinic information.",
     },
     "sec_appointment_summary": {"vi": "Thông tin lịch khám", "en": "Appointment summary"},
-    "btn_medical_result": {"vi": "Kết quả khám", "en": "Medical result"},
+    "btn_medical_result": {"vi": "Bệnh án", "en": "Medical Record"},
     "btn_invoice": {"vi": "Hóa đơn", "en": "Invoice"},
 
     # --------------------------------------------------------------------------
@@ -611,7 +613,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     # --------------------------------------------------------------------------
     # Date Picker & Calendar
     # --------------------------------------------------------------------------
-    "btn_open_calendar": {"vi": "Mở lịch", "en": "Calendar"},
+    "btn_open_calendar": {"vi": "Chọn ngày", "en": "Select date"},
     "quick_select_date": {"vi": "Chọn nhanh ngày:", "en": "Quick date:"},
     "chip_today": {"vi": "Hôm nay", "en": "Today"},
     "chip_tomorrow": {"vi": "Ngày mai", "en": "Tomorrow"},
@@ -651,8 +653,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Doctors in this specialty:",
     },
     "choose_this_doctor_and_slot": {
-        "vi": "Chọn bác sĩ & giờ khám →",
-        "en": "Select doctor & slot →",
+        "vi": "Chọn bác sĩ & giờ khám",
+        "en": "Select doctor & slot",
     },
     "doctor_schedule_info": {"vi": "Lịch trực định kỳ:", "en": "Regular schedule:"},
     "step_2_title_by_date": {"vi": "Bước 2: Chọn ngày & Bác sĩ trực", "en": "Step 2: Select Date & Doctor"},

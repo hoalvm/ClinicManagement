@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date
 from typing import Any
 
-from PySide6.QtCore import QDate, Qt, Signal
+from PySide6.QtCore import QDate, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -18,7 +17,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QTextEdit,
-    QTimeEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -167,6 +165,7 @@ class BookForPatientView(BaseApiView):
         layout.addWidget(form_card)
         layout.addStretch(1)
 
+        scroll.setWidget(container)
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.addWidget(scroll)

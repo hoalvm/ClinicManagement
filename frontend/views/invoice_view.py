@@ -2,20 +2,17 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QFormLayout,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
-    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -45,9 +42,9 @@ class InvoiceManagementView(BaseApiView):
         layout.setSpacing(16)
 
         self.header = PageHeader(
-            "Quản lý hóa đơn",
-            "Lập và quản lý hóa đơn viện phí sau khám bệnh",
-            action_label="+ Lập hóa đơn",
+            "Hóa đơn",
+            "Lập và theo dõi hóa đơn viện phí",
+            action_label="Lập hóa đơn",
             parent=self,
         )
         self.header.action_clicked.connect(self._create_invoice_dialog)
@@ -71,7 +68,7 @@ class InvoiceManagementView(BaseApiView):
         self.status_combo.currentIndexChanged.connect(self._apply_filter)
         filter_bar.addWidget(self.status_combo, 1)
 
-        self.btn_filter = QPushButton("Lọc / Làm mới")
+        self.btn_filter = QPushButton("Lọc")
         self.btn_filter.clicked.connect(self._apply_filter)
         filter_bar.addWidget(self.btn_filter)
 
@@ -167,7 +164,7 @@ class InvoiceManagementView(BaseApiView):
             self.table.setCellWidget(row, 6, badge)
 
             if status == "UNPAID":
-                btn_pay = QPushButton("Thu tiền")
+                btn_pay = QPushButton("Thu phí")
                 btn_pay.setStyleSheet("background-color: #15803d; color: white; border-radius: 6px; padding: 4px 10px; font-weight: 600; font-size: 11px;")
                 btn_pay.clicked.connect(lambda _, i_id=inv_id: self.pay_invoice_requested.emit(i_id))
                 self.table.setCellWidget(row, 7, btn_pay)
@@ -179,7 +176,7 @@ class InvoiceManagementView(BaseApiView):
 
     def _create_invoice_dialog(self) -> None:
         dialog = QDialog(self)
-        dialog.setWindowTitle("Lập hóa đơn mới cho lịch hẹn")
+        dialog.setWindowTitle("Lập hóa đơn")
         dialog.resize(480, 420)
         d_layout = QVBoxLayout(dialog)
 

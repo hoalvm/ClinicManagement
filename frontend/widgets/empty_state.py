@@ -37,6 +37,7 @@ class EmptyState(QFrame):
         self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.icon_label.setFixedSize(48, 48)
         self.icon_label.setAccessibleName("Empty state illustration")
+        self.icon_label.setVisible(False)
         layout.addWidget(self.icon_label, 0, Qt.AlignmentFlag.AlignHCenter)
 
         self.title_label = QLabel(title)

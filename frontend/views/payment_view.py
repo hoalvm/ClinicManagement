@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -45,8 +44,8 @@ class PaymentView(BaseApiView):
         layout.setSpacing(20)
 
         self.header = PageHeader(
-            "Quầy thu ngân",
-            "Thu tiền viện phí và xuất biên lai thanh toán",
+            "Thu phí",
+            "Thanh toán và xuất biên lai",
             parent=self,
         )
         layout.addWidget(self.header)
@@ -67,7 +66,7 @@ class PaymentView(BaseApiView):
         self.inv_input.returnPressed.connect(self._fetch_invoice)
         lookup_layout.addWidget(self.inv_input, 2)
 
-        self.btn_find = QPushButton("Tìm hóa đơn")
+        self.btn_find = QPushButton("Tìm kiếm")
         self.btn_find.setStyleSheet("background-color: #0f766e; color: white; font-weight: 600; padding: 6px 16px; border-radius: 6px;")
         self.btn_find.clicked.connect(self._fetch_invoice)
         lookup_layout.addWidget(self.btn_find)
@@ -152,7 +151,7 @@ class PaymentView(BaseApiView):
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
 
-        self.btn_pay = QPushButton("Xác nhận thu tiền")
+        self.btn_pay = QPushButton("Xác nhận thu")
         self.btn_pay.setStyleSheet("background-color: #15803d; color: white; font-weight: 700; font-size: 14px; padding: 12px 28px; border-radius: 8px;")
         self.btn_pay.clicked.connect(self._process_payment)
         btn_row.addWidget(self.btn_pay)
@@ -175,6 +174,7 @@ class PaymentView(BaseApiView):
 
         layout.addStretch(1)
 
+        scroll.setWidget(container)
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.addWidget(scroll)

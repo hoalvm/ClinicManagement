@@ -89,7 +89,7 @@ class AppointmentDetailView(BaseApiView):
                     ("field_date", "date"),
                     ("field_start_time", "start_time"),
                     ("field_end_time", "end_time"),
-                    ("field_payment_status", "status"),
+                    ("field_status", "status"),
                     ("field_reason", "reason"),
                 ],
             )
@@ -149,7 +149,7 @@ class AppointmentDetailView(BaseApiView):
             "date": "field_date",
             "start_time": "field_start_time",
             "end_time": "field_end_time",
-            "status": "field_payment_status",
+            "status": "field_status",
             "reason": "field_reason",
             "doctor_name": "field_doctor",
             "specialty": "field_specialty",

@@ -27,8 +27,8 @@ class StatisticsPage(QWidget):
 
         # ------------------- Header -------------------
         self.header = PageHeader(
-            "Báo cáo & Thống kê",
-            "Tổng quan số liệu phòng khám",
+            "Thống kê",
+            "Tổng quan số liệu hoạt động",
         )
         self.main_layout.addWidget(self.header)
 
