@@ -4,7 +4,7 @@ from datetime import date, datetime, time
 from decimal import Decimal
 
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, aliased, joinedload
 
 from backend.app.core.clock import clinic_now
 from backend.app.core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -53,14 +53,14 @@ class ReceptionService:
             status=appt.status,
             created_at=appt.created_at,
             patient=ReceptionPatientSummary(
-                patient_id=patient.patient_id,
-                user_id=patient.user_id,
-                full_name=patient_user.full_name if patient_user else f"Patient #{patient.patient_id}",
+                patient_id=patient.patient_id if patient else 0,
+                user_id=patient.user_id if patient else 0,
+                full_name=patient_user.full_name if patient_user else (f"Patient #{patient.patient_id}" if patient else "Patient"),
                 phone=patient_user.phone if patient_user else None,
                 email=patient_user.email if patient_user else None,
-                date_of_birth=patient.date_of_birth,
-                gender=patient.gender,
-                address=patient.address,
+                date_of_birth=patient.date_of_birth if patient else None,
+                gender=patient.gender if patient else None,
+                address=patient.address if patient else None,
             ),
             doctor={
                 "doctor_id": doctor.doctor_id if doctor else 0,
@@ -151,12 +151,15 @@ class ReceptionService:
         appointment_date: date | None = None,
         doctor_id: int | None = None,
     ) -> ReceptionAppointmentPage:
+        pu = aliased(User, name="pu")
+        du = aliased(User, name="du")
+
         base = (
             select(Appointment)
             .join(Appointment.patient)
-            .join(Patient.user)
+            .join(pu, Patient.user_id == pu.user_id)
             .join(Appointment.doctor)
-            .join(Doctor.user)
+            .join(du, Doctor.user_id == du.user_id)
             .options(
                 joinedload(Appointment.patient).joinedload(Patient.user),
                 joinedload(Appointment.doctor).joinedload(Doctor.user),
@@ -169,9 +172,9 @@ class ReceptionService:
             select(func.count(Appointment.appointment_id))
             .select_from(Appointment)
             .join(Appointment.patient)
-            .join(Patient.user)
+            .join(pu, Patient.user_id == pu.user_id)
             .join(Appointment.doctor)
-            .join(Doctor.user)
+            .join(du, Doctor.user_id == du.user_id)
         )
 
         if status and status != "ALL":
@@ -190,8 +193,9 @@ class ReceptionService:
             raw_kw = keyword.strip()
             pat = f"%{raw_kw}%"
             conds = [
-                User.full_name.ilike(pat),
-                User.phone.ilike(pat),
+                pu.full_name.ilike(pat),
+                pu.phone.ilike(pat),
+                du.full_name.ilike(pat),
                 Appointment.reason.ilike(pat),
             ]
             clean_digits = raw_kw.lstrip("#").strip()
@@ -346,13 +350,16 @@ class ReceptionService:
         status: str | None = None,
         keyword: str | None = None,
     ) -> ReceptionInvoicePage:
+        pu = aliased(User, name="pu")
+        du = aliased(User, name="du")
+
         base = (
             select(Invoice)
             .join(Invoice.appointment)
             .join(Appointment.patient)
-            .join(Patient.user)
+            .join(pu, Patient.user_id == pu.user_id)
             .join(Appointment.doctor)
-            .join(Doctor.user)
+            .join(du, Doctor.user_id == du.user_id)
             .options(
                 joinedload(Invoice.appointment)
                 .joinedload(Appointment.patient)
@@ -368,9 +375,9 @@ class ReceptionService:
             .select_from(Invoice)
             .join(Invoice.appointment)
             .join(Appointment.patient)
-            .join(Patient.user)
+            .join(pu, Patient.user_id == pu.user_id)
             .join(Appointment.doctor)
-            .join(Doctor.user)
+            .join(du, Doctor.user_id == du.user_id)
         )
 
         if status and status != "ALL":
@@ -381,8 +388,9 @@ class ReceptionService:
             raw_kw = keyword.strip()
             pat = f"%{raw_kw}%"
             conds = [
-                User.full_name.ilike(pat),
-                User.phone.ilike(pat),
+                pu.full_name.ilike(pat),
+                pu.phone.ilike(pat),
+                du.full_name.ilike(pat),
             ]
             clean_digits = raw_kw.lstrip("#").upper().replace("INV-", "").replace("INV", "").strip()
             if clean_digits.isdigit():
@@ -565,14 +573,17 @@ class ReceptionService:
         payment_method: str | None = None,
         keyword: str | None = None,
     ) -> PaymentRecordPage:
+        pu = aliased(User, name="pu")
+        du = aliased(User, name="du")
+
         base = (
             select(Payment)
             .join(Payment.invoice)
             .join(Invoice.appointment)
             .join(Appointment.patient)
-            .join(Patient.user)
+            .join(pu, Patient.user_id == pu.user_id)
             .join(Appointment.doctor)
-            .join(Doctor.user)
+            .join(du, Doctor.user_id == du.user_id)
             .options(
                 joinedload(Payment.invoice)
                 .joinedload(Invoice.appointment)
@@ -590,7 +601,9 @@ class ReceptionService:
             .join(Payment.invoice)
             .join(Invoice.appointment)
             .join(Appointment.patient)
-            .join(Patient.user)
+            .join(pu, Patient.user_id == pu.user_id)
+            .join(Appointment.doctor)
+            .join(du, Doctor.user_id == du.user_id)
         )
 
         if payment_method and payment_method != "ALL":
@@ -601,8 +614,9 @@ class ReceptionService:
             raw_kw = keyword.strip()
             pat = f"%{raw_kw}%"
             conds = [
-                User.full_name.ilike(pat),
-                User.phone.ilike(pat),
+                pu.full_name.ilike(pat),
+                pu.phone.ilike(pat),
+                du.full_name.ilike(pat),
             ]
             clean_digits = raw_kw.lstrip("#").upper().replace("INV-", "").replace("INV", "").replace("PAY-", "").strip()
             if clean_digits.isdigit():
