@@ -207,8 +207,10 @@ class MedicalResultView(BaseApiView):
             "notes": data.get("notes"),
         }
         for key, value in values.items():
-            self.values[key].setText(display_text(value))
-        self._appointment_id = int(data["appointment_id"])
+            if key in self.values:
+                self.values[key].setText(display_text(value))
+        appt_id = data.get("appointment_id")
+        self._appointment_id = int(appt_id) if appt_id is not None else None
         self.appointment_button.show()
 
         self.prescription_model.removeRows(0, self.prescription_model.rowCount())

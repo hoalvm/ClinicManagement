@@ -248,14 +248,15 @@ class InvoiceDetailView(BaseApiView):
         self._appointment_id = int(data["appointment_id"])
         self.appointment_button.show()
         values: dict[str, Any] = {
-            "appointment_id": self._appointment_id,
             "appointment_date": format_date(appointment.get("appointment_date")),
             "doctor": doctor.get("full_name"),
             "total": format_money(data.get("total_amount")),
             "status": data.get("status"),
         }
         for key, value in values.items():
-            label = self.values[key]
+            label = self.values.get(key)
+            if label is None:
+                continue
             if isinstance(label, StatusBadge):
                 label.set_status(value)
             else:

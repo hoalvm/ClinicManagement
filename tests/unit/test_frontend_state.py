@@ -432,3 +432,92 @@ def test_dashboard_stat_cards_reflow_for_wide_and_narrow_layouts(
     assert narrow_positions == [(0, 0), (0, 1), (1, 0), (1, 1)]
     dashboard.deleteLater()
     qt_app.processEvents()
+
+
+def test_appointment_detail_renders_backend_payload_without_key_error(
+    qt_app: QApplication,
+) -> None:
+    view = AppointmentDetailView(MagicMock(spec=ApiClient))
+    payload = {
+        "appointment_id": 42,
+        "appointment_date": "2026-03-25",
+        "start_time": "09:00:00",
+        "end_time": "09:30:00",
+        "status": "CONFIRMED",
+        "reason": "General checkup",
+        "doctor": {
+            "doctor_id": 1,
+            "full_name": "Dr. Strange",
+            "specialty": "Neurology",
+            "phone": "0901234567",
+            "email": "strange@clinic.com",
+            "license_number": "MED-999",
+        },
+        "clinic": {
+            "clinic_id": 1,
+            "clinic_name": "Central Clinic",
+            "address": "123 Main St",
+            "phone": "0243999999",
+        },
+        "medical_record_id": 10,
+        "invoice_id": 20,
+    }
+
+    view._render(payload)
+
+    assert view._appointment_id == 42
+    assert view._medical_record_id == 10
+    assert view._invoice_id == 20
+    assert view.header.subtitle_label.text() == "#000042"
+    assert view.values["reason"].text() == "General checkup"
+    assert view.values["doctor_name"].text() == "Dr. Strange"
+    assert not view.medical_button.isHidden()
+    assert not view.invoice_button.isHidden()
+    assert not view.reschedule_button.isHidden()
+    assert not view.cancel_button.isHidden()
+    view.deleteLater()
+    qt_app.processEvents()
+
+
+def test_invoice_detail_renders_backend_payload_without_key_error(
+    qt_app: QApplication,
+) -> None:
+    view = InvoiceDetailView(MagicMock(spec=ApiClient))
+    payload = {
+        "invoice_id": 88,
+        "appointment_id": 42,
+        "created_at": "2026-03-25T10:00:00",
+        "total_amount": "250000",
+        "status": "PAID",
+        "appointment": {
+            "appointment_date": "2026-03-25",
+            "start_time": "09:00:00",
+            "doctor": {
+                "doctor_id": 1,
+                "full_name": "Dr. Strange",
+            },
+        },
+        "items": [
+            {
+                "item_name": "Consultation",
+                "quantity": 1,
+                "unit_price": "250000",
+                "line_total": "250000",
+            }
+        ],
+        "payment": {
+            "payment_id": 5,
+            "amount": "250000",
+            "payment_method": "CASH",
+            "payment_date": "2026-03-25T10:05:00",
+        },
+    }
+
+    view._render(payload)
+
+    assert view._appointment_id == 42
+    assert view.values["doctor"].text() == "Dr. Strange"
+    assert view.items_model.rowCount() == 1
+    assert view.payment_values["method"].text() == "CASH"
+    view.deleteLater()
+    qt_app.processEvents()

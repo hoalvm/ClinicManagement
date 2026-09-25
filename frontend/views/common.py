@@ -115,7 +115,14 @@ class BaseApiView(QWidget):
             return
         try:
             handler.on_success(result)
-        except (KeyError, TypeError, ValueError, AttributeError):
+        except (KeyError, TypeError, ValueError, AttributeError) as exc:
+            import logging
+            logging.getLogger(__name__).exception(
+                "Task %s on_success callback failed with %s: %s",
+                handler.task_key,
+                type(exc).__name__,
+                exc,
+            )
             self.feedback.show_message(
                 "Unexpected response",
                 "The server response did not contain the expected information.",
