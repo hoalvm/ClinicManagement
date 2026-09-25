@@ -218,8 +218,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Search or select from the dropdown menu to choose a specialty.",
     },
     "spec_search_placeholder": {
-        "vi": "🔍 Tìm kiếm hoặc bấm mũi tên sổ xuống để chọn chuyên khoa (Tim mạch, Da liễu...)",
-        "en": "🔍 Search or click dropdown arrow to select specialty (Cardiology, Dermatology...)",
+        "vi": "Tìm kiếm hoặc bấm mũi tên sổ xuống để chọn chuyên khoa (Tim mạch, Da liễu...)",
+        "en": "Search or click dropdown arrow to select specialty (Cardiology, Dermatology...)",
     },
     "spec_combo_default": {
         "vi": "-- Bấm để chọn chuyên khoa trong danh sách sổ xuống --",
@@ -238,8 +238,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Select this specialty →",
     },
     "affiliated_doctors": {
-        "vi": "👨‍⚕️ {count} bác sĩ trực thuộc",
-        "en": "👨‍⚕️ {count} affiliated doctors",
+        "vi": "{count} bác sĩ trực thuộc",
+        "en": "{count} affiliated doctors",
     },
     "no_specialty_found": {
         "vi": "Không tìm thấy chuyên khoa",
@@ -435,18 +435,183 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "day_6": {"vi": "Thứ Bảy", "en": "Saturday"},
     "day_7": {"vi": "Chủ Nhật", "en": "Sunday"},
     # --------------------------------------------------------------------------
-    # Status Badges
+    # Status Badges & Filters
     # --------------------------------------------------------------------------
     "status_pending": {"vi": "Chờ xác nhận", "en": "Pending"},
     "status_confirmed": {"vi": "Đã xác nhận", "en": "Confirmed"},
-    "status_checked_in": {"vi": "Đã check-in", "en": "Checked In"},
+    "status_checked_in": {"vi": "Đã tiếp nhận", "en": "Checked In"},
     "status_in_progress": {"vi": "Đang khám", "en": "In Progress"},
-    "status_completed": {"vi": "Đã hoàn thành", "en": "Completed"},
+    "status_completed": {"vi": "Hoàn tất", "en": "Completed"},
     "status_cancelled": {"vi": "Đã hủy", "en": "Cancelled"},
+    "status_paid": {"vi": "Đã thanh toán", "en": "Paid"},
+    "status_unpaid": {"vi": "Chưa thanh toán", "en": "Unpaid"},
+    "status_all": {"vi": "Tất cả", "en": "All"},
+
+    # --------------------------------------------------------------------------
+    # Common Actions & Dialogs
+    # --------------------------------------------------------------------------
+    "btn_refresh": {"vi": "Làm mới", "en": "Refresh"},
+    "btn_view_details": {"vi": "Xem chi tiết", "en": "View Details"},
+    "btn_edit": {"vi": "Chỉnh sửa", "en": "Edit"},
+    "btn_save": {"vi": "Lưu thay đổi", "en": "Save Changes"},
+    "btn_cancel_action": {"vi": "Hủy", "en": "Cancel"},
+    "btn_back": {"vi": "Quay lại", "en": "Back"},
+    "btn_filter": {"vi": "Lọc", "en": "Filter"},
+    "loading": {"vi": "Đang tải...", "en": "Loading..."},
+    "processing": {"vi": "Đang xử lý...", "en": "Processing..."},
+
+    # --------------------------------------------------------------------------
+    # Dashboard
+    # --------------------------------------------------------------------------
+    "dashboard_greeting": {"vi": "Xin chào, {name}", "en": "Hello, {name}"},
+    "dashboard_greeting_default": {"vi": "Xin chào", "en": "Hello"},
+    "dashboard_subtitle": {
+        "vi": "Tổng quan chăm sóc sức khỏe và lịch khám sắp tới.",
+        "en": "Here is an overview of your care and your next visit.",
+    },
+    "care_overview": {"vi": "Tổng quan sức khỏe", "en": "Care overview"},
+    "stat_appointments": {"vi": "Lịch khám", "en": "Appointments"},
+    "stat_medical_records": {"vi": "Hồ sơ bệnh án", "en": "Medical Records"},
+    "stat_invoices": {"vi": "Hóa đơn viện phí", "en": "Invoices"},
+    "stat_unpaid_invoices": {"vi": "Chưa thanh toán", "en": "Unpaid Invoices"},
+    "upcoming_appointment": {"vi": "Lịch hẹn sắp tới", "en": "Upcoming appointment"},
+    "next_visit": {"vi": "Lịch khám kế tiếp", "en": "Your next visit"},
+    "no_upcoming_title": {"vi": "Không có lịch hẹn sắp tới", "en": "No upcoming appointments"},
+    "no_upcoming_desc": {
+        "vi": "Lịch khám đã xác nhận tiếp theo sẽ hiển thị tại đây.",
+        "en": "Your next confirmed visit will appear here when one is scheduled.",
+    },
+    "field_doctor": {"vi": "Bác sĩ", "en": "Doctor"},
+    "field_specialty": {"vi": "Chuyên khoa", "en": "Specialty"},
+    "field_clinic": {"vi": "Phòng khám", "en": "Clinic"},
+    "field_date": {"vi": "Ngày khám", "en": "Date"},
+    "field_start_time": {"vi": "Giờ bắt đầu", "en": "Start time"},
+    "field_end_time": {"vi": "Giờ kết thúc", "en": "End time"},
+    "field_time": {"vi": "Khung giờ", "en": "Time"},
+    "field_reason": {"vi": "Lý do khám", "en": "Reason"},
+
+    # --------------------------------------------------------------------------
+    # Medical History & Result
+    # --------------------------------------------------------------------------
+    "medical_history_title": {"vi": "Lịch sử bệnh án", "en": "Medical History"},
+    "medical_history_subtitle": {
+        "vi": "Xem lại chẩn đoán, ghi chú lâm sàng và kết quả khám.",
+        "en": "Review diagnoses, clinical notes, and care from previous visits.",
+    },
+    "medical_search_placeholder": {
+        "vi": "Tìm kiếm theo chẩn đoán, triệu chứng, bác sĩ...",
+        "en": "Search diagnosis, symptoms, doctor, or specialty",
+    },
+    "th_exam_date": {"vi": "Ngày khám", "en": "Examination Date"},
+    "th_diagnosis": {"vi": "Chẩn đoán", "en": "Diagnosis"},
+    "no_records_found": {"vi": "Không tìm thấy hồ sơ bệnh án", "en": "No medical records found"},
+    "no_records_desc": {
+        "vi": "Thử đổi từ khóa tìm kiếm hoặc làm mới danh sách.",
+        "en": "Try a different search term or refresh to check for new records.",
+    },
+    "records_count": {"vi": "Tìm thấy {count} hồ sơ bệnh án", "en": "{count} medical records found"},
+    "medical_result_title": {"vi": "Kết quả khám bệnh", "en": "Medical Result"},
+    "medical_result_subtitle": {
+        "vi": "Chi tiết kết quả chẩn đoán và đơn thuốc đã kê.",
+        "en": "A read-only summary of your examination and prescription.",
+    },
+    "btn_view_appointment": {"vi": "Xem lịch khám", "en": "View appointment"},
+    "sec_exam_summary": {"vi": "Thông tin ca khám", "en": "Examination summary"},
+    "field_symptoms": {"vi": "Triệu chứng", "en": "Symptoms"},
+    "field_clinical_notes": {"vi": "Ghi chú lâm sàng", "en": "Clinical notes"},
+    "sec_prescription": {"vi": "Đơn thuốc", "en": "Prescription"},
+    "th_medicine": {"vi": "Tên thuốc", "en": "Medicine"},
+    "th_quantity": {"vi": "Số lượng", "en": "Quantity"},
+    "th_dosage": {"vi": "Liều dùng", "en": "Dosage"},
+    "th_instructions": {"vi": "Cách dùng", "en": "Instructions"},
+    "no_prescription_title": {"vi": "Không có đơn thuốc", "en": "No prescription"},
+    "no_prescription_desc": {
+        "vi": "Không có thuốc nào được kê cho ca khám này.",
+        "en": "No medication was prescribed for this examination.",
+    },
+
+    # --------------------------------------------------------------------------
+    # Invoices & Invoice Details
+    # --------------------------------------------------------------------------
+    "invoice_history_title": {"vi": "Lịch sử hóa đơn", "en": "Invoice History"},
+    "invoice_history_subtitle": {
+        "vi": "Theo dõi chi phí và trạng thái thanh toán viện phí.",
+        "en": "Track charges and payment status for your clinic visits.",
+    },
+    "filter_by_status": {"vi": "Lọc theo trạng thái thanh toán", "en": "Narrow results by payment status"},
+    "th_invoice_num": {"vi": "Mã hóa đơn", "en": "Invoice"},
+    "th_total_amount": {"vi": "Tổng tiền", "en": "Total Amount"},
+    "no_invoices_found": {"vi": "Không tìm thấy hóa đơn", "en": "No invoices found"},
+    "no_invoices_desc": {
+        "vi": "Thử đổi trạng thái lọc hoặc làm mới danh sách.",
+        "en": "Try another payment status or refresh to check for new invoices.",
+    },
+    "invoices_count": {"vi": "Tìm thấy {count} hóa đơn", "en": "{count} invoices found"},
+    "invoice_detail_title": {"vi": "Chi tiết hóa đơn", "en": "Invoice Detail"},
+    "invoice_detail_subtitle": {
+        "vi": "Xem chi tiết dịch vụ, tổng tiền và thanh toán.",
+        "en": "Review billed services, totals, and payment information.",
+    },
+    "btn_view_medical_result": {"vi": "Kết quả khám", "en": "Medical result"},
+    "btn_view_invoice": {"vi": "Hóa đơn", "en": "Invoice"},
+    "sec_invoice_summary": {"vi": "Thông tin hóa đơn", "en": "Invoice summary"},
+    "sec_invoice_items": {"vi": "Chi tiết dịch vụ", "en": "Billed services"},
+    "th_service_name": {"vi": "Tên dịch vụ", "en": "Service"},
+    "th_price": {"vi": "Đơn giá", "en": "Price"},
+    "th_line_total": {"vi": "Thành tiền", "en": "Total"},
+    "sec_payment_info": {"vi": "Thông tin thanh toán", "en": "Payment information"},
+    "field_payment_status": {"vi": "Trạng thái", "en": "Payment status"},
+    "field_payment_method": {"vi": "Phương thức", "en": "Payment method"},
+    "field_payment_date": {"vi": "Thời gian thanh toán", "en": "Payment date"},
+    "payment_pending_title": {"vi": "Chưa thanh toán", "en": "Payment pending"},
+    "payment_pending_desc": {
+        "vi": "Hóa đơn này hiện chưa có giao dịch thanh toán nào được ghi nhận.",
+        "en": "No payment has been recorded for this invoice yet.",
+    },
+
+    # --------------------------------------------------------------------------
+    # Appointment History & Details
+    # --------------------------------------------------------------------------
+    "appointment_history_title": {"vi": "Lịch hẹn khám", "en": "Appointment History"},
+    "appointment_history_subtitle": {
+        "vi": "Theo dõi và quản lý các lịch hẹn khám sắp tới và trước đây.",
+        "en": "Find and review your upcoming and previous clinic visits.",
+    },
+    "appointment_search_placeholder": {
+        "vi": "Tìm kiếm bác sĩ, chuyên khoa, phòng khám...",
+        "en": "Search doctor, specialty, clinic, or reason",
+    },
+    "no_appointments_found": {"vi": "Không tìm thấy lịch hẹn", "en": "No appointments found"},
+    "no_appointments_desc": {
+        "vi": "Thử đổi từ khóa tìm kiếm hoặc trạng thái lọc.",
+        "en": "Try changing the search text or status filter, then refresh the list.",
+    },
+    "appointments_count": {"vi": "Tìm thấy {count} lịch hẹn", "en": "{count} appointments found"},
+    "appointment_detail_subtitle": {
+        "vi": "Xem lại thông tin lịch khám, bác sĩ phụ trách và cơ sở.",
+        "en": "Review the visit, care provider, and clinic information.",
+    },
+    "sec_appointment_summary": {"vi": "Thông tin lịch khám", "en": "Appointment summary"},
+    "btn_medical_result": {"vi": "Kết quả khám", "en": "Medical result"},
+    "btn_invoice": {"vi": "Hóa đơn", "en": "Invoice"},
+
+    # --------------------------------------------------------------------------
+    # Patient Profile
+    # --------------------------------------------------------------------------
+    "profile_title": {"vi": "Hồ sơ bệnh nhân", "en": "My Profile"},
+    "profile_subtitle": {
+        "vi": "Quản lý thông tin cá nhân và liên hệ của bạn.",
+        "en": "Keep your personal and contact information up to date.",
+    },
+    "sec_personal_info": {"vi": "Thông tin cá nhân", "en": "Personal information"},
+    "sec_contact_info": {"vi": "Thông tin liên hệ", "en": "Contact details"},
+    "account_notice": {"vi": "Tài khoản bệnh nhân", "en": "Your patient account"},
+    "not_set": {"vi": "Chưa thiết lập", "en": "Not set"},
+
     # --------------------------------------------------------------------------
     # Date Picker & Calendar
     # --------------------------------------------------------------------------
-    "btn_open_calendar": {"vi": "📅 Mở lịch", "en": "📅 Calendar"},
+    "btn_open_calendar": {"vi": "Mở lịch", "en": "Calendar"},
     "quick_select_date": {"vi": "Chọn nhanh ngày:", "en": "Quick date:"},
     "chip_today": {"vi": "Hôm nay", "en": "Today"},
     "chip_tomorrow": {"vi": "Ngày mai", "en": "Tomorrow"},
@@ -468,8 +633,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     # --------------------------------------------------------------------------
     # Booking Modes (By Date vs By Doctor) & Reschedule Doctor
     # --------------------------------------------------------------------------
-    "mode_by_date": {"vi": "📅 Chọn theo ngày khám", "en": "📅 Book by Date"},
-    "mode_by_doctor": {"vi": "👨‍⚕️ Chọn theo bác sĩ", "en": "👨‍⚕️ Book by Doctor"},
+    "mode_by_date": {"vi": "Chọn theo ngày khám", "en": "Book by Date"},
+    "mode_by_doctor": {"vi": "Chọn theo bác sĩ", "en": "Book by Doctor"},
     "lbl_booking_mode": {"vi": "Phương thức đặt lịch:", "en": "Booking method:"},
     "lbl_choose_doctor_on_date": {
         "vi": "Bác sĩ có lịch khám ngày này:",

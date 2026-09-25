@@ -24,7 +24,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-API_URL = "http://127.0.0.1:8000/api/v1/doctor"
+from frontend.core.config import get_frontend_settings
+from frontend.widgets.feedback_banner import FeedbackBanner
+from frontend.widgets.page_header import PageHeader
+from frontend.widgets.status_badge import STATUS_LABELS_VN, StatusBadgeDelegate
+
+API_URL = f"{get_frontend_settings().api_base_url.rstrip('/')}/api/v1/doctor"
 
 
 # ==========================================
@@ -147,23 +152,16 @@ class DoctorScheduleView(QWidget):
         layout.setSpacing(18)
 
         # Header
-        header_box = QHBoxLayout()
-        title_box = QVBoxLayout()
-        title_box.setSpacing(4)
-        title = QLabel("Lịch tiếp nhận khám bệnh")
-        title.setObjectName("pageTitle")
-        sub = QLabel("Danh sách bệnh nhân đã đăng ký, đã check-in và chờ khám")
-        sub.setObjectName("pageSubtitle")
-        title_box.addWidget(title)
-        title_box.addWidget(sub)
-        header_box.addLayout(title_box, 1)
-
-        btn_refresh = QPushButton("Làm mới danh sách")
+        self.header = PageHeader(
+            "Lịch tiếp nhận khám bệnh",
+            "Hàng đợi khám hôm nay",
+        )
+        btn_refresh = QPushButton("Làm mới")
         btn_refresh.setObjectName("secondaryButton")
         btn_refresh.setCursor(Qt.PointingHandCursor)
         btn_refresh.clicked.connect(self.load_schedule)
-        header_box.addWidget(btn_refresh)
-        layout.addLayout(header_box)
+        self.header.add_action(btn_refresh)
+        layout.addWidget(self.header)
 
         # Table Card
         table_card = QFrame()
@@ -193,6 +191,7 @@ class DoctorScheduleView(QWidget):
         h.setSectionResizeMode(3, QHeaderView.Stretch)
         h.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         h.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.table.setItemDelegateForColumn(4, StatusBadgeDelegate(self.table))
 
         card_layout.addWidget(self.table)
         layout.addWidget(table_card, 1)
@@ -227,21 +226,11 @@ class DoctorScheduleView(QWidget):
                 row, 3, QTableWidgetItem(appt.get("Reason") or "Khám bệnh")
             )
 
-            # Status pill
+            # Status pill (rendered via delegate)
             status_text = appt.get("Status", "CHECKED_IN")
-            status_lbl = QLabel(status_text)
-            status_lbl.setAlignment(Qt.AlignCenter)
-            if status_text in ("IN_PROGRESS",):
-                status_lbl.setStyleSheet(
-                    "background-color: #ede9fe; color: #5b21b6; border-radius: 4px; "
-                    "font-size: 11px; font-weight: 600; padding: 2px 8px;"
-                )
-            else:
-                status_lbl.setStyleSheet(
-                    "background-color: #e0f2fe; color: #075985; border-radius: 4px; "
-                    "font-size: 11px; font-weight: 600; padding: 2px 8px;"
-                )
-            self.table.setCellWidget(row, 4, status_lbl)
+            item_status = QTableWidgetItem(STATUS_LABELS_VN.get(status_text, status_text))
+            item_status.setTextAlignment(Qt.AlignCenter)
+            self.table.setItem(row, 4, item_status)
 
             btn_accept = QPushButton(
                 "Đang khám" if status_text == "IN_PROGRESS" else "Tiếp nhận khám"
@@ -294,24 +283,18 @@ class MedicalExamView(QWidget):
         root_layout.setSpacing(14)
 
         # Header Bar
-        header_bar = QHBoxLayout()
-        btn_back = QPushButton("< Quay lại lịch khám")
-        btn_back.setObjectName("secondaryButton")
-        btn_back.setCursor(Qt.PointingHandCursor)
-        btn_back.clicked.connect(self.back_to_schedule)
-        header_bar.addWidget(btn_back)
+        self.header = PageHeader(
+            "Phòng khám bệnh & Chẩn đoán",
+            "Bệnh nhân: —",
+            show_back=True,
+            back_text="Quay lại lịch khám",
+        )
+        self.header.back_requested.connect(self.back_to_schedule)
+        self.sub_title = self.header.subtitle_label
+        root_layout.addWidget(self.header)
 
-        title_box = QVBoxLayout()
-        title_box.setSpacing(2)
-        title = QLabel("Phòng khám bệnh & Chẩn đoán")
-        title.setObjectName("pageTitle")
-        self.sub_title = QLabel("Bệnh nhân: —")
-        self.sub_title.setObjectName("pageSubtitle")
-        title_box.addWidget(title)
-        title_box.addWidget(self.sub_title)
-        header_bar.addLayout(title_box, 1)
-
-        root_layout.addLayout(header_bar)
+        self.feedback = FeedbackBanner(self)
+        root_layout.addWidget(self.feedback)
 
         content_layout = QHBoxLayout()
         content_layout.setSpacing(18)
@@ -443,7 +426,7 @@ class MedicalExamView(QWidget):
         right_col.addWidget(card_pres, 1)
 
         # Finish Button
-        self.btn_finish = QPushButton("HOÀN TẤT CA KHÁM (COMPLETED)")
+        self.btn_finish = QPushButton("Hoàn tất khám")
         self.btn_finish.setObjectName("primaryButton")
         self.btn_finish.setCursor(Qt.PointingHandCursor)
         self.btn_finish.setMinimumHeight(44)

@@ -1,11 +1,22 @@
-"""The single HTTP boundary used by all frontend views."""
-
 from __future__ import annotations
 
+import base64
+import json
 from threading import RLock
 from typing import Any
 
 import httpx
+
+
+def decode_jwt_payload(token: str) -> dict[str, Any]:
+    """Decode JWT payload without verifying signature."""
+    try:
+        payload_part = token.split(".")[1]
+        padding = 4 - len(payload_part) % 4
+        payload_part += "=" * (padding % 4)
+        return json.loads(base64.urlsafe_b64decode(payload_part))
+    except Exception:
+        return {}
 
 
 class ApiError(Exception):
@@ -35,22 +46,82 @@ class ApiClient:
         )
         self._access_token: str | None = None
         self._token_lock = RLock()
+        self._role: str | None = None
+        self._username: str | None = None
+
+    @property
+    def token(self) -> str | None:
+        with self._token_lock:
+            return self._access_token
+
+    @property
+    def role(self) -> str | None:
+        return self._role
+
+    @property
+    def username(self) -> str | None:
+        return self._username
 
     def set_access_token(self, token: str | None) -> None:
         with self._token_lock:
             self._access_token = token
+            if token:
+                payload = decode_jwt_payload(token)
+                self._role = payload.get("role", "").upper()
+                self._username = payload.get("username") or str(payload.get("sub", ""))
+            else:
+                self._role = None
+                self._username = None
 
     def clear_access_token(self) -> None:
         self.set_access_token(None)
 
+    def login(self, username: str, password: str) -> tuple[bool, str | None, dict[str, Any]]:
+        """Log in via OAuth2 form and save token in client."""
+        try:
+            res = self.request("POST", "/auth/login", data={"username": username, "password": password})
+            token = res.get("access_token", "")
+            self.set_access_token(token)
+            payload = decode_jwt_payload(token)
+            return True, None, payload
+        except ApiError as exc:
+            return False, exc.message, {}
+
     def get(self, path: str, *, params: dict[str, Any] | None = None) -> Any:
         return self.request("GET", path, params=params)
 
-    def post(self, path: str, *, json: dict[str, Any] | None = None) -> Any:
-        return self.request("POST", path, json=json)
+    def post(
+        self,
+        path: str,
+        *,
+        json: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> Any:
+        return self.request("POST", path, json=json, data=data, params=params)
 
-    def patch(self, path: str, *, json: dict[str, Any] | None = None) -> Any:
-        return self.request("PATCH", path, json=json)
+    def put(
+        self,
+        path: str,
+        *,
+        json: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> Any:
+        return self.request("PUT", path, json=json, data=data, params=params)
+
+    def patch(
+        self,
+        path: str,
+        *,
+        json: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> Any:
+        return self.request("PATCH", path, json=json, data=data, params=params)
+
+    def delete(self, path: str, *, params: dict[str, Any] | None = None) -> Any:
+        return self.request("DELETE", path, params=params)
 
     def request(
         self,
@@ -59,6 +130,7 @@ class ApiClient:
         *,
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
     ) -> Any:
         with self._token_lock:
             token = self._access_token
@@ -70,6 +142,7 @@ class ApiClient:
                 path,
                 params=params,
                 json=json,
+                data=data,
                 headers=headers,
             )
         except httpx.TimeoutException as exc:

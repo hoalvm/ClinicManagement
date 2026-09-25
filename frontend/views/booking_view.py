@@ -244,7 +244,7 @@ class BookingView(BaseApiView):
             name = s.get("specialty_name", "")
             count = s.get("doctor_count", 0)
             doc_text = t("affiliated_doctors", count=count)
-            self.spec_combo.addItem(f"🩺 {name} ({doc_text})", s)
+            self.spec_combo.addItem(f"{name} ({doc_text})", s)
         self.spec_combo.setCurrentIndex(0)
         self.spec_combo.blockSignals(False)
 
@@ -630,14 +630,18 @@ class BookingView(BaseApiView):
             card_layout = QHBoxLayout(card)
             card_layout.setSpacing(14)
 
-            avatar = QLabel("👨‍⚕️")
-            avatar.setStyleSheet("font-size: 32px; padding: 6px;")
+            avatar = QLabel("BS")
+            avatar.setStyleSheet(
+                "background-color: #e6f4f2; color: #0d5c56; font-size: 13px; font-weight: 700; "
+                "border-radius: 20px; min-width: 40px; max-width: 40px; min-height: 40px; max-height: 40px;"
+            )
+            avatar.setAlignment(Qt.AlignCenter)
             card_layout.addWidget(avatar)
 
             info_layout = QVBoxLayout()
             info_layout.setSpacing(4)
             name_lbl = QLabel(f"Bác sĩ: {doc.get('full_name', '')}")
-            name_lbl.setStyleSheet("font-size: 16px; font-weight: 700; color: #0f172a;")
+            name_lbl.setStyleSheet("font-size: 15px; font-weight: 700; color: #0f172a;")
             info_layout.addWidget(name_lbl)
 
             spec_lbl = QLabel(f"Chuyên khoa: {doc.get('specialty_name', '')}")
@@ -646,7 +650,7 @@ class BookingView(BaseApiView):
 
             clinic_info = doc.get("clinic_name") or "Phòng khám chính"
             clinic_addr = doc.get("clinic_address") or ""
-            clinic_lbl = QLabel(f"🏥 {clinic_info} - {clinic_addr}")
+            clinic_lbl = QLabel(f"Cơ sở: {clinic_info} - {clinic_addr}")
             clinic_lbl.setStyleSheet("color: #64748b; font-size: 12px;")
             info_layout.addWidget(clinic_lbl)
 
@@ -708,14 +712,18 @@ class BookingView(BaseApiView):
             card_layout = QHBoxLayout(card)
             card_layout.setSpacing(14)
 
-            avatar = QLabel("👨‍⚕️")
-            avatar.setStyleSheet("font-size: 32px; padding: 6px;")
+            avatar = QLabel("BS")
+            avatar.setStyleSheet(
+                "background-color: #e6f4f2; color: #0d5c56; font-size: 13px; font-weight: 700; "
+                "border-radius: 20px; min-width: 40px; max-width: 40px; min-height: 40px; max-height: 40px;"
+            )
+            avatar.setAlignment(Qt.AlignCenter)
             card_layout.addWidget(avatar)
 
             info_layout = QVBoxLayout()
             info_layout.setSpacing(4)
             name_lbl = QLabel(f"Bác sĩ: {doc.get('full_name', '')}")
-            name_lbl.setStyleSheet("font-size: 16px; font-weight: 700; color: #0f172a;")
+            name_lbl.setStyleSheet("font-size: 15px; font-weight: 700; color: #0f172a;")
             info_layout.addWidget(name_lbl)
 
             spec_lbl = QLabel(f"Chuyên khoa: {doc.get('specialty_name', '')}")
@@ -724,7 +732,7 @@ class BookingView(BaseApiView):
 
             clinic_info = doc.get("clinic_name") or "Phòng khám chính"
             clinic_addr = doc.get("clinic_address") or ""
-            clinic_lbl = QLabel(f"🏥 {clinic_info} - {clinic_addr}")
+            clinic_lbl = QLabel(f"Cơ sở: {clinic_info} - {clinic_addr}")
             clinic_lbl.setStyleSheet("color: #64748b; font-size: 12px;")
             info_layout.addWidget(clinic_lbl)
 
@@ -1013,7 +1021,7 @@ class BookingView(BaseApiView):
             None,
         )
         if spam_reason and hasattr(self, "specialty_warning_frame"):
-            self.specialty_warning_lbl.setText(f"⚠️ {spam_reason}")
+            self.specialty_warning_lbl.setText(spam_reason)
             self.specialty_warning_frame.show()
         elif hasattr(self, "specialty_warning_frame"):
             self.specialty_warning_frame.hide()

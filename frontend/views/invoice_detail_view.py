@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient
-from frontend.ui.icons import apply_line_icon
+from frontend.core.i18n import get_i18n, t
 from frontend.views.common import (
     BaseApiView,
     configure_table,
@@ -48,22 +48,14 @@ class InvoiceDetailView(BaseApiView):
         root.setSpacing(14)
 
         self.header = PageHeader(
-            "Invoice",
-            "Review billed services, totals, and payment information.",
+            t("invoice_detail_title"),
+            t("invoice_detail_subtitle"),
             show_back=True,
         )
         self.back_button = self.header.back_button
-        # ``title`` is retained for existing callers that update the invoice ID.
         self.title = self.header.title_label
-        self.appointment_button = QPushButton("View appointment")
+        self.appointment_button = QPushButton(t("btn_view_appointment"))
         self.appointment_button.setObjectName("primaryButton")
-        apply_line_icon(
-            self.appointment_button,
-            "calendar",
-            "#FFFFFF",
-            active_color="#FFFFFF",
-            accessible_name="View related appointment",
-        )
         self.header.add_action(self.appointment_button)
         root.addWidget(self.header)
         root.addWidget(self.feedback)
@@ -85,21 +77,22 @@ class InvoiceDetailView(BaseApiView):
         info_grid.setContentsMargins(24, 20, 24, 20)
         info_grid.setHorizontalSpacing(28)
         info_grid.setVerticalSpacing(12)
-        overview_title = QLabel("Invoice overview")
-        overview_title.setObjectName("sectionTitle")
-        info_grid.addWidget(overview_title, 0, 0, 1, 2)
+        self.overview_title = QLabel(t("sec_invoice_summary"))
+        self.overview_title.setObjectName("sectionTitle")
+        info_grid.addWidget(self.overview_title, 0, 0, 1, 2)
         self.values: dict[str, QLabel] = {}
+        self._info_labels: dict[str, QLabel] = {}
         fields = [
-            ("Appointment ID", "appointment_id"),
-            ("Appointment date", "appointment_date"),
-            ("Doctor", "doctor"),
-            ("Total amount", "total"),
-            ("Status", "status"),
+            ("field_doctor", "doctor"),
+            ("field_date", "appointment_date"),
+            ("th_total_amount", "total"),
+            ("field_payment_status", "status"),
         ]
-        for row, (label, key) in enumerate(fields, start=1):
-            field_label = QLabel(label)
+        for row, (label_key, key) in enumerate(fields, start=1):
+            field_label = QLabel(t(label_key))
             field_label.setObjectName("fieldLabel")
             field_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+            self._info_labels[key] = field_label
             value: QLabel
             if key == "status":
                 value = StatusBadge()
@@ -112,7 +105,7 @@ class InvoiceDetailView(BaseApiView):
                     Qt.TextInteractionFlag.TextSelectableByMouse
                     | Qt.TextInteractionFlag.TextSelectableByKeyboard
                 )
-                value.setAccessibleName(label)
+                value.setAccessibleName(t(label_key))
             info_grid.addWidget(field_label, row, 0, Qt.AlignmentFlag.AlignTop)
             info_grid.addWidget(value, row, 1, Qt.AlignmentFlag.AlignTop)
             self.values[key] = value
@@ -125,14 +118,14 @@ class InvoiceDetailView(BaseApiView):
         items_layout = QVBoxLayout(items_card)
         items_layout.setContentsMargins(20, 18, 20, 20)
         items_layout.setSpacing(12)
-        item_title = QLabel("Invoice items")
-        item_title.setObjectName("sectionTitle")
-        items_layout.addWidget(item_title)
+        self.item_title = QLabel(t("sec_invoice_items"))
+        self.item_title.setObjectName("sectionTitle")
+        items_layout.addWidget(self.item_title)
         self.items_table = QTableView()
         self.items_table.setAccessibleName("Invoice line items")
         self.items_model: QStandardItemModel = configure_table(
             self.items_table,
-            ["Item", "Quantity", "Unit price", "Line total"],
+            [t("th_service_name"), t("th_quantity"), t("th_price"), t("th_line_total")],
             stretch_column=0,
             column_widths={0: 300, 1: 90, 2: 160, 3: 170},
         )
@@ -140,9 +133,9 @@ class InvoiceDetailView(BaseApiView):
         items_layout.addWidget(self.items_table)
         content_layout.addWidget(items_card)
 
-        payment_title = QLabel("Payment")
-        payment_title.setObjectName("sectionTitle")
-        content_layout.addWidget(payment_title)
+        self.payment_title = QLabel(t("sec_payment_info"))
+        self.payment_title.setObjectName("sectionTitle")
+        content_layout.addWidget(self.payment_title)
         self.payment_card = QFrame()
         self.payment_card.setObjectName("infoCard")
         payment_grid = QGridLayout(self.payment_card)
@@ -150,15 +143,17 @@ class InvoiceDetailView(BaseApiView):
         payment_grid.setHorizontalSpacing(28)
         payment_grid.setVerticalSpacing(12)
         self.payment_values: dict[str, QLabel] = {}
-        for row, (label, key) in enumerate(
+        self._payment_labels: dict[str, QLabel] = {}
+        for row, (label_key, key) in enumerate(
             [
-                ("Payment method", "method"),
-                ("Amount paid", "amount"),
-                ("Payment date", "date"),
+                ("field_payment_method", "method"),
+                ("th_total_amount", "amount"),
+                ("field_payment_date", "date"),
             ]
         ):
-            field_label = QLabel(label)
+            field_label = QLabel(t(label_key))
             field_label.setObjectName("fieldLabel")
+            self._payment_labels[key] = field_label
             value = QLabel("—")
             value.setObjectName("fieldValue")
             value.setWordWrap(True)
@@ -166,16 +161,15 @@ class InvoiceDetailView(BaseApiView):
                 Qt.TextInteractionFlag.TextSelectableByMouse
                 | Qt.TextInteractionFlag.TextSelectableByKeyboard
             )
-            value.setAccessibleName(label)
+            value.setAccessibleName(t(label_key))
             payment_grid.addWidget(field_label, row, 0, Qt.AlignmentFlag.AlignTop)
             payment_grid.addWidget(value, row, 1, Qt.AlignmentFlag.AlignTop)
             self.payment_values[key] = value
         payment_grid.setColumnMinimumWidth(0, 142)
         payment_grid.setColumnStretch(1, 1)
         self.not_paid = EmptyState(
-            "Payment pending",
-            "No payment has been recorded for this invoice yet.",
-            icon="invoice",
+            t("payment_pending_title"),
+            t("payment_pending_desc"),
         )
         content_layout.addWidget(self.payment_card)
         content_layout.addWidget(self.not_paid)
@@ -185,7 +179,47 @@ class InvoiceDetailView(BaseApiView):
 
         self.header.back_requested.connect(self.back_requested.emit)
         self.appointment_button.clicked.connect(self._open_appointment)
+
+        get_i18n().language_changed.connect(self.retranslate_ui)
         self.clear_data()
+
+    def retranslate_ui(self) -> None:
+        """Update all text in InvoiceDetailView according to current language."""
+        self.header.set_title(t("invoice_detail_title"))
+        if self._invoice_id is not None:
+            self.header.set_subtitle(f"#INV-{self._invoice_id:06d}")
+        else:
+            self.header.set_subtitle(t("invoice_detail_subtitle"))
+        self.appointment_button.setText(t("btn_view_appointment"))
+        self.overview_title.setText(t("sec_invoice_summary"))
+
+        info_key_map = {
+            "doctor": "field_doctor",
+            "appointment_date": "field_date",
+            "total": "th_total_amount",
+            "status": "field_payment_status",
+        }
+        for key, lbl in self._info_labels.items():
+            if key in info_key_map:
+                lbl.setText(t(info_key_map[key]))
+
+        self.item_title.setText(t("sec_invoice_items"))
+        headers = [t("th_service_name"), t("th_quantity"), t("th_price"), t("th_line_total")]
+        for col, h in enumerate(headers):
+            self.items_model.setHeaderData(col, Qt.Orientation.Horizontal, h)
+
+        self.payment_title.setText(t("sec_payment_info"))
+        payment_key_map = {
+            "method": "field_payment_method",
+            "amount": "th_total_amount",
+            "date": "field_payment_date",
+        }
+        for key, lbl in self._payment_labels.items():
+            if key in payment_key_map:
+                lbl.setText(t(payment_key_map[key]))
+
+        self.not_paid.set_title(t("payment_pending_title"))
+        self.not_paid.set_description(t("payment_pending_desc"))
 
     def activate(self, invoice_id: int) -> None:
         self.invalidate_pending()
@@ -204,7 +238,7 @@ class InvoiceDetailView(BaseApiView):
             lambda: self.api_client.get(f"/api/v1/invoices/me/{invoice_id}"),
             self._render,
             controls=(self.appointment_button,),
-            loading_text="Loading invoice…",
+            loading_text=t("loading"),
         )
 
     def _render(self, payload: object) -> None:

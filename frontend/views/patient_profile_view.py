@@ -22,8 +22,8 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient
+from frontend.core.i18n import get_i18n, t
 from frontend.core.session import SessionState
-from frontend.ui.icons import apply_line_icon
 from frontend.views.common import BaseApiView, require_dict
 from frontend.widgets.page_header import PageHeader
 
@@ -48,8 +48,8 @@ class PatientProfileView(BaseApiView):
         root.setSpacing(14)
 
         self.header = PageHeader(
-            "My Profile",
-            "Keep your personal and contact information up to date.",
+            t("profile_title"),
+            t("profile_subtitle"),
         )
         root.addWidget(self.header)
         root.addWidget(self.feedback)
@@ -88,21 +88,15 @@ class PatientProfileView(BaseApiView):
         self.hero_name = QLabel("Patient")
         self.hero_name.setObjectName("sectionTitle")
         self.hero_name.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.hero_username = QLabel("Your patient account")
+        self.hero_username = QLabel(t("account_notice"))
         self.hero_username.setObjectName("mutedLabel")
         self.hero_username.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         identity.addWidget(self.hero_name)
         identity.addWidget(self.hero_username)
         hero_layout.addLayout(identity, 1)
 
-        self.edit_button = QPushButton("Edit profile")
+        self.edit_button = QPushButton(t("btn_edit"))
         self.edit_button.setObjectName("secondaryButton")
-        apply_line_icon(
-            self.edit_button,
-            "edit",
-            active_color="#0F766E",
-            accessible_name="Edit profile",
-        )
         hero_layout.addWidget(self.edit_button, 0, Qt.AlignmentFlag.AlignVCenter)
         content_layout.addWidget(hero)
 
@@ -120,64 +114,53 @@ class PatientProfileView(BaseApiView):
         self.full_name.setAccessibleName("Full name")
         self.phone = QLineEdit()
         self.phone.setMaxLength(15)
-        self.phone.setPlaceholderText("e.g. +84901234567")
         self.phone.setAccessibleName("Phone number")
         self.email = QLineEdit()
         self.email.setMaxLength(100)
-        self.email.setPlaceholderText("name@example.com")
         self.email.setAccessibleName("Email address")
         self.date_of_birth = QDateEdit()
         self.date_of_birth.setCalendarPopup(True)
         self.date_of_birth.setDisplayFormat("dd/MM/yyyy")
         self.date_of_birth.setMinimumDate(NULL_DATE)
-        self.date_of_birth.setSpecialValueText("Not set")
+        self.date_of_birth.setSpecialValueText(t("not_set"))
         self.date_of_birth.setMaximumDate(QDate.currentDate())
         self.date_of_birth.setAccessibleName("Date of birth")
         self.gender = QComboBox()
-        self.gender.addItem("Not set", None)
-        for gender in ("MALE", "FEMALE", "OTHER"):
-            self.gender.addItem(gender.title(), gender)
+        self._populate_gender_combo()
         self.gender.setAccessibleName("Gender")
         self.address = QTextEdit()
         self.address.setMaximumHeight(96)
-        self.address.setPlaceholderText("Street, ward, district, province or city")
         self.address.setAccessibleName("Address")
         self.address.setTabChangesFocus(True)
 
-        personal_title = QLabel("Personal information")
-        personal_title.setObjectName("sectionTitle")
-        card_layout.addWidget(personal_title)
+        self._form_labels: dict[str, QLabel] = {}
+        self.personal_title = QLabel(t("sec_personal_info"))
+        self.personal_title.setObjectName("sectionTitle")
+        card_layout.addWidget(self.personal_title)
         personal_form = self._form_layout()
-        self._add_form_row(personal_form, "Username", self.username)
-        self._add_form_row(personal_form, "Full name", self.full_name)
-        self._add_form_row(personal_form, "Date of birth", self.date_of_birth)
-        self._add_form_row(personal_form, "Gender", self.gender)
+        self._add_form_row(personal_form, "username", self.username)
+        self._add_form_row(personal_form, "full_name", self.full_name)
+        self._add_form_row(personal_form, "date_of_birth", self.date_of_birth)
+        self._add_form_row(personal_form, "gender", self.gender)
         card_layout.addLayout(personal_form)
 
-        contact_title = QLabel("Contact details")
-        contact_title.setObjectName("sectionTitle")
-        card_layout.addWidget(contact_title)
+        self.contact_title = QLabel(t("sec_contact_info"))
+        self.contact_title.setObjectName("sectionTitle")
+        card_layout.addWidget(self.contact_title)
         contact_form = self._form_layout()
-        self._add_form_row(contact_form, "Phone", self.phone)
-        self._add_form_row(contact_form, "Email", self.email)
-        self._add_form_row(contact_form, "Address", self.address)
+        self._add_form_row(contact_form, "phone", self.phone)
+        self._add_form_row(contact_form, "email", self.email)
+        self._add_form_row(contact_form, "address", self.address)
         card_layout.addLayout(contact_form)
 
         actions = QHBoxLayout()
         actions.setSpacing(10)
         actions.addStretch()
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = QPushButton(t("btn_cancel_action"))
         self.cancel_button.setObjectName("secondaryButton")
         self.cancel_button.setAccessibleName("Cancel profile changes")
-        self.save_button = QPushButton("Save changes")
+        self.save_button = QPushButton(t("btn_save"))
         self.save_button.setObjectName("primaryButton")
-        apply_line_icon(
-            self.save_button,
-            "save",
-            "#FFFFFF",
-            active_color="#FFFFFF",
-            accessible_name="Save profile changes",
-        )
         actions.addWidget(self.cancel_button)
         actions.addWidget(self.save_button)
         card_layout.addLayout(actions)
@@ -199,6 +182,36 @@ class PatientProfileView(BaseApiView):
         self.save_button.clicked.connect(self._save)
         self._set_editing(False)
 
+        get_i18n().language_changed.connect(self.retranslate_ui)
+
+    def _populate_gender_combo(self) -> None:
+        curr = self.gender.currentData()
+        self.gender.blockSignals(True)
+        self.gender.clear()
+        self.gender.addItem(t("not_set"), None)
+        for g_code, g_key in [("MALE", "gender_male"), ("FEMALE", "gender_female"), ("OTHER", "gender_other")]:
+            self.gender.addItem(t(g_key), g_code)
+        idx = self.gender.findData(curr)
+        if idx >= 0:
+            self.gender.setCurrentIndex(idx)
+        self.gender.blockSignals(False)
+
+    def retranslate_ui(self) -> None:
+        """Update all text in PatientProfileView according to current language."""
+        self.header.set_title(t("profile_title"))
+        self.header.set_subtitle(t("profile_subtitle"))
+        self.edit_button.setText(t("btn_edit"))
+        self.cancel_button.setText(t("btn_cancel_action"))
+        self.save_button.setText(t("btn_save"))
+        self.personal_title.setText(t("sec_personal_info"))
+        self.contact_title.setText(t("sec_contact_info"))
+        self.date_of_birth.setSpecialValueText(t("not_set"))
+        self._populate_gender_combo()
+        for key, lbl in self._form_labels.items():
+            lbl.setText(t(key))
+        if not self.username.text():
+            self.hero_username.setText(t("account_notice"))
+
     @staticmethod
     def _form_layout() -> QFormLayout:
         form = QFormLayout()
@@ -208,11 +221,11 @@ class PatientProfileView(BaseApiView):
         form.setVerticalSpacing(13)
         return form
 
-    @staticmethod
-    def _add_form_row(form: QFormLayout, text: str, field: QWidget) -> None:
-        label = QLabel(text)
+    def _add_form_row(self, form: QFormLayout, key: str, field: QWidget) -> None:
+        label = QLabel(t(key))
         label.setObjectName("fieldLabel")
         label.setBuddy(field)
+        self._form_labels[key] = label
         form.addRow(label, field)
 
     def activate(self) -> None:
@@ -224,7 +237,7 @@ class PatientProfileView(BaseApiView):
             lambda: self.api_client.get("/api/v1/patients/me"),
             self._render,
             controls=(self.edit_button, *self._editable),
-            loading_text="Loading profile…",
+            loading_text=t("loading"),
             on_finished=lambda: self._set_editing(False),
         )
 
@@ -259,7 +272,7 @@ class PatientProfileView(BaseApiView):
         initials = "".join(part[0] for part in display_name.split() if part)[:2].upper() or "P"
         self.avatar_text.setText(initials)
         self.hero_name.setText(display_name)
-        self.hero_username.setText(f"@{username}" if username else "Your patient account")
+        self.hero_username.setText(f"@{username}" if username else t("account_notice"))
 
     def _set_editing(self, editing: bool, *, focus: bool = False) -> None:
         for widget in (self.full_name, self.phone, self.email, self.address):
@@ -357,7 +370,7 @@ class PatientProfileView(BaseApiView):
             save_and_reload,
             saved,
             controls=(self.save_button, self.cancel_button, *self._editable),
-            loading_text="Saving profile…",
+            loading_text=t("processing"),
             on_finished=finished,
         )
 

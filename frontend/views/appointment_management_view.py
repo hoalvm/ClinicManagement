@@ -49,9 +49,9 @@ class AppointmentManagementView(BaseApiView):
 
         # Header
         self.header = PageHeader(
-            "Appointment Management",
-            "Review booking requests, confirm dates, check in arriving patients, or cancel/reschedule.",
-            action_label="+ New Appointment",
+            "Quản lý lịch hẹn",
+            "Theo dõi, xác nhận và tiếp nhận bệnh nhân theo lịch hẹn",
+            action_label="+ Lịch hẹn mới",
             parent=self,
         )
         self.header.action_clicked.connect(self.book_requested)
@@ -64,23 +64,21 @@ class AppointmentManagementView(BaseApiView):
         filter_bar.setSpacing(12)
 
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search patient name, phone, or reason…")
+        self.search_input.setPlaceholderText("Tìm kiếm theo tên bệnh nhân, SĐT hoặc lý do...")
         self.search_input.returnPressed.connect(self._apply_filter)
         filter_bar.addWidget(self.search_input, 2)
 
         self.status_combo = QComboBox()
-        self.status_combo.addItems([
-            "All Statuses",
-            "PENDING",
-            "CONFIRMED",
-            "CHECKED_IN",
-            "COMPLETED",
-            "CANCELLED",
-        ])
+        self.status_combo.addItem("Tất cả trạng thái", "")
+        self.status_combo.addItem("Chờ xác nhận", "PENDING")
+        self.status_combo.addItem("Đã xác nhận", "CONFIRMED")
+        self.status_combo.addItem("Chờ khám", "CHECKED_IN")
+        self.status_combo.addItem("Hoàn thành", "COMPLETED")
+        self.status_combo.addItem("Đã hủy", "CANCELLED")
         self.status_combo.currentIndexChanged.connect(self._apply_filter)
         filter_bar.addWidget(self.status_combo, 1)
 
-        self.btn_refresh = QPushButton("Filter / Refresh")
+        self.btn_refresh = QPushButton("Lọc / Làm mới")
         self.btn_refresh.clicked.connect(self._apply_filter)
         filter_bar.addWidget(self.btn_refresh)
 
@@ -90,7 +88,7 @@ class AppointmentManagementView(BaseApiView):
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels([
-            "ID", "Date & Time", "Patient Name", "Phone", "Doctor", "Status", "Actions"
+            "Mã hẹn", "Thời gian", "Bệnh nhân", "Số điện thoại", "Bác sĩ", "Trạng thái", "Thao tác"
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.table.horizontalHeader().setStretchLastSection(True)
@@ -99,8 +97,8 @@ class AppointmentManagementView(BaseApiView):
         layout.addWidget(self.table)
 
         self.empty_state = EmptyState(
-            "No appointments found",
-            "Try adjusting your search criteria or booking an appointment for a patient.",
+            "Không tìm thấy lịch hẹn",
+            "Thử thay đổi điều kiện tìm kiếm hoặc tạo lịch hẹn mới.",
             parent=self,
         )
         layout.addWidget(self.empty_state)
@@ -124,8 +122,7 @@ class AppointmentManagementView(BaseApiView):
         self.load_appointments()
 
     def load_appointments(self) -> None:
-        status_text = self.status_combo.currentText()
-        status_param = None if status_text == "All Statuses" else status_text
+        status_param = self.status_combo.currentData() or None
         keyword_param = self.search_input.text().strip() or None
 
         params = {
@@ -141,7 +138,7 @@ class AppointmentManagementView(BaseApiView):
             "load_staff_appts",
             lambda: self.api_client.get("/api/v1/reception/appointments", params=params),
             self._on_appointments_loaded,
-            loading_text="Loading appointments…",
+            loading_text="Đang tải danh sách lịch hẹn...",
         )
 
     def _on_appointments_loaded(self, data: dict[str, Any]) -> None:
@@ -184,24 +181,24 @@ class AppointmentManagementView(BaseApiView):
             actions_layout.setSpacing(6)
 
             if status == "PENDING":
-                btn_confirm = QPushButton("Confirm")
+                btn_confirm = QPushButton("Xác nhận")
                 btn_confirm.setStyleSheet("background-color: #0f766e; color: white; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-weight: 600;")
                 btn_confirm.clicked.connect(lambda _, a_id=appt_id: self._confirm_appointment(a_id))
                 actions_layout.addWidget(btn_confirm)
 
             if status in ("PENDING", "CONFIRMED"):
-                btn_checkin = QPushButton("Check-In")
+                btn_checkin = QPushButton("Tiếp nhận")
                 btn_checkin.setStyleSheet("background-color: #0284c7; color: white; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-weight: 600;")
                 btn_checkin.clicked.connect(lambda _, a_id=appt_id: self._check_in_appointment(a_id))
                 actions_layout.addWidget(btn_checkin)
 
             if status not in ("COMPLETED", "CANCELLED"):
-                btn_reschedule = QPushButton("Reschedule")
+                btn_reschedule = QPushButton("Đổi lịch")
                 btn_reschedule.setStyleSheet("background-color: #e2e8f0; color: #334155; border-radius: 6px; padding: 4px 8px; font-size: 11px;")
                 btn_reschedule.clicked.connect(lambda _, a=appt: self._reschedule_dialog(a))
                 actions_layout.addWidget(btn_reschedule)
 
-                btn_cancel = QPushButton("Cancel")
+                btn_cancel = QPushButton("Hủy")
                 btn_cancel.setStyleSheet("background-color: #fee2e2; color: #b91c1c; border-radius: 6px; padding: 4px 8px; font-size: 11px;")
                 btn_cancel.clicked.connect(lambda _, a_id=appt_id: self._cancel_dialog(a_id))
                 actions_layout.addWidget(btn_cancel)
@@ -212,39 +209,38 @@ class AppointmentManagementView(BaseApiView):
         self.run_api_task(
             f"confirm_{appt_id}",
             lambda: self.api_client.post(f"/api/v1/reception/appointments/{appt_id}/confirm"),
-            lambda _: self._on_action_success(f"Appointment #{appt_id} confirmed successfully!"),
-            loading_text="Confirming appointment…",
+            lambda _: self._on_action_success(f"Đã xác nhận lịch hẹn #{appt_id} thành công!"),
+            loading_text="Đang xác nhận lịch hẹn...",
         )
 
     def _check_in_appointment(self, appt_id: int) -> None:
         self.run_api_task(
             f"checkin_{appt_id}",
             lambda: self.api_client.post(f"/api/v1/reception/appointments/{appt_id}/check-in"),
-            lambda _: self._on_action_success(f"Patient checked in for appointment #{appt_id}!"),
-            loading_text="Checking in patient…",
+            lambda _: self._on_action_success(f"Đã tiếp nhận bệnh nhân cho lịch hẹn #{appt_id}!"),
+            loading_text="Đang tiếp nhận bệnh nhân...",
         )
 
     def _on_action_success(self, msg: str) -> None:
-        self.feedback.show_message("Action Complete", msg, severity="success")
+        self.feedback.show_message("Thành công", msg, severity="success")
         self.load_appointments()
 
     def _cancel_dialog(self, appt_id: int) -> None:
         dialog = QDialog(self)
-        dialog.setWindowTitle(f"Cancel Appointment #{appt_id}")
+        dialog.setWindowTitle(f"Hủy lịch hẹn #{appt_id}")
         dialog.resize(360, 160)
         d_layout = QVBoxLayout(dialog)
 
-        label = QLabel("Please enter the reason for cancellation:")
+        label = QLabel("Vui lòng nhập lý do hủy lịch hẹn:")
         d_layout.addWidget(label)
 
         reason_input = QLineEdit()
-        reason_input.setPlaceholderText("e.g. Patient requested cancellation, emergency, etc.")
         d_layout.addWidget(reason_input)
 
         btn_row = QHBoxLayout()
-        btn_cancel = QPushButton("Close")
+        btn_cancel = QPushButton("Đóng")
         btn_cancel.clicked.connect(dialog.reject)
-        btn_confirm = QPushButton("Confirm Cancel")
+        btn_confirm = QPushButton("Xác nhận hủy")
         btn_confirm.setStyleSheet("background-color: #dc2626; color: white; font-weight: bold;")
         btn_confirm.clicked.connect(dialog.accept)
         btn_row.addWidget(btn_cancel)
@@ -252,41 +248,40 @@ class AppointmentManagementView(BaseApiView):
         d_layout.addLayout(btn_row)
 
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            reason = reason_input.text().strip() or "Cancelled by clinic staff."
+            reason = reason_input.text().strip() or "Hủy bởi nhân viên tiếp đón."
             self.run_api_task(
                 f"cancel_{appt_id}",
                 lambda: self.api_client.post(
                     f"/api/v1/reception/appointments/{appt_id}/cancel",
                     json={"cancellation_reason": reason},
                 ),
-                lambda _: self._on_action_success(f"Appointment #{appt_id} cancelled."),
-                loading_text="Cancelling appointment…",
+                lambda _: self._on_action_success(f"Đã hủy lịch hẹn #{appt_id}."),
+                loading_text="Đang hủy lịch hẹn...",
             )
 
     def _reschedule_dialog(self, appt: dict[str, Any]) -> None:
         appt_id = appt.get("appointment_id", 0)
         dialog = QDialog(self)
-        dialog.setWindowTitle(f"Reschedule Appointment #{appt_id}")
+        dialog.setWindowTitle(f"Đổi lịch hẹn #{appt_id}")
         dialog.resize(380, 200)
         form = QFormLayout(dialog)
 
         date_edit = QDateEdit()
         date_edit.setCalendarPopup(True)
         date_edit.setDisplayFormat("yyyy-MM-dd")
-        form.addRow("New Date:", date_edit)
+        form.addRow("Ngày khám mới:", date_edit)
 
         time_edit = QTimeEdit()
         time_edit.setDisplayFormat("HH:mm")
-        form.addRow("New Time:", time_edit)
+        form.addRow("Giờ khám mới:", time_edit)
 
         reason_edit = QLineEdit()
-        reason_edit.setPlaceholderText("Optional note for reschedule")
-        form.addRow("Reason:", reason_edit)
+        form.addRow("Lý do đổi:", reason_edit)
 
         btn_row = QHBoxLayout()
-        btn_close = QPushButton("Cancel")
+        btn_close = QPushButton("Hủy")
         btn_close.clicked.connect(dialog.reject)
-        btn_save = QPushButton("Save New Schedule")
+        btn_save = QPushButton("Lưu lịch mới")
         btn_save.setStyleSheet("background-color: #0f766e; color: white; font-weight: bold;")
         btn_save.clicked.connect(dialog.accept)
         btn_row.addWidget(btn_close)
@@ -300,7 +295,7 @@ class AppointmentManagementView(BaseApiView):
                 "appointment_date": new_date,
                 "start_time": new_time,
                 "end_time": "10:00:00",
-                "reason": reason_edit.text().strip() or "Rescheduled by staff",
+                "reason": reason_edit.text().strip() or "Đổi lịch bởi nhân viên tiếp đón",
             }
             self.run_api_task(
                 f"reschedule_{appt_id}",
@@ -308,6 +303,6 @@ class AppointmentManagementView(BaseApiView):
                     f"/api/v1/reception/appointments/{appt_id}/reschedule",
                     json=payload,
                 ),
-                lambda _: self._on_action_success(f"Appointment #{appt_id} rescheduled to {new_date}!"),
-                loading_text="Updating appointment schedule…",
+                lambda _: self._on_action_success(f"Đã đổi lịch hẹn #{appt_id} sang ngày {new_date}!"),
+                loading_text="Đang cập nhật lịch hẹn...",
             )

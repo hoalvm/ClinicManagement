@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api_client import api_client
+from frontend.widgets.page_header import PageHeader
 
 DAYS_VN = {
     1: "Thứ Hai",
@@ -39,17 +40,11 @@ class ScheduleManagementPage(QWidget):
         layout.setSpacing(18)
 
         # ------------------- Header -------------------
-        header_box = QVBoxLayout()
-        header_box.setSpacing(4)
-        title_label = QLabel("Quản lý lịch làm việc")
-        title_label.setObjectName("pageTitle")
-        subtitle_label = QLabel(
-            "Xếp lịch khám bệnh định kỳ, phân ca làm việc và thiết lập thời lượng khám cho bác sĩ"
+        self.header = PageHeader(
+            "Quản lý lịch làm việc",
+            "Quản lý lịch làm việc của bác sĩ",
         )
-        subtitle_label.setObjectName("pageSubtitle")
-        header_box.addWidget(title_label)
-        header_box.addWidget(subtitle_label)
-        layout.addLayout(header_box)
+        layout.addWidget(self.header)
 
         # ------------------- Create Form Card -------------------
         form_card = QFrame()
@@ -208,13 +203,9 @@ class ScheduleManagementPage(QWidget):
 
             self.table.setItem(row, 1, QTableWidgetItem(doctors_map.get(s["DoctorID"], "—")))
 
-            day_lbl = QLabel(DAYS_VN.get(s["DayOfWeek"], "—"))
-            day_lbl.setAlignment(Qt.AlignCenter)
-            day_lbl.setStyleSheet(
-                "background-color: #f1f5f9; color: #334155; border-radius: 4px; "
-                "font-size: 11px; font-weight: 600; padding: 2px 6px;"
-            )
-            self.table.setCellWidget(row, 2, day_lbl)
+            item_day = QTableWidgetItem(DAYS_VN.get(s["DayOfWeek"], "—"))
+            item_day.setTextAlignment(Qt.AlignCenter)
+            self.table.setItem(row, 2, item_day)
 
             st_item = QTableWidgetItem(str(s["StartTime"])[:5] if len(str(s["StartTime"])) >= 5 else str(s["StartTime"]))
             st_item.setTextAlignment(Qt.AlignCenter)

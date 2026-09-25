@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient
-from frontend.ui.icons import apply_line_icon
 from frontend.views.common import BaseApiView
 
 NULL_DATE = QDate(1752, 9, 14)
@@ -71,29 +70,23 @@ class RegisterView(BaseApiView):
 
         self.username = QLineEdit()
         self.username.setMaxLength(50)
-        self.username.setPlaceholderText("Choose a username")
         self.username.setAccessibleName("Username, required")
         self.password = QLineEdit()
         self.password.setMaxLength(128)
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
-        self.password.setPlaceholderText("At least 8 characters")
         self.password.setAccessibleName("Password, required")
         self.confirm_password = QLineEdit()
         self.confirm_password.setMaxLength(128)
         self.confirm_password.setEchoMode(QLineEdit.EchoMode.Password)
-        self.confirm_password.setPlaceholderText("Enter your password again")
         self.confirm_password.setAccessibleName("Confirm password, required")
         self.full_name = QLineEdit()
         self.full_name.setMaxLength(100)
-        self.full_name.setPlaceholderText("Your full name")
         self.full_name.setAccessibleName("Full name, required")
         self.phone = QLineEdit()
         self.phone.setMaxLength(15)
-        self.phone.setPlaceholderText("e.g. 0900000000")
         self.phone.setAccessibleName("Phone number")
         self.email = QLineEdit()
         self.email.setMaxLength(100)
-        self.email.setPlaceholderText("name@example.com")
         self.email.setAccessibleName("Email address")
         self.date_of_birth = QDateEdit()
         self.date_of_birth.setAccessibleName("Date of birth")
@@ -111,7 +104,6 @@ class RegisterView(BaseApiView):
         self.address = QTextEdit()
         self.address.setAccessibleName("Address")
         self.address.setMaximumHeight(88)
-        self.address.setPlaceholderText("Street, district, city")
         self.address.setTabChangesFocus(True)
 
         account_title = QLabel("Account")
@@ -153,12 +145,6 @@ class RegisterView(BaseApiView):
         actions = QHBoxLayout()
         self.back_button = QPushButton("Back to login")
         self.back_button.setObjectName("secondaryButton")
-        apply_line_icon(
-            self.back_button,
-            "back",
-            active_color="#0F766E",
-            accessible_name="Back to login",
-        )
         self.register_button = QPushButton("Create account")
         self.register_button.setObjectName("primaryButton")
         self.register_button.setMinimumWidth(160)

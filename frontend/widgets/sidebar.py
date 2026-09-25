@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -90,9 +90,7 @@ class Sidebar(QFrame):
         apply_line_icon(
             self.logout_button,
             "logout",
-            "#a8c5d2",
-            size=19,
-            active_color="#ffffff",
+            active_color="#DC2626",
             accessible_name="Log out",
         )
         self.logout_button.clicked.connect(self.logout_requested)
@@ -171,14 +169,11 @@ class Sidebar(QFrame):
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setAccessibleName(label)
         button.setToolTip(label)
-        button.setIconSize(QSize(19, 19))
         apply_line_icon(
             button,
             self._ICONS[route],
-            "#a8c5d2",
-            size=19,
-            active_color="#ffffff",
-            selected_color="#ffffff",
+            active_color="#0F766E",
+            accessible_name=label,
         )
         button.clicked.connect(
             lambda _checked=False, key=route: self.navigation_requested.emit(key)
@@ -286,13 +281,4 @@ class Sidebar(QFrame):
     def set_active(self, route: str) -> None:
         self._active_route = route
         for key, button in self._buttons.items():
-            active = key == route
-            button.setChecked(active)
-            apply_line_icon(
-                button,
-                self._ICONS[key],
-                "#ffffff" if active else "#a8c5d2",
-                size=19,
-                active_color="#ffffff",
-                selected_color="#ffffff",
-            )
+            button.setChecked(key == route)

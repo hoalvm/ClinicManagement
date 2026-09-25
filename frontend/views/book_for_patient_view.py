@@ -46,8 +46,8 @@ class BookForPatientView(BaseApiView):
         layout.setSpacing(20)
 
         self.header = PageHeader(
-            "Book Appointment for Patient",
-            "Register walk-in visits or schedule appointments over the phone on behalf of patients.",
+            "Đặt lịch cho bệnh nhân",
+            "Tiếp nhận đặt lịch trực tiếp hoặc qua điện thoại",
             parent=self,
         )
         layout.addWidget(self.header)
@@ -60,7 +60,7 @@ class BookForPatientView(BaseApiView):
         form_layout.setSpacing(16)
 
         # Section 1: Patient Information
-        pt_section = QLabel("1. Patient Information")
+        pt_section = QLabel("1. Thông tin bệnh nhân")
         pt_section.setStyleSheet("font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 4px;")
         form_layout.addWidget(pt_section)
 
@@ -68,40 +68,39 @@ class BookForPatientView(BaseApiView):
         pt_form.setSpacing(12)
 
         self.pt_search_input = QLineEdit()
-        self.pt_search_input.setPlaceholderText("Search existing patient by phone / name (optional)…")
-        btn_lookup = QPushButton("Lookup")
+        self.pt_search_input.setPlaceholderText("Tìm kiếm theo số điện thoại hoặc họ tên...")
+        btn_lookup = QPushButton("Tra cứu")
         btn_lookup.clicked.connect(self._lookup_patient)
         lookup_row = QHBoxLayout()
         lookup_row.addWidget(self.pt_search_input, 3)
         lookup_row.addWidget(btn_lookup, 1)
-        pt_form.addRow("Existing Patient:", lookup_row)
+        pt_form.addRow("Bệnh nhân cũ:", lookup_row)
 
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("Nguyen Van A")
-        pt_form.addRow("Full Name *:", self.name_input)
+        pt_form.addRow("Họ và tên (*):", self.name_input)
 
         self.phone_input = QLineEdit()
-        self.phone_input.setPlaceholderText("0901234567")
-        pt_form.addRow("Phone Number *:", self.phone_input)
+        pt_form.addRow("Số điện thoại (*):", self.phone_input)
 
         self.gender_combo = QComboBox()
-        self.gender_combo.addItems(["MALE", "FEMALE", "OTHER"])
-        pt_form.addRow("Gender:", self.gender_combo)
+        self.gender_combo.addItem("Nam", "MALE")
+        self.gender_combo.addItem("Nữ", "FEMALE")
+        self.gender_combo.addItem("Khác", "OTHER")
+        pt_form.addRow("Giới tính:", self.gender_combo)
 
         self.dob_edit = QDateEdit()
         self.dob_edit.setCalendarPopup(True)
         self.dob_edit.setDate(QDate.currentDate().addYears(-30))
         self.dob_edit.setDisplayFormat("yyyy-MM-dd")
-        pt_form.addRow("Date of Birth:", self.dob_edit)
+        pt_form.addRow("Ngày sinh:", self.dob_edit)
 
         self.address_input = QLineEdit()
-        self.address_input.setPlaceholderText("District 1, Ho Chi Minh City")
-        pt_form.addRow("Address:", self.address_input)
+        pt_form.addRow("Địa chỉ:", self.address_input)
 
         form_layout.addLayout(pt_form)
 
         # Section 2: Appointment Details
-        appt_section = QLabel("2. Doctor & Schedule Details")
+        appt_section = QLabel("2. Thông tin lịch khám")
         appt_section.setStyleSheet("font-size: 15px; font-weight: 700; color: #0f172a; margin-top: 12px; margin-bottom: 4px;")
         form_layout.addWidget(appt_section)
 
@@ -109,16 +108,16 @@ class BookForPatientView(BaseApiView):
         appt_form.setSpacing(12)
 
         self.doctor_combo = QComboBox()
-        self.doctor_combo.addItem("Dr. Le Thi Mai (Internal Medicine / Nội tổng quát)", 1)
-        self.doctor_combo.addItem("Dr. Tran Van Duc (Cardiology / Tim mạch)", 2)
-        self.doctor_combo.addItem("Dr. Pham Minh Tri (Pediatrics / Nhi khoa)", 3)
-        appt_form.addRow("Attending Doctor *:", self.doctor_combo)
+        self.doctor_combo.addItem("BS. Lê Thị Mai (Nội tổng quát)", 1)
+        self.doctor_combo.addItem("BS. Trần Văn Đức (Tim mạch)", 2)
+        self.doctor_combo.addItem("BS. Phạm Minh Trí (Nhi khoa)", 3)
+        appt_form.addRow("Bác sĩ phụ trách (*):", self.doctor_combo)
 
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDate(QDate.currentDate())
         self.date_edit.setDisplayFormat("yyyy-MM-dd")
-        appt_form.addRow("Appointment Date *:", self.date_edit)
+        appt_form.addRow("Ngày khám (*):", self.date_edit)
 
         time_row = QHBoxLayout()
         self.time_combo = QComboBox()
@@ -137,14 +136,13 @@ class BookForPatientView(BaseApiView):
             "16:00 - 16:30",
         ])
         time_row.addWidget(self.time_combo)
-        appt_form.addRow("Time Slot *:", time_row)
+        appt_form.addRow("Khung giờ (*):", time_row)
 
         self.reason_input = QTextEdit()
-        self.reason_input.setPlaceholderText("Describe symptoms, medical complaint, or reason for booking…")
         self.reason_input.setMaximumHeight(80)
-        appt_form.addRow("Reason for Visit:", self.reason_input)
+        appt_form.addRow("Lý do khám:", self.reason_input)
 
-        self.chk_autoconfirm = QCheckBox("Directly confirm appointment (Status: CONFIRMED)")
+        self.chk_autoconfirm = QCheckBox("Tự động xác nhận lịch hẹn (Trạng thái: Đã xác nhận)")
         self.chk_autoconfirm.setChecked(True)
         appt_form.addRow("", self.chk_autoconfirm)
 
@@ -154,11 +152,11 @@ class BookForPatientView(BaseApiView):
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
 
-        self.btn_reset = QPushButton("Clear Form")
+        self.btn_reset = QPushButton("Làm mới")
         self.btn_reset.clicked.connect(self._clear_form)
         btn_row.addWidget(self.btn_reset)
 
-        self.btn_submit = QPushButton("Create Appointment")
+        self.btn_submit = QPushButton("Tạo lịch khám")
         self.btn_submit.setStyleSheet(
             "background-color: #0f766e; color: white; font-size: 14px; font-weight: 700; padding: 10px 24px; border-radius: 8px;"
         )
@@ -176,29 +174,30 @@ class BookForPatientView(BaseApiView):
     def _lookup_patient(self) -> None:
         q = self.pt_search_input.text().strip()
         if not q:
-            self.feedback.show_message("Search Patient", "Please enter a phone or name to search.", severity="info")
+            self.feedback.show_message("Tìm kiếm", "Vui lòng nhập số điện thoại hoặc tên bệnh nhân.", severity="info")
             return
 
         self.run_api_task(
             "lookup_patient",
             lambda: self.api_client.get("/api/v1/reception/patients/search", params={"q": q}),
             self._on_patient_found,
-            loading_text="Searching patient records…",
+            loading_text="Đang tra cứu hồ sơ...",
         )
 
     def _on_patient_found(self, patients: list[dict[str, Any]]) -> None:
         if not patients:
-            self.feedback.show_message("Not Found", "No existing patient matched. Please fill the details below.", severity="info")
+            self.feedback.show_message("Không tìm thấy", "Chưa có thông tin bệnh nhân. Vui lòng nhập chi tiết bên dưới.", severity="info")
             return
         p = patients[0]
         self.name_input.setText(p.get("full_name", ""))
         self.phone_input.setText(p.get("phone", "") or "")
         self.address_input.setText(p.get("address", "") or "")
         gender = p.get("gender", "MALE")
-        idx = self.gender_combo.findText(gender)
-        if idx >= 0:
-            self.gender_combo.setCurrentIndex(idx)
-        self.feedback.show_message("Patient Found", f"Loaded profile for {p.get('full_name')}", severity="success")
+        for i in range(self.gender_combo.count()):
+            if self.gender_combo.itemData(i) == gender or self.gender_combo.itemText(i) == gender:
+                self.gender_combo.setCurrentIndex(i)
+                break
+        self.feedback.show_message("Đã tìm thấy", f"Đã tải thông tin cho {p.get('full_name')}", severity="success")
 
     def _clear_form(self) -> None:
         self.pt_search_input.clear()
@@ -213,7 +212,7 @@ class BookForPatientView(BaseApiView):
         phone = self.phone_input.text().strip()
 
         if not full_name or not phone:
-            self.feedback.show_message("Required Fields", "Patient Full Name and Phone Number are required.", severity="danger")
+            self.feedback.show_message("Thiếu thông tin", "Vui lòng nhập họ và tên cùng số điện thoại người bệnh.", severity="danger")
             return
 
         time_str = self.time_combo.currentText().split(" - ")[0] + ":00"
@@ -222,17 +221,18 @@ class BookForPatientView(BaseApiView):
         appt_date = self.date_edit.date().toString("yyyy-MM-dd")
         dob = self.dob_edit.date().toString("yyyy-MM-dd")
 
+        gender_code = self.gender_combo.currentData() or "MALE"
         payload = {
             "full_name": full_name,
             "phone": phone,
             "date_of_birth": dob,
-            "gender": self.gender_combo.currentText(),
+            "gender": gender_code,
             "address": self.address_input.text().strip() or None,
             "doctor_id": doctor_id,
             "appointment_date": appt_date,
             "start_time": time_str,
             "end_time": end_str,
-            "reason": self.reason_input.toPlainText().strip() or "Appointment booked by clinic reception",
+            "reason": self.reason_input.toPlainText().strip() or "Đặt lịch khám tại quầy tiếp đón",
             "auto_confirm": self.chk_autoconfirm.isChecked(),
         }
 
@@ -240,15 +240,14 @@ class BookForPatientView(BaseApiView):
             "book_for_patient",
             lambda: self.api_client.post("/api/v1/reception/appointments/book", json=payload),
             self._on_booking_success,
-            loading_text="Scheduling appointment…",
+            loading_text="Đang lưu lịch hẹn...",
         )
 
     def _on_booking_success(self, result: dict[str, Any]) -> None:
         appt_id = result.get("appointment_id", 0)
-        status = result.get("status", "CONFIRMED")
         self.feedback.show_message(
-            "Booking Confirmed",
-            f"Successfully booked appointment #{appt_id} (Status: {status}) for patient {self.name_input.text()}!",
+            "Đặt lịch thành công",
+            f"Đã tạo thành công lịch hẹn #{appt_id} cho bệnh nhân {self.name_input.text()}!",
             severity="success",
         )
         self._clear_form()

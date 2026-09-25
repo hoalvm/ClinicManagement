@@ -10,6 +10,7 @@ from frontend.core.config import get_frontend_settings
 from frontend.core.session import SessionState
 from frontend.login_window import LoginWindow
 from frontend.main_window import MainWindow
+from frontend.reception_dashboard import ReceptionDashboard
 from frontend.style import APP_STYLE
 
 app = QApplication(sys.argv)
@@ -62,6 +63,13 @@ def open_dashboard():
                 "Lỗi hồ sơ bác sĩ",
                 "Không tìm thấy hồ sơ bác sĩ tương ứng với tài khoản này.",
             )
+
+    elif role == "STAFF":
+        dashboard = ReceptionDashboard()
+        dashboard.logout_requested.connect(show_login)
+        dashboard.show()
+        if login:
+            login.close()
 
     elif role == "PATIENT":
         settings = get_frontend_settings()

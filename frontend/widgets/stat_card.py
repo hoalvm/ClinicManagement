@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
-
-from frontend.ui.icons import line_icon
 
 
 class StatCard(QFrame):
@@ -15,9 +13,10 @@ class StatCard(QFrame):
     def __init__(
         self,
         title: str,
+        value: object = "—",
         *,
         icon_name: str | None = None,
-        icon_text: str = "•",
+        icon_text: str | None = None,
         tone: str = "teal",
         parent: QWidget | None = None,
     ) -> None:
@@ -29,43 +28,43 @@ class StatCard(QFrame):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAccessibleName(f"{title}. Open related records")
 
+        colors = {
+            "blue": "#0369A1",
+            "violet": "#6D28D9",
+            "amber": "#B45309",
+            "teal": "#0F766E",
+            "brand": "#0F766E",
+            "warning": "#B45309",
+            "info": "#0369A1",
+            "success": "#15803D",
+        }
+        accent_color = colors.get(tone, "#0F766E")
+
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(18, 17, 18, 17)
+        layout.setContentsMargins(18, 16, 18, 16)
         layout.setSpacing(14)
 
-        icon_frame = QFrame()
-        icon_frame.setObjectName("statIcon")
-        icon_frame.setFixedSize(44, 44)
-        icon_layout = QVBoxLayout(icon_frame)
-        icon_layout.setContentsMargins(0, 0, 0, 0)
-        icon = QLabel(icon_text)
-        icon.setObjectName("statIconText")
-        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        if icon_name:
-            colors = {
-                "blue": "#0369A1",
-                "violet": "#6D28D9",
-                "amber": "#B45309",
-                "teal": "#0F766E",
-            }
-            icon.setText("")
-            icon.setPixmap(
-                line_icon(icon_name, colors.get(tone, "#0F766E"), size=22).pixmap(QSize(22, 22))
-            )
-        icon_layout.addWidget(icon)
+        # Clean vertical accent indicator
+        accent_bar = QFrame()
+        accent_bar.setFixedWidth(4)
+        accent_bar.setStyleSheet(f"background-color: {accent_color}; border-radius: 2px;")
+        layout.addWidget(accent_bar)
 
         text_layout = QVBoxLayout()
-        text_layout.setSpacing(1)
-        self._value = QLabel("—")
+        text_layout.setSpacing(2)
+        self._value = QLabel(str(value) if value is not None else "—")
         self._value.setObjectName("statValue")
-        label = QLabel(title)
-        label.setObjectName("statTitle")
+        self._title_label = QLabel(title)
+        self._title_label.setObjectName("statTitle")
         text_layout.addWidget(self._value)
-        text_layout.addWidget(label)
+        text_layout.addWidget(self._title_label)
 
-        layout.addWidget(icon_frame)
         layout.addLayout(text_layout, 1)
+
+    def set_title(self, title: str) -> None:
+        self._title = title
+        self._title_label.setText(title)
+        self.setAccessibleName(f"{self._title}: {self._value.text()}. Open related records")
 
     def set_value(self, value: object) -> None:
         self._value.setText(str(value))
@@ -83,3 +82,16 @@ class StatCard(QFrame):
             event.accept()
             return
         super().keyPressEvent(event)
+
+
+class ModernStatCard(StatCard):
+    """Compatibility wrapper matching ModernStatCard(title, value, accent_color)."""
+
+    def __init__(self, title: str, value: object, accent_color: str = "#0F766E"):
+        super().__init__(title, value, parent=None)
+        # Apply custom accent line color if provided
+        for child in self.findChildren(QFrame):
+            if child.width() == 4:
+                child.setStyleSheet(f"background-color: {accent_color}; border-radius: 2px;")
+                break
+

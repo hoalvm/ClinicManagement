@@ -9,7 +9,7 @@ from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from frontend.api.api_client import ApiClient
-from frontend.ui.icons import apply_line_icon
+from frontend.core.i18n import get_i18n, t
 from frontend.views.common import (
     BaseApiView,
     display_text,
@@ -31,6 +31,7 @@ class DashboardView(BaseApiView):
         super().__init__(api_client, parent)
         self._appointment_id: int | None = None
         self._stat_columns = 0
+        self._patient_name = ""
 
         root = QVBoxLayout(self)
         root.setContentsMargins(28, 24, 28, 24)
@@ -43,28 +44,23 @@ class DashboardView(BaseApiView):
         self.greeting = self.header.title_label
         self.refresh_button = QPushButton("Refresh")
         self.refresh_button.setObjectName("secondaryButton")
-        apply_line_icon(
-            self.refresh_button,
-            "refresh",
-            active_color="#0F766E",
-            accessible_name="Refresh dashboard",
-        )
+        self.refresh_button.setAccessibleName("Refresh dashboard")
         self.header.add_action(self.refresh_button)
         root.addWidget(self.header)
         root.addWidget(self.feedback)
         root.addWidget(self.loading)
 
-        overview_title = QLabel("Care overview")
-        overview_title.setObjectName("sectionTitle")
-        root.addWidget(overview_title)
+        self.overview_title = QLabel("Care overview")
+        self.overview_title.setObjectName("sectionTitle")
+        root.addWidget(self.overview_title)
 
         self.cards = QGridLayout()
         self.cards.setHorizontalSpacing(14)
         self.cards.setVerticalSpacing(14)
-        self.appointments_card = StatCard("Appointments", icon_name="calendar", tone="blue")
-        self.records_card = StatCard("Medical Records", icon_name="medical", tone="violet")
-        self.invoices_card = StatCard("Invoices", icon_name="invoice")
-        self.unpaid_card = StatCard("Unpaid Invoices", icon_name="invoice", tone="amber")
+        self.appointments_card = StatCard("Appointments", tone="blue")
+        self.records_card = StatCard("Medical Records", tone="violet")
+        self.invoices_card = StatCard("Invoices")
+        self.unpaid_card = StatCard("Unpaid Invoices", tone="amber")
         self._stat_cards = (
             self.appointments_card,
             self.records_card,
@@ -73,9 +69,9 @@ class DashboardView(BaseApiView):
         )
         root.addLayout(self.cards)
 
-        upcoming_title = QLabel("Upcoming appointment")
-        upcoming_title.setObjectName("sectionTitle")
-        root.addWidget(upcoming_title)
+        self.upcoming_title = QLabel("Upcoming appointment")
+        self.upcoming_title.setObjectName("sectionTitle")
+        root.addWidget(self.upcoming_title)
 
         self.upcoming_card = QFrame()
         self.upcoming_card.setObjectName("appointmentCard")
@@ -86,9 +82,9 @@ class DashboardView(BaseApiView):
         upcoming_layout.setColumnStretch(1, 1)
         upcoming_layout.setColumnStretch(3, 1)
 
-        card_title = QLabel("Your next visit")
-        card_title.setObjectName("sectionTitle")
-        upcoming_layout.addWidget(card_title, 0, 0, 1, 3)
+        self.card_title = QLabel("Your next visit")
+        self.card_title.setObjectName("sectionTitle")
+        upcoming_layout.addWidget(self.card_title, 0, 0, 1, 3)
         self.status_badge = StatusBadge()
         upcoming_layout.addWidget(
             self.status_badge,
@@ -98,20 +94,22 @@ class DashboardView(BaseApiView):
         )
 
         self.upcoming_values: dict[str, QLabel] = {"status": self.status_badge}
+        self._field_labels: dict[str, QLabel] = {}
         fields = (
-            ("Doctor", "doctor"),
-            ("Specialty", "specialty"),
-            ("Clinic", "clinic"),
-            ("Date", "date"),
-            ("Start time", "start"),
-            ("End time", "end"),
-            ("Reason", "reason"),
+            ("field_doctor", "doctor"),
+            ("field_specialty", "specialty"),
+            ("field_clinic", "clinic"),
+            ("field_date", "date"),
+            ("field_start_time", "start"),
+            ("field_end_time", "end"),
+            ("field_reason", "reason"),
         )
-        for index, (label, key) in enumerate(fields):
+        for index, (label_key, key) in enumerate(fields):
             row, pair = divmod(index, 2)
             column = pair * 2
-            label_widget = QLabel(label)
+            label_widget = QLabel(t(label_key))
             label_widget.setObjectName("fieldLabel")
+            self._field_labels[key] = label_widget
             value = QLabel("—")
             value.setObjectName("fieldValue")
             value.setWordWrap(True)
@@ -133,7 +131,6 @@ class DashboardView(BaseApiView):
         self.no_upcoming = EmptyState(
             "No upcoming appointments",
             "Your next confirmed visit will appear here when one is scheduled.",
-            icon="calendar",
             action_text="Refresh",
         )
         self.no_upcoming.setMinimumHeight(178)
@@ -149,7 +146,43 @@ class DashboardView(BaseApiView):
         self.invoices_card.clicked.connect(lambda: self.route_requested.emit("invoice_history"))
         self.unpaid_card.clicked.connect(lambda: self.route_requested.emit("invoice_history"))
         self._reflow_stats(force=True)
+
+        get_i18n().language_changed.connect(self.retranslate_ui)
+        self.retranslate_ui()
         self.clear_data()
+
+    def retranslate_ui(self) -> None:
+        """Update all text in DashboardView according to current language."""
+        if self._patient_name:
+            self.header.set_title(t("dashboard_greeting", name=self._patient_name))
+        else:
+            self.header.set_title(t("dashboard_greeting_default"))
+        self.header.set_subtitle(t("dashboard_subtitle"))
+        self.refresh_button.setText(t("btn_refresh"))
+        self.overview_title.setText(t("care_overview"))
+        self.appointments_card.set_title(t("stat_appointments"))
+        self.records_card.set_title(t("stat_medical_records"))
+        self.invoices_card.set_title(t("stat_invoices"))
+        self.unpaid_card.set_title(t("stat_unpaid_invoices"))
+        self.upcoming_title.setText(t("upcoming_appointment"))
+        self.card_title.setText(t("next_visit"))
+        self.details_button.setText(t("btn_view_details"))
+        self.no_upcoming.set_title(t("no_upcoming_title"))
+        self.no_upcoming.set_description(t("no_upcoming_desc"))
+        self.no_upcoming.set_action(t("btn_refresh"))
+
+        field_key_map = {
+            "doctor": "field_doctor",
+            "specialty": "field_specialty",
+            "clinic": "field_clinic",
+            "date": "field_date",
+            "start": "field_start_time",
+            "end": "field_end_time",
+            "reason": "field_reason",
+        }
+        for key, lbl in self._field_labels.items():
+            if key in field_key_map:
+                lbl.setText(t(field_key_map[key]))
 
     def activate(self) -> None:
         self.load()
@@ -160,13 +193,17 @@ class DashboardView(BaseApiView):
             lambda: self.api_client.get("/api/v1/dashboard/me"),
             self._render,
             controls=(self.refresh_button,),
-            loading_text="Loading dashboard…",
+            loading_text=t("loading"),
         )
 
     def _render(self, payload: object) -> None:
         data = require_dict(payload)
-        patient_name = display_text(data.get("patient_name"), "Patient")
-        self.header.set_title(f"Hello, {patient_name}")
+        self._patient_name = display_text(data.get("patient_name"), "")
+        self.header.set_title(
+            t("dashboard_greeting", name=self._patient_name)
+            if self._patient_name
+            else t("dashboard_greeting_default")
+        )
         self.appointments_card.set_value(data.get("total_appointments", 0))
         self.records_card.set_value(data.get("total_medical_records", 0))
         self.invoices_card.set_value(data.get("total_invoices", 0))
@@ -219,7 +256,8 @@ class DashboardView(BaseApiView):
 
     def clear_data(self) -> None:
         self._appointment_id = None
-        self.header.set_title("Hello")
+        self._patient_name = ""
+        self.header.set_title(t("dashboard_greeting_default"))
         self.feedback.clear()
         for card in self._stat_cards:
             card.set_value("—")

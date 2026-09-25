@@ -6,7 +6,7 @@ markers = [
     "integration: requires a configured non-production Microsoft SQL Server database",
 ]
 filterwarnings = [
-    "ignore::starlette.exceptions.StarletteDeprecationWarning",
+    "ignore::DeprecationWarning",
 ]
 
 [tool.ruff]

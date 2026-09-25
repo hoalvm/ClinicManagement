@@ -45,9 +45,9 @@ class InvoiceManagementView(BaseApiView):
         layout.setSpacing(16)
 
         self.header = PageHeader(
-            "Invoice Management",
-            "Generate invoices after doctor consultations, manage outstanding fees, and track receipts.",
-            action_label="+ Issue New Invoice",
+            "Quản lý hóa đơn",
+            "Lập và quản lý hóa đơn viện phí sau khám bệnh",
+            action_label="+ Lập hóa đơn",
             parent=self,
         )
         self.header.action_clicked.connect(self._create_invoice_dialog)
@@ -60,16 +60,18 @@ class InvoiceManagementView(BaseApiView):
         filter_bar.setSpacing(12)
 
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search patient name, phone, or invoice #…")
+        self.search_input.setPlaceholderText("Tìm kiếm theo tên bệnh nhân, SĐT hoặc mã HĐ...")
         self.search_input.returnPressed.connect(self._apply_filter)
         filter_bar.addWidget(self.search_input, 2)
 
         self.status_combo = QComboBox()
-        self.status_combo.addItems(["All Invoices", "UNPAID", "PAID"])
+        self.status_combo.addItem("Tất cả hóa đơn", "")
+        self.status_combo.addItem("Chưa thanh toán", "UNPAID")
+        self.status_combo.addItem("Đã thanh toán", "PAID")
         self.status_combo.currentIndexChanged.connect(self._apply_filter)
         filter_bar.addWidget(self.status_combo, 1)
 
-        self.btn_filter = QPushButton("Filter")
+        self.btn_filter = QPushButton("Lọc / Làm mới")
         self.btn_filter.clicked.connect(self._apply_filter)
         filter_bar.addWidget(self.btn_filter)
 
@@ -79,7 +81,7 @@ class InvoiceManagementView(BaseApiView):
         self.table = QTableWidget()
         self.table.setColumnCount(8)
         self.table.setHorizontalHeaderLabels([
-            "Inv #", "Appt #", "Patient Name", "Phone", "Doctor", "Amount", "Status", "Action"
+            "Mã HĐ", "Mã hẹn", "Bệnh nhân", "Số điện thoại", "Bác sĩ", "Tổng tiền", "Trạng thái", "Thao tác"
         ])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -87,8 +89,8 @@ class InvoiceManagementView(BaseApiView):
         layout.addWidget(self.table)
 
         self.empty_state = EmptyState(
-            "No invoices found",
-            "Invoices issued after medical examinations will appear here.",
+            "Không tìm thấy hóa đơn",
+            "Hóa đơn viện phí được lập sẽ hiển thị tại danh sách này.",
             parent=self,
         )
         layout.addWidget(self.empty_state)
@@ -111,8 +113,7 @@ class InvoiceManagementView(BaseApiView):
         self.load_invoices()
 
     def load_invoices(self) -> None:
-        status_text = self.status_combo.currentText()
-        status_param = None if status_text == "All Invoices" else status_text
+        status_param = self.status_combo.currentData() or None
         keyword_param = self.search_input.text().strip() or None
 
         params = {
@@ -128,7 +129,7 @@ class InvoiceManagementView(BaseApiView):
             "load_invoices",
             lambda: self.api_client.get("/api/v1/reception/invoices", params=params),
             self._on_invoices_loaded,
-            loading_text="Loading invoices…",
+            loading_text="Đang tải hóa đơn...",
         )
 
     def _on_invoices_loaded(self, data: dict[str, Any]) -> None:
@@ -166,41 +167,41 @@ class InvoiceManagementView(BaseApiView):
             self.table.setCellWidget(row, 6, badge)
 
             if status == "UNPAID":
-                btn_pay = QPushButton("Collect Payment")
+                btn_pay = QPushButton("Thu tiền")
                 btn_pay.setStyleSheet("background-color: #15803d; color: white; border-radius: 6px; padding: 4px 10px; font-weight: 600; font-size: 11px;")
                 btn_pay.clicked.connect(lambda _, i_id=inv_id: self.pay_invoice_requested.emit(i_id))
                 self.table.setCellWidget(row, 7, btn_pay)
             else:
-                paid_label = QLabel(f"Paid ({inv.get('payment_method') or 'CARD'})")
+                method = "Tiền mặt" if inv.get('payment_method') == "CASH" else "Thẻ"
+                paid_label = QLabel(f"Đã thu ({method})")
                 paid_label.setStyleSheet("color: #166534; font-size: 11px; font-weight: 600; padding: 4px;")
                 self.table.setCellWidget(row, 7, paid_label)
 
     def _create_invoice_dialog(self) -> None:
         dialog = QDialog(self)
-        dialog.setWindowTitle("Issue New Invoice for Appointment")
+        dialog.setWindowTitle("Lập hóa đơn mới cho lịch hẹn")
         dialog.resize(480, 420)
         d_layout = QVBoxLayout(dialog)
 
         form = QFormLayout()
         appt_input = QLineEdit()
-        appt_input.setPlaceholderText("Enter Appointment ID (e.g. 101)")
-        form.addRow("Appointment ID *:", appt_input)
+        form.addRow("Mã lịch hẹn (*):", appt_input)
         d_layout.addLayout(form)
 
-        items_label = QLabel("Invoice Line Items:")
+        items_label = QLabel("Chi tiết dịch vụ:")
         items_label.setStyleSheet("font-weight: 700; margin-top: 10px;")
         d_layout.addWidget(items_label)
 
         # Simple pre-defined line items for quick billing
         item_table = QTableWidget()
         item_table.setColumnCount(3)
-        item_table.setHorizontalHeaderLabels(["Item / Service Name", "Qty", "Unit Price (₫)"])
+        item_table.setHorizontalHeaderLabels(["Tên dịch vụ / Thuốc", "Số lượng", "Đơn giá (₫)"])
         item_table.setRowCount(3)
 
         default_items = [
-            ("Doctor Specialist Consultation (Khám chuyên khoa)", 1, 200000),
-            ("Routine Diagnostic Tests (Xét nghiệm chỉ định)", 1, 150000),
-            ("Prescription Medication (Thuốc điều trị)", 1, 100000),
+            ("Khám chuyên khoa", 1, 200000),
+            ("Xét nghiệm chỉ định", 1, 150000),
+            ("Thuốc điều trị", 1, 100000),
         ]
 
         for i, (name, qty, price) in enumerate(default_items):
@@ -212,9 +213,9 @@ class InvoiceManagementView(BaseApiView):
         d_layout.addWidget(item_table)
 
         btn_row = QHBoxLayout()
-        btn_cancel = QPushButton("Cancel")
+        btn_cancel = QPushButton("Hủy")
         btn_cancel.clicked.connect(dialog.reject)
-        btn_submit = QPushButton("Generate UNPAID Invoice")
+        btn_submit = QPushButton("Tạo hóa đơn")
         btn_submit.setStyleSheet("background-color: #0f766e; color: white; font-weight: bold; padding: 8px 16px;")
         btn_submit.clicked.connect(dialog.accept)
         btn_row.addWidget(btn_cancel)
@@ -224,7 +225,7 @@ class InvoiceManagementView(BaseApiView):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             appt_id_text = appt_input.text().strip()
             if not appt_id_text.isdigit():
-                self.feedback.show_message("Invalid Input", "Please enter a valid numeric Appointment ID.", severity="danger")
+                self.feedback.show_message("Sai thông tin", "Vui lòng nhập mã lịch hẹn hợp lệ dạng số.", severity="danger")
                 return
 
             items_payload = []
@@ -240,7 +241,7 @@ class InvoiceManagementView(BaseApiView):
                     })
 
             if not items_payload:
-                self.feedback.show_message("Missing Items", "Please add at least one line item.", severity="danger")
+                self.feedback.show_message("Thiếu dịch vụ", "Vui lòng thêm ít nhất một khoản mục dịch vụ.", severity="danger")
                 return
 
             payload = {
@@ -252,15 +253,15 @@ class InvoiceManagementView(BaseApiView):
                 "create_invoice",
                 lambda: self.api_client.post("/api/v1/reception/invoices", json=payload),
                 lambda res: self._on_invoice_created(res),
-                loading_text="Creating invoice…",
+                loading_text="Đang lập hóa đơn...",
             )
 
     def _on_invoice_created(self, inv: dict[str, Any]) -> None:
         inv_id = inv.get("invoice_id", 0)
         total = float(inv.get("total_amount", 0))
         self.feedback.show_message(
-            "Invoice Created",
-            f"Created invoice INV-{inv_id:04d} for {total:,.0f} ₫ (Status: UNPAID).",
+            "Lập hóa đơn thành công",
+            f"Đã lập hóa đơn INV-{inv_id:04d} với số tiền {total:,.0f} ₫.",
             severity="success",
         )
         self.load_invoices()

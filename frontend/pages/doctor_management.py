@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api_client import api_client
+from frontend.widgets.page_header import PageHeader
+from frontend.widgets.status_badge import StatusBadgeDelegate
 
 
 class DoctorManagementPage(QWidget):
@@ -28,17 +30,11 @@ class DoctorManagementPage(QWidget):
         layout.setSpacing(18)
 
         # ------------------- Header -------------------
-        header_box = QVBoxLayout()
-        header_box.setSpacing(4)
-        title_label = QLabel("Quản lý bác sĩ")
-        title_label.setObjectName("pageTitle")
-        subtitle_label = QLabel(
-            "Danh sách đội ngũ y bác sĩ, phân bổ chuyên khoa, cơ sở phòng khám và giấy phép hành nghề"
+        self.header = PageHeader(
+            "Quản lý bác sĩ",
+            "Danh sách và thông tin bác sĩ",
         )
-        subtitle_label.setObjectName("pageSubtitle")
-        header_box.addWidget(title_label)
-        header_box.addWidget(subtitle_label)
-        layout.addLayout(header_box)
+        layout.addWidget(self.header)
 
         # ------------------- Create Form Card -------------------
         form_card = QFrame()
@@ -52,44 +48,41 @@ class DoctorManagementPage(QWidget):
         form_card_layout.addWidget(form_title)
 
         grid = QGridLayout()
-        grid.setHorizontalSpacing(14)
-        grid.setVerticalSpacing(10)
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(12)
 
         # Row 0: Username, Password, Họ tên
         col_u = QVBoxLayout()
-        col_u.setSpacing(4)
+        col_u.setSpacing(5)
         lbl_u = QLabel("Tên đăng nhập")
         lbl_u.setObjectName("fieldLabel")
         self.username_input = QLineEdit()
-        self.username_input.setPlaceholderText("VD: bstranvanb")
         col_u.addWidget(lbl_u)
         col_u.addWidget(self.username_input)
         grid.addLayout(col_u, 0, 0)
 
         col_p = QVBoxLayout()
-        col_p.setSpacing(4)
+        col_p.setSpacing(5)
         lbl_p = QLabel("Mật khẩu")
         lbl_p.setObjectName("fieldLabel")
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.Password)
-        self.password_input.setPlaceholderText("••••••••")
         col_p.addWidget(lbl_p)
         col_p.addWidget(self.password_input)
         grid.addLayout(col_p, 0, 1)
 
         col_fn = QVBoxLayout()
-        col_fn.setSpacing(4)
+        col_fn.setSpacing(5)
         lbl_fn = QLabel("Họ và tên bác sĩ")
         lbl_fn.setObjectName("fieldLabel")
         self.fullname_input = QLineEdit()
-        self.fullname_input.setPlaceholderText("VD: BS. Trần Văn B")
         col_fn.addWidget(lbl_fn)
         col_fn.addWidget(self.fullname_input)
         grid.addLayout(col_fn, 0, 2)
 
         # Row 1: Chuyên khoa, Phòng khám, CCHN, Button
         col_sp = QVBoxLayout()
-        col_sp.setSpacing(4)
+        col_sp.setSpacing(5)
         lbl_sp = QLabel("Chuyên khoa")
         lbl_sp.setObjectName("fieldLabel")
         self.specialty_combo = QComboBox()
@@ -98,7 +91,7 @@ class DoctorManagementPage(QWidget):
         grid.addLayout(col_sp, 1, 0)
 
         col_cl = QVBoxLayout()
-        col_cl.setSpacing(4)
+        col_cl.setSpacing(5)
         lbl_cl = QLabel("Phòng khám")
         lbl_cl.setObjectName("fieldLabel")
         self.clinic_combo = QComboBox()
@@ -107,11 +100,10 @@ class DoctorManagementPage(QWidget):
         grid.addLayout(col_cl, 1, 1)
 
         col_lic = QVBoxLayout()
-        col_lic.setSpacing(4)
+        col_lic.setSpacing(5)
         lbl_lic = QLabel("Số CCHN / Giấy phép")
         lbl_lic.setObjectName("fieldLabel")
         self.license_input = QLineEdit()
-        self.license_input.setPlaceholderText("VD: CCHN-123456")
         col_lic.addWidget(lbl_lic)
         col_lic.addWidget(self.license_input)
         grid.addLayout(col_lic, 1, 2)
@@ -123,6 +115,7 @@ class DoctorManagementPage(QWidget):
         add_btn.setObjectName("primaryButton")
         add_btn.setCursor(Qt.PointingHandCursor)
         add_btn.setMinimumHeight(36)
+        add_btn.setMinimumWidth(130)
         add_btn.clicked.connect(self.add_doctor)
         btn_layout.addWidget(add_btn)
 
@@ -166,6 +159,7 @@ class DoctorManagementPage(QWidget):
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)
+        self.table.setItemDelegateForColumn(5, StatusBadgeDelegate(self.table))
 
         table_card_layout.addWidget(self.table)
         layout.addWidget(table_card, 1)
@@ -209,21 +203,12 @@ class DoctorManagementPage(QWidget):
             self.table.setItem(row, 3, QTableWidgetItem(d.get("ClinicName") or "—"))
             self.table.setItem(row, 4, QTableWidgetItem(d.get("LicenseNumber") or "—"))
 
-            # Status pill
+            # Status pill (rendered via delegate)
             is_active = d["IsActive"]
-            status_lbl = QLabel("Hoạt động" if is_active else "Đã khóa")
-            status_lbl.setAlignment(Qt.AlignCenter)
-            if is_active:
-                status_lbl.setStyleSheet(
-                    "background-color: #dcfce7; color: #15803d; border-radius: 4px; "
-                    "font-size: 11px; font-weight: 600; padding: 2px 6px;"
-                )
-            else:
-                status_lbl.setStyleSheet(
-                    "background-color: #fee2e2; color: #b91c1c; border-radius: 4px; "
-                    "font-size: 11px; font-weight: 600; padding: 2px 6px;"
-                )
-            self.table.setCellWidget(row, 5, status_lbl)
+            status_text = "Hoạt động" if is_active else "Đã khóa"
+            item_status = QTableWidgetItem(status_text)
+            item_status.setTextAlignment(Qt.AlignCenter)
+            self.table.setItem(row, 5, item_status)
 
             # Action button
             del_btn = QPushButton("Khóa" if is_active else "Mở khóa")

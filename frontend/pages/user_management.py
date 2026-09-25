@@ -20,6 +20,8 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api_client import api_client
+from frontend.widgets.page_header import PageHeader
+from frontend.widgets.status_badge import STATUS_LABELS_VN, StatusBadgeDelegate
 
 
 class UserManagementPage(QWidget):
@@ -30,17 +32,11 @@ class UserManagementPage(QWidget):
         layout.setSpacing(18)
 
         # ------------------- Page Header -------------------
-        header_box = QVBoxLayout()
-        header_box.setSpacing(4)
-        title_label = QLabel("Quản lý tài khoản")
-        title_label.setObjectName("pageTitle")
-        subtitle_label = QLabel(
-            "Tạo mới, chỉnh sửa thông tin và quản lý trạng thái tài khoản người dùng"
+        self.header = PageHeader(
+            "Quản lý tài khoản",
+            "Quản trị danh sách và phân quyền tài khoản",
         )
-        subtitle_label.setObjectName("pageSubtitle")
-        header_box.addWidget(title_label)
-        header_box.addWidget(subtitle_label)
-        layout.addLayout(header_box)
+        layout.addWidget(self.header)
 
         # ------------------- Create Form Card -------------------
         form_card = QFrame()
@@ -53,68 +49,67 @@ class UserManagementPage(QWidget):
         form_title.setObjectName("sectionTitle")
         form_card_layout.addWidget(form_title)
 
-        inputs_layout = QHBoxLayout()
-        inputs_layout.setSpacing(12)
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(12)
 
         # Username
         col_u = QVBoxLayout()
-        col_u.setSpacing(4)
+        col_u.setSpacing(5)
         lbl_u = QLabel("Tên đăng nhập")
         lbl_u.setObjectName("fieldLabel")
         self.username_input = QLineEdit()
-        self.username_input.setPlaceholderText("VD: nguyenvana")
         col_u.addWidget(lbl_u)
         col_u.addWidget(self.username_input)
-        inputs_layout.addLayout(col_u, 2)
+        grid.addLayout(col_u, 0, 0)
 
         # Fullname
         col_fn = QVBoxLayout()
-        col_fn.setSpacing(4)
+        col_fn.setSpacing(5)
         lbl_fn = QLabel("Họ và tên")
         lbl_fn.setObjectName("fieldLabel")
         self.fullname_input = QLineEdit()
-        self.fullname_input.setPlaceholderText("VD: Nguyễn Văn A")
         col_fn.addWidget(lbl_fn)
         col_fn.addWidget(self.fullname_input)
-        inputs_layout.addLayout(col_fn, 3)
+        grid.addLayout(col_fn, 0, 1)
 
         # Password
         col_p = QVBoxLayout()
-        col_p.setSpacing(4)
+        col_p.setSpacing(5)
         lbl_p = QLabel("Mật khẩu")
         lbl_p.setObjectName("fieldLabel")
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.Password)
-        self.password_input.setPlaceholderText("••••••••")
         col_p.addWidget(lbl_p)
         col_p.addWidget(self.password_input)
-        inputs_layout.addLayout(col_p, 2)
+        grid.addLayout(col_p, 0, 2)
 
         # Role
         col_r = QVBoxLayout()
-        col_r.setSpacing(4)
+        col_r.setSpacing(5)
         lbl_r = QLabel("Vai trò")
         lbl_r.setObjectName("fieldLabel")
         self.role_input = QComboBox()
-        self.role_input.addItems(["PATIENT", "DOCTOR", "STAFF", "ADMIN"])
+        self.role_input.addItem("Bệnh nhân", "PATIENT")
+        self.role_input.addItem("Bác sĩ", "DOCTOR")
+        self.role_input.addItem("Nhân viên", "STAFF")
+        self.role_input.addItem("Quản trị viên", "ADMIN")
         col_r.addWidget(lbl_r)
         col_r.addWidget(self.role_input)
-        inputs_layout.addLayout(col_r, 2)
+        grid.addLayout(col_r, 0, 3)
 
-        # Add button
-        col_btn = QVBoxLayout()
-        col_btn.setSpacing(4)
-        lbl_space = QLabel(" ")
-        lbl_space.setObjectName("fieldLabel")
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
         add_btn = QPushButton("Thêm tài khoản")
         add_btn.setObjectName("primaryButton")
         add_btn.setCursor(Qt.PointingHandCursor)
+        add_btn.setMinimumHeight(36)
+        add_btn.setMinimumWidth(140)
         add_btn.clicked.connect(self.add_user)
-        col_btn.addWidget(lbl_space)
-        col_btn.addWidget(add_btn)
-        inputs_layout.addLayout(col_btn, 2)
+        btn_layout.addWidget(add_btn)
 
-        form_card_layout.addLayout(inputs_layout)
+        form_card_layout.addLayout(grid)
+        form_card_layout.addLayout(btn_layout)
         layout.addWidget(form_card)
 
         # ------------------- Data Table Card -------------------
@@ -146,6 +141,8 @@ class UserManagementPage(QWidget):
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.table.setItemDelegateForColumn(3, StatusBadgeDelegate(self.table))
+        self.table.setItemDelegateForColumn(4, StatusBadgeDelegate(self.table))
 
         table_card_layout.addWidget(self.table)
         layout.addWidget(table_card, 1)
@@ -170,30 +167,18 @@ class UserManagementPage(QWidget):
             item_name = QTableWidgetItem(u["FullName"])
             self.table.setItem(row, 2, item_name)
 
-            # Role pill
-            role_widget = QLabel(u["Role"])
-            role_widget.setAlignment(Qt.AlignCenter)
-            role_widget.setStyleSheet(
-                "background-color: #f1f5f9; color: #334155; border-radius: 4px; "
-                "font-size: 11px; font-weight: 600; padding: 2px 6px;"
-            )
-            self.table.setCellWidget(row, 3, role_widget)
+            # Role pill (rendered via delegate)
+            role_code = u["Role"]
+            item_role = QTableWidgetItem(STATUS_LABELS_VN.get(role_code, role_code))
+            item_role.setTextAlignment(Qt.AlignCenter)
+            self.table.setItem(row, 3, item_role)
 
-            # Status pill
+            # Status pill (rendered via delegate)
             is_active = u["IsActive"]
-            status_lbl = QLabel("Hoạt động" if is_active else "Đã khóa")
-            status_lbl.setAlignment(Qt.AlignCenter)
-            if is_active:
-                status_lbl.setStyleSheet(
-                    "background-color: #dcfce7; color: #15803d; border-radius: 4px; "
-                    "font-size: 11px; font-weight: 600; padding: 2px 6px;"
-                )
-            else:
-                status_lbl.setStyleSheet(
-                    "background-color: #fee2e2; color: #b91c1c; border-radius: 4px; "
-                    "font-size: 11px; font-weight: 600; padding: 2px 6px;"
-                )
-            self.table.setCellWidget(row, 4, status_lbl)
+            status_text = "Hoạt động" if is_active else "Đã khóa"
+            item_status = QTableWidgetItem(status_text)
+            item_status.setTextAlignment(Qt.AlignCenter)
+            self.table.setItem(row, 4, item_status)
 
             # Action buttons
             edit_btn = QPushButton("Sửa")
@@ -234,7 +219,7 @@ class UserManagementPage(QWidget):
             "Username": username,
             "FullName": self.fullname_input.text().strip(),
             "Password": password,
-            "Role": self.role_input.currentText(),
+            "Role": self.role_input.currentData() or self.role_input.currentText(),
         }
         r = api_client.post("/users/", json=payload)
         if r.status_code == 200:
