@@ -263,3 +263,29 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         self.api_client.close()
         super().closeEvent(event)
+
+
+if __name__ == "__main__":
+    import sys
+
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QApplication
+
+    from frontend.core.config import get_frontend_settings
+    from frontend.core.session import SessionState
+    from frontend.style import APP_STYLE
+
+    settings = get_frontend_settings()
+    app = QApplication.instance() or QApplication(sys.argv)
+    app.setFont(QFont("Segoe UI", 10))
+    app.setStyleSheet(APP_STYLE)
+
+    portal_client = ApiClient(
+        base_url=settings.api_base_url,
+        timeout=settings.api_timeout_seconds,
+    )
+    portal_session = SessionState()
+    portal_window = MainWindow(api_client=portal_client, session=portal_session)
+    portal_window.show()
+    sys.exit(app.exec())
+

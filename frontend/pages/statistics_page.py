@@ -27,8 +27,8 @@ class StatisticsPage(QWidget):
 
         # ------------------- Header -------------------
         self.header = PageHeader(
-            "Báo cáo & Thống kê",
-            "Tổng quan số liệu phòng khám",
+            "Thống kê",
+            "Tổng quan số liệu hoạt động",
         )
         self.main_layout.addWidget(self.header)
 
@@ -46,8 +46,8 @@ class StatisticsPage(QWidget):
         card_sp = QFrame()
         card_sp.setObjectName("contentCard")
         layout_sp = QVBoxLayout(card_sp)
-        layout_sp.setContentsMargins(16, 16, 16, 16)
-        layout_sp.setSpacing(10)
+        layout_sp.setContentsMargins(20, 18, 20, 18)
+        layout_sp.setSpacing(12)
 
         lbl_sp = QLabel("Phân bổ bác sĩ theo chuyên khoa")
         lbl_sp.setObjectName("sectionTitle")
@@ -71,8 +71,8 @@ class StatisticsPage(QWidget):
         card_cl = QFrame()
         card_cl.setObjectName("contentCard")
         layout_cl = QVBoxLayout(card_cl)
-        layout_cl.setContentsMargins(16, 16, 16, 16)
-        layout_cl.setSpacing(10)
+        layout_cl.setContentsMargins(20, 18, 20, 18)
+        layout_cl.setSpacing(12)
 
         lbl_cl = QLabel("Phân bổ bác sĩ theo phòng khám")
         lbl_cl.setObjectName("sectionTitle")

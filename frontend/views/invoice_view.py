@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import Any
 
 from PySide6.QtCore import Qt, Signal
@@ -10,12 +9,13 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
-    QSpinBox,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -27,7 +27,7 @@ from frontend.views.common import BaseApiView
 from frontend.widgets.empty_state import EmptyState
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.pagination import Pagination
-from frontend.widgets.status_badge import StatusBadge
+from frontend.widgets.status_badge import StatusBadgeDelegate
 
 
 class InvoiceManagementView(BaseApiView):
@@ -40,14 +40,19 @@ class InvoiceManagementView(BaseApiView):
         self._current_page = 1
         self._page_size = 15
 
-        layout = QVBoxLayout(self)
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
 
         self.header = PageHeader(
-            "Quản lý hóa đơn",
-            "Lập và quản lý hóa đơn viện phí sau khám bệnh",
-            action_label="+ Lập hóa đơn",
+            "Hóa đơn",
+            "Lập và theo dõi hóa đơn viện phí",
+            action_label="Lập hóa đơn",
             parent=self,
         )
         self.header.action_clicked.connect(self._create_invoice_dialog)
@@ -56,26 +61,30 @@ class InvoiceManagementView(BaseApiView):
         layout.addWidget(self.loading)
 
         # Filters
-        filter_bar = QHBoxLayout()
-        filter_bar.setSpacing(12)
+        filter_card = QFrame()
+        filter_card.setObjectName("filterCard")
+        filter_layout = QHBoxLayout(filter_card)
+        filter_layout.setContentsMargins(16, 10, 16, 10)
+        filter_layout.setSpacing(12)
 
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Tìm kiếm theo tên bệnh nhân, SĐT hoặc mã HĐ...")
+        self.search_input.setPlaceholderText("Tìm theo tên bệnh nhân, SĐT hoặc mã HĐ...")
         self.search_input.returnPressed.connect(self._apply_filter)
-        filter_bar.addWidget(self.search_input, 2)
+        filter_layout.addWidget(self.search_input, 2)
 
         self.status_combo = QComboBox()
         self.status_combo.addItem("Tất cả hóa đơn", "")
         self.status_combo.addItem("Chưa thanh toán", "UNPAID")
         self.status_combo.addItem("Đã thanh toán", "PAID")
         self.status_combo.currentIndexChanged.connect(self._apply_filter)
-        filter_bar.addWidget(self.status_combo, 1)
+        filter_layout.addWidget(self.status_combo, 1)
 
-        self.btn_filter = QPushButton("Lọc / Làm mới")
+        self.btn_filter = QPushButton("Lọc")
+        self.btn_filter.setCursor(Qt.PointingHandCursor)
         self.btn_filter.clicked.connect(self._apply_filter)
-        filter_bar.addWidget(self.btn_filter)
+        filter_layout.addWidget(self.btn_filter)
 
-        layout.addLayout(filter_bar)
+        layout.addWidget(filter_card)
 
         # Invoices Table
         self.table = QTableWidget()
@@ -83,9 +92,22 @@ class InvoiceManagementView(BaseApiView):
         self.table.setHorizontalHeaderLabels([
             "Mã HĐ", "Mã hẹn", "Bệnh nhân", "Số điện thoại", "Bác sĩ", "Tổng tiền", "Trạng thái", "Thao tác"
         ])
-        self.table.horizontalHeader().setStretchLastSection(True)
+        hdr = self.table.horizontalHeader()
+        hdr.setStretchLastSection(False)
+        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
+        hdr.setSectionResizeMode(7, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(6, 110)
+        self.table.setColumnWidth(7, 140)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setAlternatingRowColors(True)
+        self.table.setItemDelegateForColumn(6, StatusBadgeDelegate(self.table))
         layout.addWidget(self.table)
 
         self.empty_state = EmptyState(
@@ -99,6 +121,11 @@ class InvoiceManagementView(BaseApiView):
         self.pagination = Pagination(parent=self)
         self.pagination.page_requested.connect(self._go_to_page)
         layout.addWidget(self.pagination)
+
+        scroll.setWidget(container)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(scroll)
 
     def showEvent(self, event: Any) -> None:
         super().showEvent(event)
@@ -156,30 +183,54 @@ class InvoiceManagementView(BaseApiView):
             amount_val = inv.get("total_amount", 0)
             status = inv.get("status", "UNPAID")
 
-            self.table.setItem(row, 0, QTableWidgetItem(f"INV-{inv_id:04d}"))
-            self.table.setItem(row, 1, QTableWidgetItem(f"#{appt_id}"))
-            self.table.setItem(row, 2, QTableWidgetItem(patient_name))
-            self.table.setItem(row, 3, QTableWidgetItem(patient_phone))
-            self.table.setItem(row, 4, QTableWidgetItem(doctor_name))
-            self.table.setItem(row, 5, QTableWidgetItem(f"{float(amount_val):,.0f} ₫"))
+            item_inv = QTableWidgetItem(f"INV-{inv_id:04d}")
+            item_inv.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 0, item_inv)
 
-            badge = StatusBadge(status)
-            self.table.setCellWidget(row, 6, badge)
+            item_appt = QTableWidgetItem(f"#{appt_id}")
+            item_appt.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 1, item_appt)
+
+            self.table.setItem(row, 2, QTableWidgetItem(patient_name))
+
+            item_phone = QTableWidgetItem(patient_phone)
+            item_phone.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 3, item_phone)
+
+            self.table.setItem(row, 4, QTableWidgetItem(doctor_name))
+
+            item_amount = QTableWidgetItem(f"{float(amount_val):,.0f} ₫")
+            item_amount.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.table.setItem(row, 5, item_amount)
+
+            item_status = QTableWidgetItem(status)
+            item_status.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 6, item_status)
+
+            action_widget = QWidget()
+            act_layout = QHBoxLayout(action_widget)
+            act_layout.setContentsMargins(4, 0, 4, 0)
+            act_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             if status == "UNPAID":
-                btn_pay = QPushButton("Thu tiền")
-                btn_pay.setStyleSheet("background-color: #15803d; color: white; border-radius: 6px; padding: 4px 10px; font-weight: 600; font-size: 11px;")
+                btn_pay = QPushButton("Thu phí")
+                btn_pay.setObjectName("tableActionPrimary")
+                btn_pay.setCursor(Qt.PointingHandCursor)
                 btn_pay.clicked.connect(lambda _, i_id=inv_id: self.pay_invoice_requested.emit(i_id))
-                self.table.setCellWidget(row, 7, btn_pay)
+                act_layout.addWidget(btn_pay)
             else:
-                method = "Tiền mặt" if inv.get('payment_method') == "CASH" else "Thẻ"
+                method = "Tiền mặt" if inv.get("payment_method") == "CASH" else "Thẻ"
                 paid_label = QLabel(f"Đã thu ({method})")
-                paid_label.setStyleSheet("color: #166534; font-size: 11px; font-weight: 600; padding: 4px;")
-                self.table.setCellWidget(row, 7, paid_label)
+                paid_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                paid_label.setStyleSheet("color: #166534; font-size: 11px; font-weight: 600;")
+                act_layout.addWidget(paid_label)
+
+            self.table.setCellWidget(row, 7, action_widget)
+            self.table.setRowHeight(row, 50)
 
     def _create_invoice_dialog(self) -> None:
         dialog = QDialog(self)
-        dialog.setWindowTitle("Lập hóa đơn mới cho lịch hẹn")
+        dialog.setWindowTitle("Lập hóa đơn")
         dialog.resize(480, 420)
         d_layout = QVBoxLayout(dialog)
 
@@ -189,7 +240,7 @@ class InvoiceManagementView(BaseApiView):
         d_layout.addLayout(form)
 
         items_label = QLabel("Chi tiết dịch vụ:")
-        items_label.setStyleSheet("font-weight: 700; margin-top: 10px;")
+        items_label.setObjectName("fieldLabel")
         d_layout.addWidget(items_label)
 
         # Simple pre-defined line items for quick billing
@@ -214,9 +265,12 @@ class InvoiceManagementView(BaseApiView):
 
         btn_row = QHBoxLayout()
         btn_cancel = QPushButton("Hủy")
+        btn_cancel.setObjectName("secondaryButton")
+        btn_cancel.setCursor(Qt.PointingHandCursor)
         btn_cancel.clicked.connect(dialog.reject)
         btn_submit = QPushButton("Tạo hóa đơn")
-        btn_submit.setStyleSheet("background-color: #0f766e; color: white; font-weight: bold; padding: 8px 16px;")
+        btn_submit.setObjectName("primaryButton")
+        btn_submit.setCursor(Qt.PointingHandCursor)
         btn_submit.clicked.connect(dialog.accept)
         btn_row.addWidget(btn_cancel)
         btn_row.addWidget(btn_submit)

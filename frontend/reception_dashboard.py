@@ -39,8 +39,21 @@ class ReceptionDashboard(QMainWindow):
             base_url=settings.api_base_url,
             timeout=settings.api_timeout_seconds,
         )
-        if session_state.access_token:
-            self.api_client.set_access_token(session_state.access_token)
+        if not self.api_client.token:
+            if session_state.access_token:
+                self.api_client.set_access_token(session_state.access_token)
+            else:
+                from frontend.api_client import api_client as legacy_client
+
+                if legacy_client.token:
+                    self.api_client.set_access_token(legacy_client.token)
+                    session_state.set_authenticated(
+                        access_token=legacy_client.token,
+                        current_user={
+                            "username": legacy_client.username,
+                            "role": legacy_client.role or "STAFF",
+                        },
+                    )
 
         self.setWindowTitle("ClinicCare - Quầy Tiếp Đón & Thu Ngân")
         self.resize(1280, 800)
@@ -60,35 +73,47 @@ class ReceptionDashboard(QMainWindow):
         sidebar_layout.setSpacing(12)
 
         # Brand header
-        brand_layout = QVBoxLayout()
-        brand_layout.setSpacing(2)
-        brand_title = QLabel("CLINICCARE")
-        brand_title.setStyleSheet(
-            "color: #ffffff; font-size: 18px; font-weight: 800; letter-spacing: 1px;"
+        brand_row = QWidget()
+        brand_layout = QHBoxLayout(brand_row)
+        brand_layout.setContentsMargins(0, 0, 0, 0)
+        brand_layout.setSpacing(10)
+
+        brand_mark = QLabel("C")
+        brand_mark.setAlignment(Qt.AlignCenter)
+        brand_mark.setFixedSize(40, 40)
+        brand_mark.setStyleSheet(
+            "background-color: #0f766e; color: #ffffff; border-radius: 10px; font-size: 20px; font-weight: 800;"
         )
-        brand_sub = QLabel("TIẾP ĐÓN & THU NGÂN")
-        brand_sub.setStyleSheet("color: #94a3b8; font-size: 11px; font-weight: 600;")
-        brand_layout.addWidget(brand_title)
-        brand_layout.addWidget(brand_sub)
-        sidebar_layout.addLayout(brand_layout)
+        brand_layout.addWidget(brand_mark)
 
-        sidebar_layout.addSpacing(16)
+        brand_text = QWidget()
+        brand_text_layout = QVBoxLayout(brand_text)
+        brand_text_layout.setContentsMargins(0, 0, 0, 0)
+        brand_text_layout.setSpacing(1)
+        brand_title = QLabel("ClinicCare")
+        brand_title.setStyleSheet("color: #ffffff; font-size: 16px; font-weight: 700;")
+        brand_text_layout.addWidget(brand_title)
+        brand_layout.addWidget(brand_text, 1)
 
-        nav_title = QLabel("Nghiệp vụ")
+        sidebar_layout.addWidget(brand_row)
+        sidebar_layout.addSpacing(20)
+
+        nav_title = QLabel("NGHIỆP VỤ")
         nav_title.setObjectName("sidebarSectionLabel")
         sidebar_layout.addWidget(nav_title)
+        sidebar_layout.addSpacing(4)
 
         # Menu List
         self.menu = QListWidget()
         self.menu.setObjectName("adminSidebar")
         self._menu_routes = [
-            ("dashboard", "Bàn tiếp đón"),
-            ("check_in", "Tiếp nhận nhanh"),
-            ("book_for_patient", "Đặt lịch khám"),
+            ("dashboard", "Tiếp đón"),
+            ("check_in", "Check-in"),
+            ("book_for_patient", "Đặt lịch"),
             ("appointment_management", "Lịch hẹn"),
             ("invoice_management", "Hóa đơn"),
-            ("payment", "Thu ngân"),
-            ("payment_history", "Lịch sử thu phí"),
+            ("payment", "Thu phí"),
+            ("payment_history", "Lịch sử thu"),
         ]
         for _, label in self._menu_routes:
             self.menu.addItem(label)
@@ -96,17 +121,32 @@ class ReceptionDashboard(QMainWindow):
 
         # User Info & Logout
         user_card = QFrame()
-        user_card.setStyleSheet("background-color: #1e293b; border-radius: 8px; padding: 6px;")
-        user_layout = QVBoxLayout(user_card)
-        user_layout.setContentsMargins(10, 10, 10, 10)
-        user_layout.setSpacing(2)
+        user_card.setObjectName("sidebarUser")
+        user_card.setStyleSheet(
+            "background-color: #1e293b; border-radius: 8px; border: 1px solid #334155;"
+        )
+        user_card_layout = QHBoxLayout(user_card)
+        user_card_layout.setContentsMargins(10, 8, 10, 8)
+        user_card_layout.setSpacing(10)
 
-        user_role = QLabel("NHÂN VIÊN TIẾP ĐÓN")
-        user_role.setStyleSheet("color: #2dd4bf; font-size: 10px; font-weight: 700;")
-        user_name = QLabel(session_state.username or "Reception Staff")
+        avatar = QLabel("NV")
+        avatar.setFixedSize(36, 36)
+        avatar.setAlignment(Qt.AlignCenter)
+        avatar.setStyleSheet(
+            "background-color: #0f766e; color: #ffffff; border-radius: 8px; font-size: 13px; font-weight: 700;"
+        )
+        user_card_layout.addWidget(avatar)
+
+        info_layout = QVBoxLayout()
+        info_layout.setContentsMargins(0, 0, 0, 0)
+        info_layout.setSpacing(1)
+        user_name = QLabel(session_state.username or "Nhân viên")
         user_name.setStyleSheet("color: #ffffff; font-size: 13px; font-weight: 600;")
-        user_layout.addWidget(user_role)
-        user_layout.addWidget(user_name)
+        user_role = QLabel("Tiếp đón & Thu ngân")
+        user_role.setStyleSheet("color: #94a3b8; font-size: 11px;")
+        info_layout.addWidget(user_name)
+        info_layout.addWidget(user_role)
+        user_card_layout.addLayout(info_layout, 1)
         sidebar_layout.addWidget(user_card)
 
         self.logout_btn = QPushButton("Đăng xuất")
@@ -125,12 +165,12 @@ class ReceptionDashboard(QMainWindow):
         self.view_payment = PaymentView(self.api_client)
         self.view_payment_history = PaymentHistoryView(self.api_client)
 
-        self.pages.addWidget(self.view_dashboard)        # index 0
-        self.pages.addWidget(self.view_check_in)         # index 1
-        self.pages.addWidget(self.view_book)             # index 2
-        self.pages.addWidget(self.view_appts)            # index 3
-        self.pages.addWidget(self.view_invoices)         # index 4
-        self.pages.addWidget(self.view_payment)          # index 5
+        self.pages.addWidget(self.view_dashboard)  # index 0
+        self.pages.addWidget(self.view_check_in)  # index 1
+        self.pages.addWidget(self.view_book)  # index 2
+        self.pages.addWidget(self.view_appts)  # index 3
+        self.pages.addWidget(self.view_invoices)  # index 4
+        self.pages.addWidget(self.view_payment)  # index 5
         self.pages.addWidget(self.view_payment_history)  # index 6
 
         self._connect_signals()
@@ -146,8 +186,12 @@ class ReceptionDashboard(QMainWindow):
     def _connect_signals(self) -> None:
         self.view_dashboard.navigate_requested.connect(self.navigate_by_route)
         self.view_dashboard.check_in_requested.connect(self._handle_check_in_requested)
-        self.view_dashboard.create_invoice_requested.connect(self._handle_create_invoice_requested)
-        self.view_invoices.pay_invoice_requested.connect(self._handle_pay_invoice_requested)
+        self.view_dashboard.create_invoice_requested.connect(
+            self._handle_create_invoice_requested
+        )
+        self.view_invoices.pay_invoice_requested.connect(
+            self._handle_pay_invoice_requested
+        )
 
     def navigate_by_route(self, route: str) -> None:
         route_map = {

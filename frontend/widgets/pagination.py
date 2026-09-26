@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QWidget
 
 
@@ -20,11 +20,11 @@ class PaginationWidget(QWidget):
         layout.setContentsMargins(2, 2, 2, 2)
         layout.setSpacing(8)
 
-        self._summary = QLabel("No results")
+        self._summary = QLabel("Chưa có dữ liệu")
         self._summary.setObjectName("mutedLabel")
         self._summary.setAccessibleName("Pagination summary")
 
-        rows_label = QLabel("Rows per page")
+        rows_label = QLabel("Số dòng")
         rows_label.setObjectName("mutedLabel")
         self._page_size = QComboBox()
         self._page_size.addItems(["5", "10", "20", "50", "100"])
@@ -33,11 +33,13 @@ class PaginationWidget(QWidget):
         self._page_size.setFixedWidth(76)
         rows_label.setBuddy(self._page_size)
 
-        self._previous = QPushButton("‹  Previous")
+        self._previous = QPushButton("Trước")
         self._previous.setObjectName("secondaryButton")
+        self._previous.setCursor(Qt.PointingHandCursor)
         self._previous.setAccessibleName("Previous page")
-        self._next = QPushButton("Next  ›")
+        self._next = QPushButton("Tiếp")
         self._next.setObjectName("secondaryButton")
+        self._next.setCursor(Qt.PointingHandCursor)
         self._next.setAccessibleName("Next page")
 
         layout.addWidget(self._summary)
@@ -66,11 +68,10 @@ class PaginationWidget(QWidget):
             first = (self._page - 1) * self.page_size + 1
             last = min(total, self._page * self.page_size)
             self._summary.setText(
-                f"Showing {first}–{last} of {total}  ·  Page {self._page} of "
-                f"{max(1, self._total_pages)}"
+                f"Hiển thị {first}–{last} / {total}  ·  Trang {self._page}/{max(1, self._total_pages)}"
             )
         else:
-            self._summary.setText("No results")
+            self._summary.setText("Không có dữ liệu")
         self._previous.setEnabled(self._page > 1)
         self._next.setEnabled(self._total_pages > 0 and self._page < self._total_pages)
 

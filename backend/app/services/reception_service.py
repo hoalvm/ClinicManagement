@@ -4,19 +4,17 @@ from datetime import date, datetime, time
 from decimal import Decimal
 
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, aliased, joinedload
 
 from backend.app.core.clock import clinic_now
 from backend.app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from backend.app.models import (
     Appointment,
-    Clinic,
     Doctor,
     Invoice,
     InvoiceItem,
     Patient,
     Payment,
-    Specialty,
     User,
 )
 from backend.app.schemas.reception import (
@@ -55,14 +53,14 @@ class ReceptionService:
             status=appt.status,
             created_at=appt.created_at,
             patient=ReceptionPatientSummary(
-                patient_id=patient.patient_id,
-                user_id=patient.user_id,
-                full_name=patient_user.full_name if patient_user else f"Patient #{patient.patient_id}",
+                patient_id=patient.patient_id if patient else 0,
+                user_id=patient.user_id if patient else 0,
+                full_name=patient_user.full_name if patient_user else (f"Patient #{patient.patient_id}" if patient else "Patient"),
                 phone=patient_user.phone if patient_user else None,
                 email=patient_user.email if patient_user else None,
-                date_of_birth=patient.date_of_birth,
-                gender=patient.gender,
-                address=patient.address,
+                date_of_birth=patient.date_of_birth if patient else None,
+                gender=patient.gender if patient else None,
+                address=patient.address if patient else None,
             ),
             doctor={
                 "doctor_id": doctor.doctor_id if doctor else 0,
@@ -153,12 +151,15 @@ class ReceptionService:
         appointment_date: date | None = None,
         doctor_id: int | None = None,
     ) -> ReceptionAppointmentPage:
+        pu = aliased(User, name="pu")
+        du = aliased(User, name="du")
+
         base = (
             select(Appointment)
             .join(Appointment.patient)
-            .join(Patient.user)
+            .join(pu, Patient.user_id == pu.user_id)
             .join(Appointment.doctor)
-            .join(Doctor.user)
+            .join(du, Doctor.user_id == du.user_id)
             .options(
                 joinedload(Appointment.patient).joinedload(Patient.user),
                 joinedload(Appointment.doctor).joinedload(Doctor.user),
@@ -171,9 +172,9 @@ class ReceptionService:
             select(func.count(Appointment.appointment_id))
             .select_from(Appointment)
             .join(Appointment.patient)
-            .join(Patient.user)
+            .join(pu, Patient.user_id == pu.user_id)
             .join(Appointment.doctor)
-            .join(Doctor.user)
+            .join(du, Doctor.user_id == du.user_id)
         )
 
         if status and status != "ALL":
@@ -189,12 +190,18 @@ class ReceptionService:
             count_stmt = count_stmt.where(Appointment.doctor_id == doctor_id)
 
         if keyword and keyword.strip():
-            pat = f"%{keyword.strip()}%"
-            filter_or = or_(
-                User.full_name.ilike(pat),
-                User.phone.ilike(pat),
+            raw_kw = keyword.strip()
+            pat = f"%{raw_kw}%"
+            conds = [
+                pu.full_name.ilike(pat),
+                pu.phone.ilike(pat),
+                du.full_name.ilike(pat),
                 Appointment.reason.ilike(pat),
-            )
+            ]
+            clean_digits = raw_kw.lstrip("#").strip()
+            if clean_digits.isdigit():
+                conds.append(Appointment.appointment_id == int(clean_digits))
+            filter_or = or_(*conds)
             base = base.where(filter_or)
             count_stmt = count_stmt.where(filter_or)
 
@@ -343,13 +350,16 @@ class ReceptionService:
         status: str | None = None,
         keyword: str | None = None,
     ) -> ReceptionInvoicePage:
+        pu = aliased(User, name="pu")
+        du = aliased(User, name="du")
+
         base = (
             select(Invoice)
             .join(Invoice.appointment)
             .join(Appointment.patient)
-            .join(Patient.user)
+            .join(pu, Patient.user_id == pu.user_id)
             .join(Appointment.doctor)
-            .join(Doctor.user)
+            .join(du, Doctor.user_id == du.user_id)
             .options(
                 joinedload(Invoice.appointment)
                 .joinedload(Appointment.patient)
@@ -365,9 +375,9 @@ class ReceptionService:
             .select_from(Invoice)
             .join(Invoice.appointment)
             .join(Appointment.patient)
-            .join(Patient.user)
+            .join(pu, Patient.user_id == pu.user_id)
             .join(Appointment.doctor)
-            .join(Doctor.user)
+            .join(du, Doctor.user_id == du.user_id)
         )
 
         if status and status != "ALL":
@@ -375,11 +385,19 @@ class ReceptionService:
             count_stmt = count_stmt.where(Invoice.status == status)
 
         if keyword and keyword.strip():
-            pat = f"%{keyword.strip()}%"
-            filt = or_(
-                User.full_name.ilike(pat),
-                User.phone.ilike(pat),
-            )
+            raw_kw = keyword.strip()
+            pat = f"%{raw_kw}%"
+            conds = [
+                pu.full_name.ilike(pat),
+                pu.phone.ilike(pat),
+                du.full_name.ilike(pat),
+            ]
+            clean_digits = raw_kw.lstrip("#").upper().replace("INV-", "").replace("INV", "").strip()
+            if clean_digits.isdigit():
+                num_val = int(clean_digits)
+                conds.append(Invoice.invoice_id == num_val)
+                conds.append(Invoice.appointment_id == num_val)
+            filt = or_(*conds)
             base = base.where(filt)
             count_stmt = count_stmt.where(filt)
 
@@ -422,6 +440,38 @@ class ReceptionService:
             page_size=page_size,
             total=total,
             total_pages=total_pages,
+        )
+
+    def get_invoice(self, invoice_id: int) -> ReceptionInvoiceItem:
+        stmt = (
+            select(Invoice)
+            .where(Invoice.invoice_id == invoice_id)
+            .options(
+                joinedload(Invoice.appointment).joinedload(Appointment.patient).joinedload(Patient.user),
+                joinedload(Invoice.appointment).joinedload(Appointment.doctor).joinedload(Doctor.user),
+                joinedload(Invoice.payment),
+            )
+        )
+        inv = self.session.execute(stmt).unique().scalar_one_or_none()
+        if not inv:
+            raise NotFoundError(f"Invoice #{invoice_id} not found.")
+        appt = inv.appointment
+        pt_user = appt.patient.user if appt and appt.patient else None
+        dr_user = appt.doctor.user if appt and appt.doctor else None
+        payment = inv.payment
+
+        return ReceptionInvoiceItem(
+            invoice_id=inv.invoice_id,
+            appointment_id=inv.appointment_id,
+            created_at=inv.created_at,
+            total_amount=inv.total_amount,
+            status=inv.status,
+            patient_name=pt_user.full_name if pt_user else "Patient",
+            patient_phone=pt_user.phone if pt_user else None,
+            doctor_name=dr_user.full_name if dr_user else "Doctor",
+            appointment_date=appt.appointment_date if appt else date.today(),
+            payment_method=payment.payment_method if payment else None,
+            paid_at=payment.payment_date if payment else None,
         )
 
     def create_invoice(self, req: CreateInvoiceRequest) -> ReceptionInvoiceItem:
@@ -523,14 +573,17 @@ class ReceptionService:
         payment_method: str | None = None,
         keyword: str | None = None,
     ) -> PaymentRecordPage:
+        pu = aliased(User, name="pu")
+        du = aliased(User, name="du")
+
         base = (
             select(Payment)
             .join(Payment.invoice)
             .join(Invoice.appointment)
             .join(Appointment.patient)
-            .join(Patient.user)
+            .join(pu, Patient.user_id == pu.user_id)
             .join(Appointment.doctor)
-            .join(Doctor.user)
+            .join(du, Doctor.user_id == du.user_id)
             .options(
                 joinedload(Payment.invoice)
                 .joinedload(Invoice.appointment)
@@ -548,7 +601,9 @@ class ReceptionService:
             .join(Payment.invoice)
             .join(Invoice.appointment)
             .join(Appointment.patient)
-            .join(Patient.user)
+            .join(pu, Patient.user_id == pu.user_id)
+            .join(Appointment.doctor)
+            .join(du, Doctor.user_id == du.user_id)
         )
 
         if payment_method and payment_method != "ALL":
@@ -556,11 +611,19 @@ class ReceptionService:
             count_stmt = count_stmt.where(Payment.payment_method == payment_method)
 
         if keyword and keyword.strip():
-            pat = f"%{keyword.strip()}%"
-            filt = or_(
-                User.full_name.ilike(pat),
-                User.phone.ilike(pat),
-            )
+            raw_kw = keyword.strip()
+            pat = f"%{raw_kw}%"
+            conds = [
+                pu.full_name.ilike(pat),
+                pu.phone.ilike(pat),
+                du.full_name.ilike(pat),
+            ]
+            clean_digits = raw_kw.lstrip("#").upper().replace("INV-", "").replace("INV", "").replace("PAY-", "").strip()
+            if clean_digits.isdigit():
+                num_val = int(clean_digits)
+                conds.append(Payment.payment_id == num_val)
+                conds.append(Invoice.invoice_id == num_val)
+            filt = or_(*conds)
             base = base.where(filt)
             count_stmt = count_stmt.where(filt)
 

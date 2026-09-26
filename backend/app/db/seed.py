@@ -309,6 +309,9 @@ def _ensure_prescription(
                 instructions=data["instructions"],
             )
             session.add(item)
+    if len(existing_items) > len(items):
+        for extra in existing_items[len(items):]:
+            session.delete(extra)
     session.flush()
     return prescription
 
@@ -352,6 +355,9 @@ def _ensure_invoice(
                 unit_price=unit_price,
             )
             session.add(item)
+    if len(existing_items) > len(items):
+        for extra in existing_items[len(items):]:
+            session.delete(extra)
     session.flush()
 
     # Sum only the active items for this invoice
@@ -359,7 +365,7 @@ def _ensure_invoice(
         select(InvoiceItem)
         .where(InvoiceItem.invoice_id == invoice.invoice_id)
         .order_by(InvoiceItem.invoice_item_id)
-    ).scalars().all()[:len(items)]
+    ).scalars().all()
 
     invoice.total_amount = sum(
         (item.unit_price * item.quantity for item in active_items), start=Decimal("0.00")
@@ -377,6 +383,8 @@ def _ensure_invoice(
         payment.amount = invoice.total_amount
         payment.payment_method = payment_method
         payment.payment_date = completed_at + timedelta(minutes=15)
+    elif payment is not None:
+        session.delete(payment)
     session.flush()
     return invoice
 

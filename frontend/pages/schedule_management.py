@@ -1,6 +1,6 @@
 """Modern, clean Schedule Management page for Admin."""
 
-from PySide6.QtCore import QTime, Qt
+from PySide6.QtCore import Qt, QTime
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -41,8 +41,8 @@ class ScheduleManagementPage(QWidget):
 
         # ------------------- Header -------------------
         self.header = PageHeader(
-            "Quản lý lịch làm việc",
-            "Quản lý lịch làm việc của bác sĩ",
+            "Lịch trực",
+            "Phân ca làm việc của bác sĩ",
         )
         layout.addWidget(self.header)
 
@@ -50,10 +50,10 @@ class ScheduleManagementPage(QWidget):
         form_card = QFrame()
         form_card.setObjectName("contentCard")
         form_card_layout = QVBoxLayout(form_card)
-        form_card_layout.setContentsMargins(20, 16, 20, 18)
-        form_card_layout.setSpacing(12)
+        form_card_layout.setContentsMargins(20, 18, 20, 18)
+        form_card_layout.setSpacing(14)
 
-        form_title = QLabel("Thêm lịch làm việc mới")
+        form_title = QLabel("Thêm ca trực")
         form_title.setObjectName("sectionTitle")
         form_card_layout.addWidget(form_title)
 
@@ -120,10 +120,11 @@ class ScheduleManagementPage(QWidget):
         # Button row
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
-        add_btn = QPushButton("Thêm lịch làm việc")
+        add_btn = QPushButton("Thêm mới")
         add_btn.setObjectName("primaryButton")
         add_btn.setCursor(Qt.PointingHandCursor)
         add_btn.setMinimumHeight(36)
+        add_btn.setMinimumWidth(120)
         add_btn.clicked.connect(self.add_schedule)
         btn_layout.addWidget(add_btn)
 
@@ -135,8 +136,8 @@ class ScheduleManagementPage(QWidget):
         table_card = QFrame()
         table_card.setObjectName("contentCard")
         table_card_layout = QVBoxLayout(table_card)
-        table_card_layout.setContentsMargins(16, 16, 16, 16)
-        table_card_layout.setSpacing(10)
+        table_card_layout.setContentsMargins(20, 18, 20, 18)
+        table_card_layout.setSpacing(12)
 
         table_title = QLabel("Danh sách lịch làm việc hiện tại")
         table_title.setObjectName("sectionTitle")
@@ -164,7 +165,8 @@ class ScheduleManagementPage(QWidget):
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.Fixed)
+        self.table.setColumnWidth(5, 100)
 
         table_card_layout.addWidget(self.table)
         layout.addWidget(table_card, 1)
@@ -219,17 +221,17 @@ class ScheduleManagementPage(QWidget):
             del_btn = QPushButton("Xóa")
             del_btn.setObjectName("actionDeleteBtn")
             del_btn.setCursor(Qt.PointingHandCursor)
-            del_btn.setFixedSize(54, 28)
+            del_btn.setFixedSize(60, 28)
             del_btn.clicked.connect(lambda _, sid=s["ScheduleID"]: self.delete_item(sid))
 
             actions_widget = QWidget()
             actions_layout = QHBoxLayout(actions_widget)
-            actions_layout.setContentsMargins(6, 0, 6, 0)
+            actions_layout.setContentsMargins(4, 0, 4, 0)
             actions_layout.setAlignment(Qt.AlignCenter)
             actions_layout.addWidget(del_btn)
 
             self.table.setCellWidget(row, 5, actions_widget)
-            self.table.setRowHeight(row, 44)
+            self.table.setRowHeight(row, 48)
 
     def add_schedule(self):
         self.load_doctors()

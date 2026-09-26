@@ -7,12 +7,12 @@ from typing import Any
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -23,7 +23,6 @@ from frontend.api.api_client import ApiClient
 from frontend.views.common import BaseApiView
 from frontend.widgets.empty_state import EmptyState
 from frontend.widgets.page_header import PageHeader
-from frontend.widgets.status_badge import StatusBadge
 
 
 class CheckInView(BaseApiView):
@@ -34,13 +33,18 @@ class CheckInView(BaseApiView):
     def __init__(self, api_client: ApiClient, parent: QWidget | None = None) -> None:
         super().__init__(api_client, parent)
 
-        layout = QVBoxLayout(self)
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(18)
 
         self.header = PageHeader(
-            "Tiếp nhận nhanh",
-            "Xác nhận bệnh nhân đến khám và cấp số thứ tự",
+            "Tiếp nhận",
+            "Xác nhận có mặt và cấp số khám",
             action_label="Làm mới",
             parent=self,
         )
@@ -51,17 +55,19 @@ class CheckInView(BaseApiView):
 
         # Fast Intake Search Box
         intake_card = QFrame()
-        intake_card.setObjectName("intakeCard")
-        intake_card.setStyleSheet("background: white; border: 1px solid #cbd5e1; border-radius: 12px; padding: 16px;")
+        intake_card.setObjectName("filterCard")
         intake_layout = QVBoxLayout(intake_card)
+        intake_layout.setContentsMargins(16, 14, 16, 14)
+        intake_layout.setSpacing(10)
 
-        card_title = QLabel("Tìm kiếm lịch hẹn tiếp nhận")
-        card_title.setStyleSheet("font-size: 14px; font-weight: 700; color: #0f172a;")
+        card_title = QLabel("Tìm kiếm lịch hẹn")
+        card_title.setObjectName("sectionTitle")
         intake_layout.addWidget(card_title)
 
         search_row = QHBoxLayout()
+        search_row.setSpacing(10)
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Nhập số điện thoại, họ tên hoặc mã lịch hẹn...")
+        self.search_input.setPlaceholderText("SĐT, họ tên hoặc mã hẹn...")
         self.search_input.returnPressed.connect(self.search_and_load)
         search_row.addWidget(self.search_input, 3)
 
@@ -71,7 +77,7 @@ class CheckInView(BaseApiView):
         search_row.addWidget(self.queue_num_input, 1)
 
         self.btn_search = QPushButton("Tìm kiếm")
-        self.btn_search.setStyleSheet("background-color: #0f766e; color: white; font-weight: 600; padding: 8px 16px; border-radius: 8px;")
+        self.btn_search.setCursor(Qt.PointingHandCursor)
         self.btn_search.clicked.connect(self.search_and_load)
         search_row.addWidget(self.btn_search)
 
@@ -79,8 +85,8 @@ class CheckInView(BaseApiView):
         layout.addWidget(intake_card)
 
         # Results table for check-in
-        results_label = QLabel("Danh sách lịch hẹn chờ tiếp nhận")
-        results_label.setStyleSheet("font-size: 13px; font-weight: 700; color: #334155; margin-top: 6px;")
+        results_label = QLabel("Lịch hẹn chờ tiếp nhận")
+        results_label.setObjectName("sectionTitle")
         layout.addWidget(results_label)
 
         self.results_table = QTableWidget()
@@ -88,19 +94,36 @@ class CheckInView(BaseApiView):
         self.results_table.setHorizontalHeaderLabels([
             "Mã hẹn", "Ngày khám", "Giờ khám", "Bệnh nhân", "Số điện thoại", "Bác sĩ", "Thao tác"
         ])
-        self.results_table.horizontalHeader().setStretchLastSection(True)
+        hdr = self.results_table.horizontalHeader()
+        hdr.setStretchLastSection(False)
+        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
+        self.results_table.setColumnWidth(6, 140)
         self.results_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.results_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.results_table.setMinimumHeight(200)
+        self.results_table.setAlternatingRowColors(True)
+        self.results_table.setMinimumHeight(220)
         layout.addWidget(self.results_table)
 
         self.empty_results = EmptyState(
-            "Không có lịch hẹn cần tiếp nhận",
-            "Tìm kiếm người bệnh theo tên, SĐT hoặc mã lịch hẹn.",
+            "Không có lịch hẹn chờ tiếp nhận",
+            "Tìm kiếm theo SĐT, họ tên hoặc mã hẹn.",
             parent=self,
         )
         layout.addWidget(self.empty_results)
         self.empty_results.hide()
+
+        layout.addStretch(1)
+        scroll.setWidget(container)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(scroll)
 
     def showEvent(self, event: Any) -> None:
         super().showEvent(event)
@@ -131,6 +154,13 @@ class CheckInView(BaseApiView):
         if not items:
             self.results_table.hide()
             self.empty_results.show()
+            checked_in = [i for i in all_items if i.get("status") == "CHECKED_IN"]
+            if checked_in:
+                self.feedback.show_message(
+                    "Đã tiếp nhận",
+                    f"Lịch hẹn #{checked_in[0].get('appointment_id')} của bệnh nhân {checked_in[0].get('patient', {}).get('full_name')} đã được tiếp nhận trước đó.",
+                    severity="info",
+                )
             return
 
         self.empty_results.hide()
@@ -143,19 +173,40 @@ class CheckInView(BaseApiView):
             start_time = str(appt.get("start_time", ""))[:5]
             patient = appt.get("patient", {})
             doctor = appt.get("doctor", {})
-            status = appt.get("status", "CONFIRMED")
 
-            self.results_table.setItem(row, 0, QTableWidgetItem(f"#{appt_id}"))
-            self.results_table.setItem(row, 1, QTableWidgetItem(appt_date))
-            self.results_table.setItem(row, 2, QTableWidgetItem(start_time))
+            item_id = QTableWidgetItem(f"#{appt_id}")
+            item_id.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.results_table.setItem(row, 0, item_id)
+
+            item_date = QTableWidgetItem(appt_date)
+            item_date.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.results_table.setItem(row, 1, item_date)
+
+            item_time = QTableWidgetItem(start_time)
+            item_time.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.results_table.setItem(row, 2, item_time)
+
             self.results_table.setItem(row, 3, QTableWidgetItem(patient.get("full_name", "")))
-            self.results_table.setItem(row, 4, QTableWidgetItem(patient.get("phone", "") or "—"))
+
+            item_phone = QTableWidgetItem(patient.get("phone", "") or "—")
+            item_phone.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.results_table.setItem(row, 4, item_phone)
+
             self.results_table.setItem(row, 5, QTableWidgetItem(doctor.get("full_name", "")))
 
+            action_widget = QWidget()
+            act_layout = QHBoxLayout(action_widget)
+            act_layout.setContentsMargins(4, 0, 4, 0)
+            act_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
             btn = QPushButton("Tiếp nhận")
-            btn.setStyleSheet("background-color: #0f766e; color: white; border-radius: 6px; padding: 6px 12px; font-weight: 600;")
+            btn.setObjectName("tableActionPrimary")
+            btn.setCursor(Qt.PointingHandCursor)
             btn.clicked.connect(lambda _, a_id=appt_id: self._execute_check_in(a_id))
-            self.results_table.setCellWidget(row, 6, btn)
+            act_layout.addWidget(btn)
+
+            self.results_table.setCellWidget(row, 6, action_widget)
+            self.results_table.setRowHeight(row, 50)
 
     def _execute_check_in(self, appt_id: int) -> None:
         queue_no = self.queue_num_input.text().strip() or None

@@ -43,17 +43,21 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     # --------------------------------------------------------------------------
     # Authentication (Login & Register)
     # --------------------------------------------------------------------------
+    "portal_tag": {
+        "vi": "CỔNG THÔNG TIN BỆNH NHÂN",
+        "en": "PATIENT PORTAL",
+    },
     "welcome_back": {
-        "vi": "CHÀO MỪNG TRỞ LẠI",
-        "en": "WELCOME BACK",
+        "vi": "CỔNG THÔNG TIN BỆNH NHÂN",
+        "en": "PATIENT PORTAL",
     },
     "sign_in_title": {
-        "vi": "Đăng nhập vào ClinicCare",
-        "en": "Sign in to ClinicCare",
+        "vi": "ClinicCare",
+        "en": "ClinicCare",
     },
     "sign_in_subtitle": {
-        "vi": "Sử dụng tài khoản bệnh nhân của bạn để tiếp tục.",
-        "en": "Use your patient username to continue.",
+        "vi": "Đăng nhập để tiếp tục",
+        "en": "Sign in to continue",
     },
     "username": {
         "vi": "Tên đăng nhập",
@@ -76,12 +80,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Create a patient account",
     },
     "register_title": {
-        "vi": "Tạo tài khoản bệnh nhân mới",
-        "en": "Create your patient account",
+        "vi": "ClinicCare",
+        "en": "ClinicCare",
     },
     "register_subtitle": {
-        "vi": "Điền các thông tin cơ bản để bắt đầu sử dụng cổng bệnh nhân.",
-        "en": "Fill in your details to start using the patient portal.",
+        "vi": "Đăng ký tài khoản bệnh nhân để tiếp tục",
+        "en": "Create your patient account to continue",
     },
     "full_name": {
         "vi": "Họ và tên",
@@ -131,6 +135,118 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "vi": "Quay lại đăng nhập",
         "en": "Back to login",
     },
+    "register_eyebrow": {
+        "vi": "CỔNG THÔNG TIN BỆNH NHÂN",
+        "en": "PATIENT PORTAL",
+    },
+    "account_info": {
+        "vi": "Thông tin tài khoản",
+        "en": "Account information",
+    },
+    "personal_info": {
+        "vi": "Thông tin cá nhân",
+        "en": "Personal information",
+    },
+    "register_hero_title": {
+        "vi": "Khởi đầu hành trình chăm sóc sức khỏe toàn diện.",
+        "en": "Begin your journey to comprehensive healthcare.",
+    },
+    "register_hero_desc": {
+        "vi": "Tạo tài khoản bệnh nhân để dễ dàng đặt lịch khám, theo dõi hồ sơ y tế và quản lý hóa đơn viện phí.",
+        "en": "Create a patient account to easily book appointments, track medical records, and manage clinic invoices.",
+    },
+    "register_bullet_1": {
+        "vi": "Đặt lịch khám với bác sĩ chuyên khoa nhanh chóng",
+        "en": "Fast appointment booking with specialists",
+    },
+    "register_bullet_2": {
+        "vi": "Tra cứu hồ sơ bệnh án và đơn thuốc điện tử an toàn",
+        "en": "Secure access to medical records and prescriptions",
+    },
+    "register_bullet_3": {
+        "vi": "Theo dõi chi phí và hóa đơn thanh toán minh bạch",
+        "en": "Transparent tracking of clinic fees and invoices",
+    },
+    "register_bullet_4": {
+        "vi": "Bảo mật tuyệt đối thông tin sức khỏe cá nhân",
+        "en": "Complete privacy and security for personal health data",
+    },
+    "username_placeholder": {
+        "vi": "Nhập tên đăng nhập...",
+        "en": "Enter your username...",
+    },
+    "password_placeholder": {
+        "vi": "Nhập mật khẩu (tối thiểu 8 ký tự)...",
+        "en": "Enter password (min 8 characters)...",
+    },
+    "confirm_password_placeholder": {
+        "vi": "Nhập lại mật khẩu...",
+        "en": "Re-enter your password...",
+    },
+    "full_name_placeholder": {
+        "vi": "Nhập họ và tên...",
+        "en": "Enter your full name...",
+    },
+    "phone_placeholder": {
+        "vi": "Nhập số điện thoại...",
+        "en": "Enter your phone number...",
+    },
+    "email_placeholder": {
+        "vi": "Nhập địa chỉ email...",
+        "en": "Enter your email address...",
+    },
+    "address_placeholder": {
+        "vi": "Nhập địa chỉ nơi ở...",
+        "en": "Enter residential address...",
+    },
+    "already_have_account": {
+        "vi": "Đã có tài khoản? Đăng nhập ngay",
+        "en": "Already have an account? Sign in",
+    },
+    "create_account_help": {
+        "vi": "Cần hỗ trợ đăng ký? Liên hệ trực tiếp phòng khám.",
+        "en": "Need help registering? Contact your clinic directly.",
+    },
+    "err_username_required": {
+        "vi": "Tên đăng nhập không được để trống.",
+        "en": "Username is required.",
+    },
+    "err_password_len": {
+        "vi": "Mật khẩu phải có ít nhất 8 ký tự.",
+        "en": "Password must be at least 8 characters.",
+    },
+    "err_password_match": {
+        "vi": "Mật khẩu xác nhận không khớp.",
+        "en": "Passwords do not match.",
+    },
+    "err_fullname_required": {
+        "vi": "Họ và tên không được để trống.",
+        "en": "Full name is required.",
+    },
+    "err_email_invalid": {
+        "vi": "Địa chỉ email không hợp lệ.",
+        "en": "Enter a valid email address.",
+    },
+    "err_phone_invalid": {
+        "vi": "Số điện thoại phải từ 7 đến 14 chữ số.",
+        "en": "Phone must contain 7 to 14 digits.",
+    },
+    "err_address_len": {
+        "vi": "Địa chỉ không được vượt quá 255 ký tự.",
+        "en": "Address must be 255 characters or fewer.",
+    },
+    "err_password_required": {
+        "vi": "Mật khẩu không được để trống.",
+        "en": "Password is required.",
+    },
+    "check_details": {
+        "vi": "Vui lòng kiểm tra lại",
+        "en": "Check your details",
+    },
+    "signing_in": {
+        "vi": "Đang đăng nhập…",
+        "en": "Signing in…",
+    },
     # --------------------------------------------------------------------------
     # Navigation & Sidebar
     # --------------------------------------------------------------------------
@@ -143,11 +259,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "MY CARE",
     },
     "nav_dashboard": {
-        "vi": "Bảng điều khiển",
+        "vi": "Tổng quan",
         "en": "Dashboard",
     },
     "nav_booking": {
-        "vi": "Đặt lịch khám",
+        "vi": "Đặt lịch",
         "en": "Book Appointment",
     },
     "nav_appointments": {
@@ -155,15 +271,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Appointments",
     },
     "nav_profile": {
-        "vi": "Hồ sơ cá nhân",
+        "vi": "Hồ sơ",
         "en": "My Profile",
     },
     "nav_medical_history": {
-        "vi": "Lịch sử bệnh án",
+        "vi": "Bệnh án",
         "en": "Medical History",
     },
     "nav_invoice_history": {
-        "vi": "Lịch sử hóa đơn",
+        "vi": "Hóa đơn",
         "en": "Invoice History",
     },
     "nav_logout": {
@@ -226,16 +342,16 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "-- Click to select specialty from dropdown list --",
     },
     "spec_continue_btn": {
-        "vi": "Tiếp tục chọn bác sĩ →",
-        "en": "Continue to Doctor Selection →",
+        "vi": "Tiếp tục",
+        "en": "Continue",
     },
     "spec_divider_lbl": {
         "vi": "Hoặc bấm chọn trực tiếp chuyên khoa bên dưới:",
         "en": "Or select directly from the specialties below:",
     },
     "select_this_specialty": {
-        "vi": "Chọn chuyên khoa này →",
-        "en": "Select this specialty →",
+        "vi": "Chọn chuyên khoa",
+        "en": "Select specialty",
     },
     "affiliated_doctors": {
         "vi": "{count} bác sĩ trực thuộc",
@@ -250,8 +366,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Try searching with different keywords.",
     },
     "step_2_back": {
-        "vi": "← Đổi chuyên khoa",
-        "en": "← Change specialty",
+        "vi": "Đổi chuyên khoa",
+        "en": "Change specialty",
     },
     "step_2_title": {
         "vi": "Bước 2: Chọn bác sĩ",
@@ -270,16 +386,16 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Clinic",
     },
     "select_this_doctor": {
-        "vi": "Chọn bác sĩ này →",
-        "en": "Select this doctor →",
+        "vi": "Chọn bác sĩ",
+        "en": "Select doctor",
     },
     "no_doctors_found": {
         "vi": "Không có bác sĩ nào cho chuyên khoa này",
         "en": "No doctors found for this specialty",
     },
     "step_3_back": {
-        "vi": "← Chọn lại bác sĩ",
-        "en": "← Change doctor",
+        "vi": "Đổi bác sĩ",
+        "en": "Change doctor",
     },
     "step_3_title": {
         "vi": "Bước 3: Chọn ngày và giờ khám",
@@ -306,8 +422,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Please choose another date matching the doctor's shift schedule.",
     },
     "step_4_back": {
-        "vi": "← Chọn lại giờ khám",
-        "en": "← Change time slot",
+        "vi": "Đổi giờ khám",
+        "en": "Change time slot",
     },
     "step_4_title": {
         "vi": "Bước 4: Xác nhận thông tin đặt lịch",
@@ -350,8 +466,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Describe specific symptoms, health condition, or visit request...",
     },
     "confirm_booking_btn": {
-        "vi": "✓ Xác nhận đặt lịch khám",
-        "en": "✓ Confirm Appointment Booking",
+        "vi": "Xác nhận đặt lịch",
+        "en": "Confirm Booking",
     },
     "booking_success_title": {
         "vi": "Đặt lịch khám thành công!",
@@ -377,8 +493,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Cancel",
     },
     "btn_new_booking": {
-        "vi": "+ Đặt lịch khám mới",
-        "en": "+ Book Appointment",
+        "vi": "Đặt lịch mới",
+        "en": "Book Appointment",
     },
     "cancel_dialog_title": {
         "vi": "Hủy lịch hẹn khám bệnh",
@@ -560,7 +676,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "th_price": {"vi": "Đơn giá", "en": "Price"},
     "th_line_total": {"vi": "Thành tiền", "en": "Total"},
     "sec_payment_info": {"vi": "Thông tin thanh toán", "en": "Payment information"},
-    "field_payment_status": {"vi": "Trạng thái", "en": "Payment status"},
+    "field_status": {"vi": "Trạng thái", "en": "Status"},
+    "field_appointment_status": {"vi": "Trạng thái", "en": "Status"},
+    "field_payment_status": {"vi": "Trạng thái thanh toán", "en": "Payment status"},
     "field_payment_method": {"vi": "Phương thức", "en": "Payment method"},
     "field_payment_date": {"vi": "Thời gian thanh toán", "en": "Payment date"},
     "payment_pending_title": {"vi": "Chưa thanh toán", "en": "Payment pending"},
@@ -592,7 +710,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Review the visit, care provider, and clinic information.",
     },
     "sec_appointment_summary": {"vi": "Thông tin lịch khám", "en": "Appointment summary"},
-    "btn_medical_result": {"vi": "Kết quả khám", "en": "Medical result"},
+    "btn_medical_result": {"vi": "Bệnh án", "en": "Medical Record"},
     "btn_invoice": {"vi": "Hóa đơn", "en": "Invoice"},
 
     # --------------------------------------------------------------------------
@@ -611,7 +729,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     # --------------------------------------------------------------------------
     # Date Picker & Calendar
     # --------------------------------------------------------------------------
-    "btn_open_calendar": {"vi": "Mở lịch", "en": "Calendar"},
+    "btn_open_calendar": {"vi": "Chọn ngày", "en": "Select date"},
     "quick_select_date": {"vi": "Chọn nhanh ngày:", "en": "Quick date:"},
     "chip_today": {"vi": "Hôm nay", "en": "Today"},
     "chip_tomorrow": {"vi": "Ngày mai", "en": "Tomorrow"},
@@ -651,8 +769,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Doctors in this specialty:",
     },
     "choose_this_doctor_and_slot": {
-        "vi": "Chọn bác sĩ & giờ khám →",
-        "en": "Select doctor & slot →",
+        "vi": "Chọn bác sĩ & giờ khám",
+        "en": "Select doctor & slot",
     },
     "doctor_schedule_info": {"vi": "Lịch trực định kỳ:", "en": "Regular schedule:"},
     "step_2_title_by_date": {"vi": "Bước 2: Chọn ngày & Bác sĩ trực", "en": "Step 2: Select Date & Doctor"},

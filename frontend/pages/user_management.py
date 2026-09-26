@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFormLayout,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -33,8 +34,8 @@ class UserManagementPage(QWidget):
 
         # ------------------- Page Header -------------------
         self.header = PageHeader(
-            "Quản lý tài khoản",
-            "Quản trị danh sách và phân quyền tài khoản",
+            "Tài khoản",
+            "Quản trị danh sách và phân quyền",
         )
         layout.addWidget(self.header)
 
@@ -42,10 +43,10 @@ class UserManagementPage(QWidget):
         form_card = QFrame()
         form_card.setObjectName("contentCard")
         form_card_layout = QVBoxLayout(form_card)
-        form_card_layout.setContentsMargins(20, 16, 20, 18)
-        form_card_layout.setSpacing(12)
+        form_card_layout.setContentsMargins(20, 18, 20, 18)
+        form_card_layout.setSpacing(14)
 
-        form_title = QLabel("Thêm tài khoản mới")
+        form_title = QLabel("Thêm tài khoản")
         form_title.setObjectName("sectionTitle")
         form_card_layout.addWidget(form_title)
 
@@ -100,11 +101,11 @@ class UserManagementPage(QWidget):
 
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
-        add_btn = QPushButton("Thêm tài khoản")
+        add_btn = QPushButton("Thêm mới")
         add_btn.setObjectName("primaryButton")
         add_btn.setCursor(Qt.PointingHandCursor)
         add_btn.setMinimumHeight(36)
-        add_btn.setMinimumWidth(140)
+        add_btn.setMinimumWidth(120)
         add_btn.clicked.connect(self.add_user)
         btn_layout.addWidget(add_btn)
 
@@ -116,8 +117,8 @@ class UserManagementPage(QWidget):
         table_card = QFrame()
         table_card.setObjectName("contentCard")
         table_card_layout = QVBoxLayout(table_card)
-        table_card_layout.setContentsMargins(16, 16, 16, 16)
-        table_card_layout.setSpacing(10)
+        table_card_layout.setContentsMargins(20, 18, 20, 18)
+        table_card_layout.setSpacing(12)
 
         table_title = QLabel("Danh sách tài khoản")
         table_title.setObjectName("sectionTitle")
@@ -139,9 +140,10 @@ class UserManagementPage(QWidget):
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.Stretch)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        self.table.setItemDelegateForColumn(3, StatusBadgeDelegate(self.table))
+        header.setSectionResizeMode(4, QHeaderView.Fixed)
+        header.setSectionResizeMode(5, QHeaderView.Fixed)
+        self.table.setColumnWidth(4, 135)
+        self.table.setColumnWidth(5, 160)
         self.table.setItemDelegateForColumn(4, StatusBadgeDelegate(self.table))
 
         table_card_layout.addWidget(self.table)
@@ -175,7 +177,7 @@ class UserManagementPage(QWidget):
 
             # Status pill (rendered via delegate)
             is_active = u["IsActive"]
-            status_text = "Hoạt động" if is_active else "Đã khóa"
+            status_text = "ACTIVE" if is_active else "INACTIVE"
             item_status = QTableWidgetItem(status_text)
             item_status.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(row, 4, item_status)
@@ -184,7 +186,7 @@ class UserManagementPage(QWidget):
             edit_btn = QPushButton("Sửa")
             edit_btn.setObjectName("actionEditBtn")
             edit_btn.setCursor(Qt.PointingHandCursor)
-            edit_btn.setFixedSize(54, 28)
+            edit_btn.setFixedSize(56, 28)
             edit_btn.clicked.connect(
                 lambda _, uid=u["UserID"], un=u["Username"], fn=u["FullName"]: self.open_edit_dialog(
                     uid, un, fn
@@ -194,19 +196,19 @@ class UserManagementPage(QWidget):
             del_btn = QPushButton("Khóa" if is_active else "Mở khóa")
             del_btn.setObjectName("actionDeleteBtn")
             del_btn.setCursor(Qt.PointingHandCursor)
-            del_btn.setFixedSize(68, 28)
+            del_btn.setFixedSize(76, 28)
             del_btn.clicked.connect(lambda _, uid=u["UserID"]: self.delete_user(uid))
 
             actions_widget = QWidget()
             actions_layout = QHBoxLayout(actions_widget)
-            actions_layout.setContentsMargins(6, 0, 6, 0)
+            actions_layout.setContentsMargins(4, 0, 4, 0)
             actions_layout.setSpacing(6)
             actions_layout.setAlignment(Qt.AlignCenter)
             actions_layout.addWidget(edit_btn)
             actions_layout.addWidget(del_btn)
 
             self.table.setCellWidget(row, 5, actions_widget)
-            self.table.setRowHeight(row, 44)
+            self.table.setRowHeight(row, 48)
 
     def add_user(self):
         username = self.username_input.text().strip()

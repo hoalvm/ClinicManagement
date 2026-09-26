@@ -10,12 +10,13 @@ from PySide6.QtWidgets import (
     QDateEdit,
     QDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QTimeEdit,
@@ -28,7 +29,7 @@ from frontend.views.common import BaseApiView
 from frontend.widgets.empty_state import EmptyState
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.pagination import Pagination
-from frontend.widgets.status_badge import StatusBadge
+from frontend.widgets.status_badge import StatusBadgeDelegate
 
 
 class AppointmentManagementView(BaseApiView):
@@ -43,15 +44,20 @@ class AppointmentManagementView(BaseApiView):
         self._page_size = 15
         self._current_items: list[dict[str, Any]] = []
 
-        layout = QVBoxLayout(self)
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        container = QWidget()
+
+        layout = QVBoxLayout(container)
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
 
         # Header
         self.header = PageHeader(
-            "Quản lý lịch hẹn",
-            "Theo dõi, xác nhận và tiếp nhận bệnh nhân theo lịch hẹn",
-            action_label="+ Lịch hẹn mới",
+            "Lịch hẹn",
+            "Theo dõi và xử lý lịch khám của bệnh nhân",
+            action_label="Đặt lịch mới",
             parent=self,
         )
         self.header.action_clicked.connect(self.book_requested)
@@ -60,7 +66,10 @@ class AppointmentManagementView(BaseApiView):
         layout.addWidget(self.loading)
 
         # Filter Controls Bar
-        filter_bar = QHBoxLayout()
+        filter_card = QFrame()
+        filter_card.setObjectName("filterCard")
+        filter_bar = QHBoxLayout(filter_card)
+        filter_bar.setContentsMargins(16, 10, 16, 10)
         filter_bar.setSpacing(12)
 
         self.search_input = QLineEdit()
@@ -78,11 +87,12 @@ class AppointmentManagementView(BaseApiView):
         self.status_combo.currentIndexChanged.connect(self._apply_filter)
         filter_bar.addWidget(self.status_combo, 1)
 
-        self.btn_refresh = QPushButton("Lọc / Làm mới")
+        self.btn_refresh = QPushButton("Lọc")
+        self.btn_refresh.setCursor(Qt.PointingHandCursor)
         self.btn_refresh.clicked.connect(self._apply_filter)
         filter_bar.addWidget(self.btn_refresh)
 
-        layout.addLayout(filter_bar)
+        layout.addWidget(filter_card)
 
         # Table
         self.table = QTableWidget()
@@ -90,10 +100,20 @@ class AppointmentManagementView(BaseApiView):
         self.table.setHorizontalHeaderLabels([
             "Mã hẹn", "Thời gian", "Bệnh nhân", "Số điện thoại", "Bác sĩ", "Trạng thái", "Thao tác"
         ])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setStretchLastSection(True)
+        hdr = self.table.horizontalHeader()
+        hdr.setStretchLastSection(False)
+        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+        hdr.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(5, 110)
+        self.table.setColumnWidth(6, 320)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setItemDelegateForColumn(5, StatusBadgeDelegate(self.table))
         layout.addWidget(self.table)
 
         self.empty_state = EmptyState(
@@ -108,6 +128,11 @@ class AppointmentManagementView(BaseApiView):
         self.pagination = Pagination(parent=self)
         self.pagination.page_requested.connect(self._go_to_page)
         layout.addWidget(self.pagination)
+
+        scroll.setWidget(container)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(scroll)
 
     def showEvent(self, event: Any) -> None:
         super().showEvent(event)
@@ -165,45 +190,62 @@ class AppointmentManagementView(BaseApiView):
             doctor = appt.get("doctor", {})
             status = appt.get("status", "PENDING")
 
-            self.table.setItem(row, 0, QTableWidgetItem(f"#{appt_id}"))
-            self.table.setItem(row, 1, QTableWidgetItem(f"{appt_date} {start_time}"))
+            item_id = QTableWidgetItem(f"#{appt_id}")
+            item_id.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 0, item_id)
+
+            item_dt = QTableWidgetItem(f"{appt_date} {start_time}")
+            item_dt.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 1, item_dt)
+
             self.table.setItem(row, 2, QTableWidgetItem(patient.get("full_name", "")))
-            self.table.setItem(row, 3, QTableWidgetItem(patient.get("phone", "") or "—"))
+
+            item_phone = QTableWidgetItem(patient.get("phone", "") or "—")
+            item_phone.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 3, item_phone)
+
             self.table.setItem(row, 4, QTableWidgetItem(doctor.get("full_name", "")))
 
-            badge = StatusBadge(status)
-            self.table.setCellWidget(row, 5, badge)
+            item_status = QTableWidgetItem(status)
+            item_status.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.table.setItem(row, 5, item_status)
 
             # Actions cell container
             actions_widget = QWidget()
             actions_layout = QHBoxLayout(actions_widget)
-            actions_layout.setContentsMargins(4, 2, 4, 2)
+            actions_layout.setContentsMargins(4, 0, 4, 0)
             actions_layout.setSpacing(6)
+            actions_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             if status == "PENDING":
                 btn_confirm = QPushButton("Xác nhận")
-                btn_confirm.setStyleSheet("background-color: #0f766e; color: white; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-weight: 600;")
+                btn_confirm.setObjectName("tableActionPrimary")
+                btn_confirm.setCursor(Qt.PointingHandCursor)
                 btn_confirm.clicked.connect(lambda _, a_id=appt_id: self._confirm_appointment(a_id))
                 actions_layout.addWidget(btn_confirm)
 
             if status in ("PENDING", "CONFIRMED"):
                 btn_checkin = QPushButton("Tiếp nhận")
-                btn_checkin.setStyleSheet("background-color: #0284c7; color: white; border-radius: 6px; padding: 4px 8px; font-size: 11px; font-weight: 600;")
+                btn_checkin.setObjectName("tableActionInfo")
+                btn_checkin.setCursor(Qt.PointingHandCursor)
                 btn_checkin.clicked.connect(lambda _, a_id=appt_id: self._check_in_appointment(a_id))
                 actions_layout.addWidget(btn_checkin)
 
             if status not in ("COMPLETED", "CANCELLED"):
                 btn_reschedule = QPushButton("Đổi lịch")
-                btn_reschedule.setStyleSheet("background-color: #e2e8f0; color: #334155; border-radius: 6px; padding: 4px 8px; font-size: 11px;")
+                btn_reschedule.setObjectName("tableActionSecondary")
+                btn_reschedule.setCursor(Qt.PointingHandCursor)
                 btn_reschedule.clicked.connect(lambda _, a=appt: self._reschedule_dialog(a))
                 actions_layout.addWidget(btn_reschedule)
 
                 btn_cancel = QPushButton("Hủy")
-                btn_cancel.setStyleSheet("background-color: #fee2e2; color: #b91c1c; border-radius: 6px; padding: 4px 8px; font-size: 11px;")
+                btn_cancel.setObjectName("tableActionDanger")
+                btn_cancel.setCursor(Qt.PointingHandCursor)
                 btn_cancel.clicked.connect(lambda _, a_id=appt_id: self._cancel_dialog(a_id))
                 actions_layout.addWidget(btn_cancel)
 
             self.table.setCellWidget(row, 6, actions_widget)
+            self.table.setRowHeight(row, 50)
 
     def _confirm_appointment(self, appt_id: int) -> None:
         self.run_api_task(
@@ -239,9 +281,12 @@ class AppointmentManagementView(BaseApiView):
 
         btn_row = QHBoxLayout()
         btn_cancel = QPushButton("Đóng")
+        btn_cancel.setObjectName("secondaryButton")
+        btn_cancel.setCursor(Qt.PointingHandCursor)
         btn_cancel.clicked.connect(dialog.reject)
         btn_confirm = QPushButton("Xác nhận hủy")
-        btn_confirm.setStyleSheet("background-color: #dc2626; color: white; font-weight: bold;")
+        btn_confirm.setObjectName("dangerButton")
+        btn_confirm.setCursor(Qt.PointingHandCursor)
         btn_confirm.clicked.connect(dialog.accept)
         btn_row.addWidget(btn_cancel)
         btn_row.addWidget(btn_confirm)
@@ -280,9 +325,12 @@ class AppointmentManagementView(BaseApiView):
 
         btn_row = QHBoxLayout()
         btn_close = QPushButton("Hủy")
+        btn_close.setObjectName("secondaryButton")
+        btn_close.setCursor(Qt.PointingHandCursor)
         btn_close.clicked.connect(dialog.reject)
         btn_save = QPushButton("Lưu lịch mới")
-        btn_save.setStyleSheet("background-color: #0f766e; color: white; font-weight: bold;")
+        btn_save.setObjectName("primaryButton")
+        btn_save.setCursor(Qt.PointingHandCursor)
         btn_save.clicked.connect(dialog.accept)
         btn_row.addWidget(btn_close)
         btn_row.addWidget(btn_save)

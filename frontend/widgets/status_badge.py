@@ -203,6 +203,12 @@ def _with_enabled_alpha(color: str, enabled: bool) -> QColor:
 
 def _badge_font(source: QFont) -> QFont:
     font = QFont(source)
+    if font.pointSize() > 0:
+        font.setPointSize(max(9, font.pointSize() - 1))
+    elif font.pixelSize() > 0:
+        font.setPixelSize(max(11, font.pixelSize() - 2))
+    else:
+        font.setPointSize(9)
     font.setWeight(QFont.Weight.DemiBold)
     return font
 
@@ -297,7 +303,7 @@ class StatusBadgeDelegate(QStyledItemDelegate):
         parent: QWidget | None = None,
         *,
         status_role: int = int(Qt.ItemDataRole.DisplayRole),
-        horizontal_margin: int = 8,
+        horizontal_margin: int = 4,
     ) -> None:
         super().__init__(parent)
         self.status_role = status_role
@@ -337,9 +343,9 @@ class StatusBadgeDelegate(QStyledItemDelegate):
             -self.horizontal_margin,
             -4,
         )
-        max_text_width = max(0, available.width() - 20)
+        max_text_width = max(0, available.width() - 14)
         text = metrics.elidedText(text, Qt.TextElideMode.ElideRight, max_text_width)
-        badge_width = min(available.width(), metrics.horizontalAdvance(text) + 20)
+        badge_width = min(available.width(), metrics.horizontalAdvance(text) + 16)
         badge_height = min(26, available.height())
         badge_rect = QRectF(
             available.center().x() - badge_width / 2,

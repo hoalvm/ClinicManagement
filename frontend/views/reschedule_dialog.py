@@ -159,18 +159,16 @@ class RescheduleAppointmentDialog(QDialog):
         layout.addWidget(curr_card)
 
         # Doctor selection
-        self.lbl_doctor = QLabel(t("reschedule_choose_doctor", default="Chọn bác sĩ khám:"))
+        self.lbl_doctor = QLabel(t("reschedule_choose_doctor", default="Bác sĩ khám:"))
         self.lbl_doctor.setObjectName("fieldLabel")
         layout.addWidget(self.lbl_doctor)
 
         self.doctor_combo = QComboBox()
         self.doctor_combo.setMinimumHeight(38)
-        self.doctor_combo.currentIndexChanged.connect(self._fetch_slots)
         layout.addWidget(self.doctor_combo)
-        self._populate_doctors(spec_name)
 
         # New Date selection
-        self.lbl_date = QLabel(t("reschedule_new_date"))
+        self.lbl_date = QLabel(t("reschedule_new_date", default="Ngày khám mới:"))
         self.lbl_date.setObjectName("fieldLabel")
         layout.addWidget(self.lbl_date)
 
@@ -180,22 +178,17 @@ class RescheduleAppointmentDialog(QDialog):
         self.date_edit.setDate(QDate.currentDate().addDays(1))
         self.date_edit.setMinimumDate(QDate.currentDate())
         self.date_edit.setMaximumDate(QDate.currentDate().addDays(60))
-        self.date_edit.dateChanged.connect(self._fetch_slots)
         date_row.addWidget(self.date_edit, 1)
 
-        self.open_cal_btn = QPushButton(t("btn_open_calendar", default="📅 Mở lịch"))
+        self.open_cal_btn = QPushButton(t("btn_open_calendar", default="Chọn ngày"))
         self.open_cal_btn.setObjectName("secondaryButton")
         self.open_cal_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.open_cal_btn.setStyleSheet(
-            "QPushButton { background: #ffffff; color: #334155; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 6px 12px; font-weight: 600; }"
-            "QPushButton:hover { background: #f1f5f9; border-color: #94a3b8; }"
-        )
         self.open_cal_btn.clicked.connect(self._open_calendar_dialog)
         date_row.addWidget(self.open_cal_btn)
         layout.addLayout(date_row)
 
         # Slot selector
-        self.lbl_slot = QLabel(t("reschedule_new_slot"))
+        self.lbl_slot = QLabel(t("reschedule_new_slot", default="Khung giờ mới:"))
         self.lbl_slot.setObjectName("fieldLabel")
         layout.addWidget(self.lbl_slot)
 
@@ -208,7 +201,7 @@ class RescheduleAppointmentDialog(QDialog):
         layout.addWidget(self.slot_status_label)
 
         # Reason
-        lbl_reason = QLabel(t("reschedule_reason_label"))
+        lbl_reason = QLabel(t("reschedule_reason_label", default="Lý do đổi lịch:"))
         lbl_reason.setObjectName("fieldLabel")
         layout.addWidget(lbl_reason)
 
@@ -228,34 +221,31 @@ class RescheduleAppointmentDialog(QDialog):
         btn_layout.setSpacing(10)
         btn_layout.addStretch(1)
 
-        self.back_button = QPushButton(t("close_btn"))
+        self.back_button = QPushButton(t("close_btn", default="Đóng"))
         self.back_button.setObjectName("secondaryButton")
         self.back_button.setMinimumHeight(38)
-        self.back_button.setStyleSheet(
-            "QPushButton { background: #ffffff; color: #334155; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 6px 16px; font-weight: 600; }"
-            "QPushButton:hover { background: #f1f5f9; }"
-        )
         self.back_button.clicked.connect(self.reject)
         btn_layout.addWidget(self.back_button)
 
-        self.save_button = QPushButton(t("confirm_reschedule_btn"))
+        self.save_button = QPushButton(t("confirm_reschedule_btn", default="Xác nhận đổi lịch"))
         self.save_button.setObjectName("primaryButton")
         self.save_button.setMinimumHeight(38)
-        self.save_button.setStyleSheet(
-            "QPushButton { background: #0f766e; color: #ffffff; border: none; border-radius: 8px; padding: 6px 18px; font-weight: 700; }"
-            "QPushButton:hover { background: #0d5f58; }"
-            "QPushButton:disabled { background: #94a3b8; }"
-        )
         self.save_button.setEnabled(False)
         self.save_button.clicked.connect(self._submit_reschedule)
         btn_layout.addWidget(self.save_button)
 
         layout.addLayout(btn_layout)
 
+        # Populate doctors and connect signals after all widgets exist
+        self._populate_doctors(spec_name)
+        self.doctor_combo.currentIndexChanged.connect(self._fetch_slots)
+        self.date_edit.dateChanged.connect(self._fetch_slots)
+
         # Initial slots fetch
         self._fetch_slots()
 
     def _populate_doctors(self, spec_name: str) -> None:
+        self.doctor_combo.blockSignals(True)
         self.doctor_combo.clear()
         try:
             doctors = self.api_client.get("/api/v1/catalog/doctors")
@@ -281,6 +271,8 @@ class RescheduleAppointmentDialog(QDialog):
                 self.appointment.get("doctor", {}).get("full_name", "Bác sĩ"),
                 userData=self.doctor_id,
             )
+        finally:
+            self.doctor_combo.blockSignals(False)
 
     def _open_calendar_dialog(self) -> None:
         dlg = CalendarDialog(
@@ -400,11 +392,11 @@ class RescheduleAppointmentDialog(QDialog):
         if hasattr(self, "lbl_doctor"):
             self.lbl_doctor.setText(t("reschedule_choose_doctor", default="Chọn bác sĩ khám:"))
         if hasattr(self, "lbl_date"):
-            self.lbl_date.setText(t("reschedule_new_date"))
+            self.lbl_date.setText(t("reschedule_new_date", default="Ngày khám mới:"))
         if hasattr(self, "open_cal_btn"):
-            self.open_cal_btn.setText(t("btn_open_calendar", default="📅 Mở lịch"))
+            self.open_cal_btn.setText(t("btn_open_calendar", default="Chọn ngày"))
         if hasattr(self, "lbl_slot"):
-            self.lbl_slot.setText(t("reschedule_new_slot"))
+            self.lbl_slot.setText(t("reschedule_new_slot", default="Khung giờ mới:"))
         if hasattr(self, "save_button"):
             self.save_button.setText(t("confirm_reschedule_btn"))
         if hasattr(self, "back_button"):

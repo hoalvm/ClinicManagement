@@ -2,11 +2,10 @@
 
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import Annotated
 
-from pydantic import Field, PlainSerializer
+from pydantic import Field
 
-from backend.app.schemas.common import APIModel, AppointmentStatus, InvoiceStatus, Money, Page
+from backend.app.schemas.common import APIModel, Money, Page
 
 
 class ReceptionPatientSummary(APIModel):

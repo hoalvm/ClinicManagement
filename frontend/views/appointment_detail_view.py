@@ -89,7 +89,7 @@ class AppointmentDetailView(BaseApiView):
                     ("field_date", "date"),
                     ("field_start_time", "start_time"),
                     ("field_end_time", "end_time"),
-                    ("field_payment_status", "status"),
+                    ("field_status", "status"),
                     ("field_reason", "reason"),
                 ],
             )
@@ -149,7 +149,7 @@ class AppointmentDetailView(BaseApiView):
             "date": "field_date",
             "start_time": "field_start_time",
             "end_time": "field_end_time",
-            "status": "field_payment_status",
+            "status": "field_status",
             "reason": "field_reason",
             "doctor_name": "field_doctor",
             "specialty": "field_specialty",
@@ -227,10 +227,13 @@ class AppointmentDetailView(BaseApiView):
     def _render(self, payload: object) -> None:
         data = require_dict(payload)
         self._current_appointment_data = data
+        appt_id = data.get("appointment_id")
+        if appt_id is not None:
+            self._appointment_id = int(appt_id)
+            self.header.set_subtitle(f"#{self._appointment_id:06d}")
         doctor = data.get("doctor") or {}
         clinic = data.get("clinic") or {}
         values: dict[str, Any] = {
-            "appointment_id": data.get("appointment_id"),
             "date": format_date(data.get("appointment_date")),
             "start_time": format_time(data.get("start_time")),
             "end_time": format_time(data.get("end_time")),
@@ -246,7 +249,9 @@ class AppointmentDetailView(BaseApiView):
             "clinic_phone": clinic.get("phone"),
         }
         for key, value in values.items():
-            label = self.values[key]
+            label = self.values.get(key)
+            if label is None:
+                continue
             if isinstance(label, StatusBadge):
                 label.set_status(value)
             else:

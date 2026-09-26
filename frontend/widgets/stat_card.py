@@ -37,21 +37,25 @@ class StatCard(QFrame):
             "warning": "#B45309",
             "info": "#0369A1",
             "success": "#15803D",
+            "danger": "#B91C1C",
         }
         accent_color = colors.get(tone, "#0F766E")
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(14)
+        layout.setContentsMargins(20, 18, 20, 18)
+        layout.setSpacing(16)
+        layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         # Clean vertical accent indicator
-        accent_bar = QFrame()
-        accent_bar.setFixedWidth(4)
-        accent_bar.setStyleSheet(f"background-color: {accent_color}; border-radius: 2px;")
-        layout.addWidget(accent_bar)
+        self.accent_bar = QFrame()
+        self.accent_bar.setFixedWidth(4)
+        self.accent_bar.setFixedHeight(44)
+        self.accent_bar.setStyleSheet(f"background-color: {accent_color}; border-radius: 2px;")
+        layout.addWidget(self.accent_bar, 0, Qt.AlignmentFlag.AlignVCenter)
 
         text_layout = QVBoxLayout()
         text_layout.setSpacing(2)
+        text_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         self._value = QLabel(str(value) if value is not None else "—")
         self._value.setObjectName("statValue")
         self._title_label = QLabel(title)
@@ -89,9 +93,7 @@ class ModernStatCard(StatCard):
 
     def __init__(self, title: str, value: object, accent_color: str = "#0F766E"):
         super().__init__(title, value, parent=None)
-        # Apply custom accent line color if provided
-        for child in self.findChildren(QFrame):
-            if child.width() == 4:
-                child.setStyleSheet(f"background-color: {accent_color}; border-radius: 2px;")
-                break
+        if hasattr(self, "accent_bar"):
+            self.accent_bar.setStyleSheet(f"background-color: {accent_color}; border-radius: 2px;")
+
 

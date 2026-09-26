@@ -565,3 +565,36 @@ def test_staff_process_payment_zero_amount_rejected(client: TestClient) -> None:
         json={"payment_method": "CASH", "amount": 0},
     )
     assert res.status_code == 422
+
+
+def test_staff_get_invoice_by_id(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """TC-REC-16: Staff can fetch single invoice by ID directly."""
+    from datetime import date, datetime
+    from decimal import Decimal
+    from backend.app.api.routes import reception
+    from backend.app.schemas.reception import ReceptionInvoiceItem
+
+    mock_service = MagicMock()
+    mock_service.get_invoice.return_value = ReceptionInvoiceItem(
+        invoice_id=300,
+        appointment_id=200,
+        created_at=datetime(2026, 9, 25, 10, 0),
+        total_amount=Decimal("250000.00"),
+        status="UNPAID",
+        patient_name="Tran Van A",
+        patient_phone="0911223344",
+        doctor_name="BS. Nguyen Van B",
+        appointment_date=date(2026, 9, 25),
+    )
+    monkeypatch.setattr(reception, "ReceptionService", lambda _session: mock_service)
+
+    staff_user = SimpleNamespace(user_id=88, username="reception01", role="STAFF", is_active=True)
+    app.dependency_overrides[api_get_current_user] = lambda: staff_user
+
+    res = client.get("/api/v1/reception/invoices/300")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["invoice_id"] == 300
+    assert data["patient_name"] == "Tran Van A"
+    assert data["status"] == "UNPAID"
+
