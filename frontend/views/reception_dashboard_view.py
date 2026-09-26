@@ -60,30 +60,34 @@ class ReceptionDashboardView(BaseApiView):
         quick_actions_box = QFrame()
         quick_actions_box.setObjectName("quickActionsBox")
         quick_actions_layout = QHBoxLayout(quick_actions_box)
-        quick_actions_layout.setContentsMargins(16, 14, 16, 14)
-        quick_actions_layout.setSpacing(12)
+        quick_actions_layout.setContentsMargins(18, 14, 18, 14)
+        quick_actions_layout.setSpacing(10)
 
-        quick_label = QLabel("Thao tác:")
-        quick_label.setStyleSheet("font-weight: 700; color: #1e293b; font-size: 13px;")
+        quick_label = QLabel("Thao tác nhanh:")
+        quick_label.setStyleSheet("font-weight: 700; color: #475569; font-size: 13px;")
         quick_actions_layout.addWidget(quick_label)
 
         self.btn_check_in = QPushButton("Tiếp nhận")
-        self.btn_check_in.setStyleSheet("background-color: #0f766e; color: white; border-radius: 8px; padding: 8px 14px; font-weight: 600;")
+        self.btn_check_in.setObjectName("primaryButton")
+        self.btn_check_in.setCursor(Qt.PointingHandCursor)
         self.btn_check_in.clicked.connect(lambda: self.navigate_requested.emit("check_in"))
         quick_actions_layout.addWidget(self.btn_check_in)
 
         self.btn_book = QPushButton("Đặt lịch")
-        self.btn_book.setStyleSheet("background-color: #0369a1; color: white; border-radius: 8px; padding: 8px 14px; font-weight: 600;")
+        self.btn_book.setObjectName("secondaryButton")
+        self.btn_book.setCursor(Qt.PointingHandCursor)
         self.btn_book.clicked.connect(lambda: self.navigate_requested.emit("book_for_patient"))
         quick_actions_layout.addWidget(self.btn_book)
 
         self.btn_invoice = QPushButton("Lập hóa đơn")
-        self.btn_invoice.setStyleSheet("background-color: #d97706; color: white; border-radius: 8px; padding: 8px 14px; font-weight: 600;")
+        self.btn_invoice.setObjectName("secondaryButton")
+        self.btn_invoice.setCursor(Qt.PointingHandCursor)
         self.btn_invoice.clicked.connect(lambda: self.navigate_requested.emit("invoice_management"))
         quick_actions_layout.addWidget(self.btn_invoice)
 
         self.btn_payments = QPushButton("Thu phí")
-        self.btn_payments.setStyleSheet("background-color: #15803d; color: white; border-radius: 8px; padding: 8px 14px; font-weight: 600;")
+        self.btn_payments.setObjectName("secondaryButton")
+        self.btn_payments.setCursor(Qt.PointingHandCursor)
         self.btn_payments.clicked.connect(lambda: self.navigate_requested.emit("payment"))
         quick_actions_layout.addWidget(self.btn_payments)
 
@@ -107,7 +111,8 @@ class ReceptionDashboardView(BaseApiView):
 
         # Waiting Room / Checked-In Queue Section
         section_label = QLabel("Bệnh nhân đang chờ khám")
-        section_label.setStyleSheet("font-weight: 700; font-size: 15px; color: #0f172a; margin-top: 10px;")
+        section_label.setObjectName("sectionTitle")
+        section_label.setStyleSheet("margin-top: 8px;")
         content_layout.addWidget(section_label)
 
         self.queue_table = QTableWidget()
@@ -123,7 +128,7 @@ class ReceptionDashboardView(BaseApiView):
         hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
-        self.queue_table.setColumnWidth(5, 130)
+        self.queue_table.setColumnWidth(5, 160)
         self.queue_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.queue_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.queue_table.setAlternatingRowColors(True)
@@ -196,15 +201,14 @@ class ReceptionDashboardView(BaseApiView):
 
                 action_widget = QWidget()
                 act_layout = QHBoxLayout(action_widget)
-                act_layout.setContentsMargins(6, 4, 6, 4)
+                act_layout.setContentsMargins(4, 0, 4, 0)
                 act_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
                 action_btn = QPushButton("Lập hóa đơn")
+                action_btn.setObjectName("tableActionPrimary")
                 action_btn.setCursor(Qt.PointingHandCursor)
-                action_btn.setFixedHeight(28)
-                action_btn.setStyleSheet("background-color: #0f766e; color: white; border-radius: 6px; padding: 4px 12px; font-weight: 600; font-size: 11px;")
                 action_btn.clicked.connect(lambda _, a_id=appt_id: self.create_invoice_requested.emit(a_id))
                 act_layout.addWidget(action_btn)
 
                 self.queue_table.setCellWidget(row, 5, action_widget)
-                self.queue_table.setRowHeight(row, 44)
+                self.queue_table.setRowHeight(row, 50)

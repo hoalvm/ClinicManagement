@@ -61,7 +61,7 @@ class CheckInView(BaseApiView):
         intake_layout.setSpacing(10)
 
         card_title = QLabel("Tìm kiếm lịch hẹn")
-        card_title.setStyleSheet("font-size: 14px; font-weight: 700; color: #0f172a;")
+        card_title.setObjectName("sectionTitle")
         intake_layout.addWidget(card_title)
 
         search_row = QHBoxLayout()
@@ -77,6 +77,7 @@ class CheckInView(BaseApiView):
         search_row.addWidget(self.queue_num_input, 1)
 
         self.btn_search = QPushButton("Tìm kiếm")
+        self.btn_search.setCursor(Qt.PointingHandCursor)
         self.btn_search.clicked.connect(self.search_and_load)
         search_row.addWidget(self.btn_search)
 
@@ -85,7 +86,7 @@ class CheckInView(BaseApiView):
 
         # Results table for check-in
         results_label = QLabel("Lịch hẹn chờ tiếp nhận")
-        results_label.setStyleSheet("font-size: 13px; font-weight: 700; color: #334155; margin-top: 6px;")
+        results_label.setObjectName("sectionTitle")
         layout.addWidget(results_label)
 
         self.results_table = QTableWidget()
@@ -102,9 +103,10 @@ class CheckInView(BaseApiView):
         hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
         hdr.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
-        self.results_table.setColumnWidth(6, 120)
+        self.results_table.setColumnWidth(6, 140)
         self.results_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.results_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.results_table.setAlternatingRowColors(True)
         self.results_table.setMinimumHeight(220)
         layout.addWidget(self.results_table)
 
@@ -194,21 +196,17 @@ class CheckInView(BaseApiView):
 
             action_widget = QWidget()
             act_layout = QHBoxLayout(action_widget)
-            act_layout.setContentsMargins(6, 4, 6, 4)
+            act_layout.setContentsMargins(4, 0, 4, 0)
             act_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             btn = QPushButton("Tiếp nhận")
+            btn.setObjectName("tableActionPrimary")
             btn.setCursor(Qt.PointingHandCursor)
-            btn.setFixedHeight(28)
-            btn.setStyleSheet(
-                "background-color: #0f766e; color: white; border-radius: 6px; "
-                "padding: 4px 14px; font-weight: 600; font-size: 11px;"
-            )
             btn.clicked.connect(lambda _, a_id=appt_id: self._execute_check_in(a_id))
             act_layout.addWidget(btn)
 
             self.results_table.setCellWidget(row, 6, action_widget)
-            self.results_table.setRowHeight(row, 44)
+            self.results_table.setRowHeight(row, 50)
 
     def _execute_check_in(self, appt_id: int) -> None:
         queue_no = self.queue_num_input.text().strip() or None

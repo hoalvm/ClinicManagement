@@ -79,13 +79,14 @@ class BookForPatientView(BaseApiView):
 
         # Card 1: Patient Search & Demographics
         pt_card = QFrame()
-        pt_card.setStyleSheet("background: white; border: 1px solid #cbd5e1; border-radius: 12px; padding: 20px;")
+        pt_card.setObjectName("contentCard")
         pt_card_layout = QVBoxLayout(pt_card)
+        pt_card_layout.setContentsMargins(20, 18, 20, 18)
         pt_card_layout.setSpacing(14)
 
         pt_sec_header = QHBoxLayout()
         pt_sec_title = QLabel("1. Thông tin bệnh nhân")
-        pt_sec_title.setStyleSheet("font-size: 15px; font-weight: 700; color: #0f172a;")
+        pt_sec_title.setObjectName("sectionTitle")
         pt_sec_header.addWidget(pt_sec_title)
 
         self.pt_type_badge = QLabel("Bệnh nhân mới")
@@ -96,8 +97,9 @@ class BookForPatientView(BaseApiView):
         pt_sec_header.addStretch(1)
 
         self.btn_unselect_pt = QPushButton("Bỏ chọn (Tạo mới)")
+        self.btn_unselect_pt.setObjectName("ghostButton")
         self.btn_unselect_pt.setStyleSheet(
-            "color: #0369a1; font-size: 11px; font-weight: 600; background: transparent; border: none; text-decoration: underline;"
+            "color: #0369a1; font-size: 12px; font-weight: 600; text-decoration: underline;"
         )
         self.btn_unselect_pt.setCursor(Qt.PointingHandCursor)
         self.btn_unselect_pt.clicked.connect(self._reset_patient_selection)
@@ -108,25 +110,25 @@ class BookForPatientView(BaseApiView):
 
         # Lookup Row
         lookup_box = QFrame()
-        lookup_box.setStyleSheet("background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px;")
+        lookup_box.setObjectName("filterCard")
         lookup_layout = QVBoxLayout(lookup_box)
+        lookup_layout.setContentsMargins(14, 12, 14, 12)
         lookup_layout.setSpacing(8)
 
         lookup_input_row = QHBoxLayout()
         lookup_lbl = QLabel("Tra cứu hồ sơ cũ:")
-        lookup_lbl.setStyleSheet("font-weight: 600; color: #334155; font-size: 12px;")
+        lookup_lbl.setObjectName("fieldLabel")
         lookup_input_row.addWidget(lookup_lbl)
 
         self.pt_search_input = QLineEdit()
-        self.pt_search_input.setPlaceholderText("Nhập số điện thoại hoặc họ tên bệnh nhân...")
+        self.pt_search_input.setPlaceholderText(
+            "Nhập số điện thoại hoặc họ tên bệnh nhân..."
+        )
         self.pt_search_input.returnPressed.connect(self._lookup_patient)
         lookup_input_row.addWidget(self.pt_search_input, 1)
 
         self.btn_lookup = QPushButton("Tra cứu")
         self.btn_lookup.setCursor(Qt.PointingHandCursor)
-        self.btn_lookup.setStyleSheet(
-            "background-color: #0f766e; color: white; font-weight: 600; padding: 6px 16px; border-radius: 6px;"
-        )
         self.btn_lookup.clicked.connect(self._lookup_patient)
         lookup_input_row.addWidget(self.btn_lookup)
 
@@ -135,10 +137,18 @@ class BookForPatientView(BaseApiView):
         # Quick Results Picker (hidden by default)
         self.search_results_table = QTableWidget()
         self.search_results_table.setColumnCount(4)
-        self.search_results_table.setHorizontalHeaderLabels(["Họ tên", "Số điện thoại", "Ngày sinh", "Thao tác"])
-        self.search_results_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.search_results_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.search_results_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.search_results_table.setHorizontalHeaderLabels(
+            ["Họ tên", "Số điện thoại", "Ngày sinh", "Thao tác"]
+        )
+        self.search_results_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+        self.search_results_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
+        self.search_results_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
         self.search_results_table.setMaximumHeight(130)
         self.search_results_table.hide()
         lookup_layout.addWidget(self.search_results_table)
@@ -147,7 +157,11 @@ class BookForPatientView(BaseApiView):
 
         # Patient Demographics Form
         pt_form = QFormLayout()
-        pt_form.setSpacing(10)
+        pt_form.setSpacing(12)
+        pt_form.setLabelAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        pt_form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
 
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("Nhập họ và tên đầy đủ")
@@ -190,16 +204,21 @@ class BookForPatientView(BaseApiView):
 
         # Card 2: Appointment Scheduling
         appt_card = QFrame()
-        appt_card.setStyleSheet("background: white; border: 1px solid #cbd5e1; border-radius: 12px; padding: 20px;")
+        appt_card.setObjectName("contentCard")
         appt_card_layout = QVBoxLayout(appt_card)
+        appt_card_layout.setContentsMargins(20, 18, 20, 18)
         appt_card_layout.setSpacing(14)
 
         appt_sec_title = QLabel("2. Thông tin lịch khám")
-        appt_sec_title.setStyleSheet("font-size: 15px; font-weight: 700; color: #0f172a;")
+        appt_sec_title.setObjectName("sectionTitle")
         appt_card_layout.addWidget(appt_sec_title)
 
         appt_form = QFormLayout()
-        appt_form.setSpacing(10)
+        appt_form.setSpacing(12)
+        appt_form.setLabelAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        appt_form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
 
         self.doctor_combo = QComboBox()
         self.doctor_combo.currentIndexChanged.connect(self._update_booking_preview)
@@ -218,20 +237,22 @@ class BookForPatientView(BaseApiView):
         date_time_row.addWidget(time_lbl)
 
         self.time_combo = QComboBox()
-        self.time_combo.addItems([
-            "08:00 - 08:30",
-            "08:30 - 09:00",
-            "09:00 - 09:30",
-            "09:30 - 10:00",
-            "10:00 - 10:30",
-            "10:30 - 11:00",
-            "13:30 - 14:00",
-            "14:00 - 14:30",
-            "14:30 - 15:00",
-            "15:00 - 15:30",
-            "15:30 - 16:00",
-            "16:00 - 16:30",
-        ])
+        self.time_combo.addItems(
+            [
+                "08:00 - 08:30",
+                "08:30 - 09:00",
+                "09:00 - 09:30",
+                "09:30 - 10:00",
+                "10:00 - 10:30",
+                "10:30 - 11:00",
+                "13:30 - 14:00",
+                "14:00 - 14:30",
+                "14:30 - 15:00",
+                "15:00 - 15:30",
+                "15:30 - 16:00",
+                "16:00 - 16:30",
+            ]
+        )
         self.time_combo.currentIndexChanged.connect(self._update_booking_preview)
         date_time_row.addWidget(self.time_combo, 1)
 
@@ -243,7 +264,9 @@ class BookForPatientView(BaseApiView):
         self.reason_input.textChanged.connect(self._update_booking_preview)
         appt_form.addRow("Lý do khám:", self.reason_input)
 
-        self.chk_autoconfirm = QCheckBox("Tự động xác nhận lịch hẹn (Trạng thái: Đã xác nhận)")
+        self.chk_autoconfirm = QCheckBox(
+            "Tự động xác nhận lịch hẹn (Trạng thái: Đã xác nhận)"
+        )
         self.chk_autoconfirm.setChecked(True)
         self.chk_autoconfirm.toggled.connect(self._update_booking_preview)
         appt_form.addRow("", self.chk_autoconfirm)
@@ -255,18 +278,14 @@ class BookForPatientView(BaseApiView):
         btn_row.addStretch(1)
 
         self.btn_reset = QPushButton("Làm mới")
+        self.btn_reset.setObjectName("secondaryButton")
         self.btn_reset.setCursor(Qt.PointingHandCursor)
-        self.btn_reset.setStyleSheet(
-            "padding: 9px 18px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600; color: #475569;"
-        )
         self.btn_reset.clicked.connect(self._clear_form)
         btn_row.addWidget(self.btn_reset)
 
         self.btn_submit = QPushButton("Tạo lịch khám")
+        self.btn_submit.setObjectName("primaryButton")
         self.btn_submit.setCursor(Qt.PointingHandCursor)
-        self.btn_submit.setStyleSheet(
-            "background-color: #0f766e; color: white; font-size: 14px; font-weight: 700; padding: 10px 24px; border-radius: 6px;"
-        )
         self.btn_submit.clicked.connect(self._submit_booking)
         btn_row.addWidget(self.btn_submit)
 
@@ -285,13 +304,14 @@ class BookForPatientView(BaseApiView):
 
         # Panel 1: Patient Profile Card
         self.profile_card = QFrame()
-        self.profile_card.setStyleSheet("background: white; border: 1px solid #cbd5e1; border-radius: 12px; padding: 20px;")
+        self.profile_card.setObjectName("contentCard")
         profile_layout = QVBoxLayout(self.profile_card)
+        profile_layout.setContentsMargins(18, 16, 18, 16)
         profile_layout.setSpacing(14)
 
         card1_top = QHBoxLayout()
         card1_title = QLabel("Hồ sơ bệnh nhân")
-        card1_title.setStyleSheet("font-size: 15px; font-weight: 700; color: #0f172a;")
+        card1_title.setObjectName("sectionTitle")
         card1_top.addWidget(card1_title)
 
         self.badge_profile_status = QLabel("Chưa chọn")
@@ -304,13 +324,17 @@ class BookForPatientView(BaseApiView):
 
         # Empty state inside profile card
         self.profile_empty_box = QFrame()
-        self.profile_empty_box.setStyleSheet("background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 16px;")
+        self.profile_empty_box.setStyleSheet(
+            "background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 16px;"
+        )
         empty_box_layout = QVBoxLayout(self.profile_empty_box)
         empty_box_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_profile_empty_title = QLabel("Chưa có thông tin bệnh nhân")
         self.lbl_profile_empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_profile_empty_title.setStyleSheet("font-weight: 700; color: #475569; font-size: 13px;")
-        self.lbl_profile_empty_sub = QLabel("Nhập số điện thoại hoặc tra cứu bệnh nhân cũ để xem hồ sơ và lịch sử khám tại đây.")
+        self.lbl_profile_empty_title.setStyleSheet(
+            "font-weight: 700; color: #475569; font-size: 13px;"
+        )
+        self.lbl_profile_empty_sub = QLabel("N/A")
         self.lbl_profile_empty_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_profile_empty_sub.setStyleSheet("color: #94a3b8; font-size: 12px;")
         self.lbl_profile_empty_sub.setWordWrap(True)
@@ -328,7 +352,9 @@ class BookForPatientView(BaseApiView):
         lbl_c_name = QLabel("Họ và tên:")
         lbl_c_name.setStyleSheet("color: #64748b; font-size: 12px;")
         self.val_p_name = QLabel("—")
-        self.val_p_name.setStyleSheet("font-size: 14px; font-weight: 700; color: #0f172a;")
+        self.val_p_name.setStyleSheet(
+            "font-size: 14px; font-weight: 700; color: #0f172a;"
+        )
         info_grid.addWidget(lbl_c_name, 0, 0)
         info_grid.addWidget(self.val_p_name, 0, 1)
 
@@ -368,26 +394,35 @@ class BookForPatientView(BaseApiView):
 
         # Panel 2: Recent Appointment History Card
         self.history_card = QFrame()
-        self.history_card.setStyleSheet("background: white; border: 1px solid #cbd5e1; border-radius: 12px; padding: 20px;")
+        self.history_card.setObjectName("contentCard")
         history_layout = QVBoxLayout(self.history_card)
+        history_layout.setContentsMargins(18, 16, 18, 16)
         history_layout.setSpacing(10)
 
         card2_title = QLabel("Lịch sử khám gần đây")
-        card2_title.setStyleSheet("font-size: 14px; font-weight: 700; color: #0f172a;")
+        card2_title.setObjectName("sectionTitle")
         history_layout.addWidget(card2_title)
 
         self.history_table = QTableWidget()
         self.history_table.setColumnCount(4)
-        self.history_table.setHorizontalHeaderLabels(["Ngày", "Bác sĩ", "Trạng thái", "Lý do"])
-        self.history_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        self.history_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.history_table.setHorizontalHeaderLabels(
+            ["Ngày", "Bác sĩ", "Trạng thái", "Lý do"]
+        )
+        self.history_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+        self.history_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
         self.history_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.history_table.setMaximumHeight(140)
         history_layout.addWidget(self.history_table)
 
         self.lbl_no_history = QLabel("Chưa có lịch sử khám bệnh trước đây.")
         self.lbl_no_history.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_no_history.setStyleSheet("color: #94a3b8; font-size: 12px; padding: 12px;")
+        self.lbl_no_history.setStyleSheet(
+            "color: #94a3b8; font-size: 12px; padding: 12px;"
+        )
         history_layout.addWidget(self.lbl_no_history)
         self.lbl_no_history.hide()
 
@@ -395,13 +430,15 @@ class BookForPatientView(BaseApiView):
 
         # Panel 3: Live Booking Preview Card
         self.preview_card = QFrame()
-        self.preview_card.setStyleSheet("background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 18px;")
+        self.preview_card.setObjectName("previewCard")
         prev_layout = QVBoxLayout(self.preview_card)
+        prev_layout.setContentsMargins(18, 16, 18, 16)
         prev_layout.setSpacing(10)
 
         prev_header = QHBoxLayout()
         prev_title = QLabel("Tóm tắt lịch khám dự kiến")
-        prev_title.setStyleSheet("font-size: 14px; font-weight: 700; color: #166534;")
+        prev_title.setObjectName("sectionTitle")
+        prev_title.setStyleSheet("color: #166534;")
         prev_header.addWidget(prev_title)
 
         self.prev_status_badge = StatusBadge("CONFIRMED")
@@ -497,12 +534,18 @@ class BookForPatientView(BaseApiView):
     def _lookup_patient(self) -> None:
         q = self.pt_search_input.text().strip()
         if not q:
-            self.feedback.show_message("Tìm kiếm", "Vui lòng nhập số điện thoại hoặc tên bệnh nhân.", severity="info")
+            self.feedback.show_message(
+                "Tìm kiếm",
+                "Vui lòng nhập số điện thoại hoặc tên bệnh nhân.",
+                severity="info",
+            )
             return
 
         self.run_api_task(
             "lookup_patient",
-            lambda: self.api_client.get("/api/v1/reception/patients/search", params={"q": q}),
+            lambda: self.api_client.get(
+                "/api/v1/reception/patients/search", params={"q": q}
+            ),
             self._on_patient_search_results,
             loading_text="Đang tra cứu hồ sơ bệnh nhân...",
         )
@@ -540,13 +583,11 @@ class BookForPatientView(BaseApiView):
                 self.search_results_table.setItem(row, 2, dob_item)
 
                 btn_select = QPushButton("Chọn")
+                btn_select.setObjectName("tableActionPrimary")
                 btn_select.setCursor(Qt.PointingHandCursor)
-                btn_select.setStyleSheet(
-                    "background-color: #0369a1; color: white; border-radius: 4px; padding: 2px 8px; font-weight: 600;"
-                )
                 btn_select.clicked.connect(lambda _, pat=p: self._select_patient(pat))
                 self.search_results_table.setCellWidget(row, 3, btn_select)
-                self.search_results_table.setRowHeight(row, 36)
+                self.search_results_table.setRowHeight(row, 40)
 
             self.feedback.show_message(
                 "Tìm thấy nhiều kết quả",
@@ -577,7 +618,9 @@ class BookForPatientView(BaseApiView):
                 self.dob_edit.setDate(qdate)
 
         # Update patient status indicator
-        self.pt_type_badge.setText(f"Hồ sơ bệnh nhân cũ (#PT-{self._selected_patient_id})")
+        self.pt_type_badge.setText(
+            f"Hồ sơ bệnh nhân cũ (#PT-{self._selected_patient_id})"
+        )
         self.pt_type_badge.setStyleSheet(
             "background-color: #e0f2fe; color: #0369a1; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 10px;"
         )
@@ -693,7 +736,10 @@ class BookForPatientView(BaseApiView):
 
         self.run_api_task(
             "load_patient_history",
-            lambda: self.api_client.get("/api/v1/reception/appointments", params={"keyword": phone, "page_size": 10}),
+            lambda: self.api_client.get(
+                "/api/v1/reception/appointments",
+                params={"keyword": phone, "page_size": 10},
+            ),
             self._on_history_loaded,
             loading_text="Đang tải lịch sử khám...",
         )
@@ -751,7 +797,9 @@ class BookForPatientView(BaseApiView):
         # Patient name
         pt_name = self.name_input.text().strip()
         if self._selected_patient:
-            self.lbl_prev_patient.setText(f"{pt_name} (#PT-{self._selected_patient_id})")
+            self.lbl_prev_patient.setText(
+                f"{pt_name} (#PT-{self._selected_patient_id})"
+            )
         elif pt_name:
             self.lbl_prev_patient.setText(f"{pt_name} (BN mới)")
         else:
@@ -759,7 +807,9 @@ class BookForPatientView(BaseApiView):
 
         # Reason
         reason_text = self.reason_input.toPlainText().strip()
-        self.lbl_prev_reason.setText(reason_text if reason_text else "Tiếp nhận tại quầy phòng khám")
+        self.lbl_prev_reason.setText(
+            reason_text if reason_text else "Tiếp nhận tại quầy phòng khám"
+        )
 
         # Status badge
         is_autoconfirm = self.chk_autoconfirm.isChecked()
@@ -793,7 +843,11 @@ class BookForPatientView(BaseApiView):
 
         doctor_id = self.doctor_combo.currentData()
         if not doctor_id:
-            self.feedback.show_message("Chưa chọn bác sĩ", "Vui lòng chọn bác sĩ phụ trách khám.", severity="danger")
+            self.feedback.show_message(
+                "Chưa chọn bác sĩ",
+                "Vui lòng chọn bác sĩ phụ trách khám.",
+                severity="danger",
+            )
             return
 
         time_parts = self.time_combo.currentText().split(" - ")
@@ -809,7 +863,8 @@ class BookForPatientView(BaseApiView):
             "appointment_date": appt_date,
             "start_time": start_str,
             "end_time": end_str,
-            "reason": self.reason_input.toPlainText().strip() or "Đặt lịch khám tại quầy tiếp đón",
+            "reason": self.reason_input.toPlainText().strip()
+            or "Đặt lịch khám tại quầy tiếp đón",
             "auto_confirm": self.chk_autoconfirm.isChecked(),
         }
 
@@ -827,7 +882,9 @@ class BookForPatientView(BaseApiView):
 
         self.run_api_task(
             "book_for_patient",
-            lambda: self.api_client.post("/api/v1/reception/appointments/book", json=payload),
+            lambda: self.api_client.post(
+                "/api/v1/reception/appointments/book", json=payload
+            ),
             self._on_booking_success,
             loading_text="Đang lưu lịch hẹn khám...",
         )

@@ -74,6 +74,7 @@ class PaymentHistoryView(BaseApiView):
         filter_bar.addWidget(self.method_combo, 1)
 
         self.btn_filter = QPushButton("Lọc")
+        self.btn_filter.setCursor(Qt.PointingHandCursor)
         self.btn_filter.clicked.connect(self._apply_filter)
         filter_bar.addWidget(self.btn_filter)
 
@@ -193,4 +194,4 @@ class PaymentHistoryView(BaseApiView):
             self.table.setItem(row, 5, method_item)
 
             self.table.setItem(row, 6, QTableWidgetItem(dt))
-            self.table.setRowHeight(row, 40)
+            self.table.setRowHeight(row, 50)

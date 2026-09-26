@@ -80,6 +80,7 @@ class InvoiceManagementView(BaseApiView):
         filter_layout.addWidget(self.status_combo, 1)
 
         self.btn_filter = QPushButton("Lọc")
+        self.btn_filter.setCursor(Qt.PointingHandCursor)
         self.btn_filter.clicked.connect(self._apply_filter)
         filter_layout.addWidget(self.btn_filter)
 
@@ -102,9 +103,10 @@ class InvoiceManagementView(BaseApiView):
         hdr.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
         hdr.setSectionResizeMode(7, QHeaderView.ResizeMode.Fixed)
         self.table.setColumnWidth(6, 110)
-        self.table.setColumnWidth(7, 120)
+        self.table.setColumnWidth(7, 140)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setAlternatingRowColors(True)
         self.table.setItemDelegateForColumn(6, StatusBadgeDelegate(self.table))
         layout.addWidget(self.table)
 
@@ -207,17 +209,13 @@ class InvoiceManagementView(BaseApiView):
 
             action_widget = QWidget()
             act_layout = QHBoxLayout(action_widget)
-            act_layout.setContentsMargins(6, 4, 6, 4)
+            act_layout.setContentsMargins(4, 0, 4, 0)
             act_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             if status == "UNPAID":
                 btn_pay = QPushButton("Thu phí")
+                btn_pay.setObjectName("tableActionPrimary")
                 btn_pay.setCursor(Qt.PointingHandCursor)
-                btn_pay.setFixedHeight(28)
-                btn_pay.setStyleSheet(
-                    "background-color: #15803d; color: white; border-radius: 6px; "
-                    "padding: 4px 14px; font-weight: 600; font-size: 11px;"
-                )
                 btn_pay.clicked.connect(lambda _, i_id=inv_id: self.pay_invoice_requested.emit(i_id))
                 act_layout.addWidget(btn_pay)
             else:
@@ -228,7 +226,7 @@ class InvoiceManagementView(BaseApiView):
                 act_layout.addWidget(paid_label)
 
             self.table.setCellWidget(row, 7, action_widget)
-            self.table.setRowHeight(row, 44)
+            self.table.setRowHeight(row, 50)
 
     def _create_invoice_dialog(self) -> None:
         dialog = QDialog(self)
@@ -242,7 +240,7 @@ class InvoiceManagementView(BaseApiView):
         d_layout.addLayout(form)
 
         items_label = QLabel("Chi tiết dịch vụ:")
-        items_label.setStyleSheet("font-weight: 700; margin-top: 10px;")
+        items_label.setObjectName("fieldLabel")
         d_layout.addWidget(items_label)
 
         # Simple pre-defined line items for quick billing
@@ -268,8 +266,11 @@ class InvoiceManagementView(BaseApiView):
         btn_row = QHBoxLayout()
         btn_cancel = QPushButton("Hủy")
         btn_cancel.setObjectName("secondaryButton")
+        btn_cancel.setCursor(Qt.PointingHandCursor)
         btn_cancel.clicked.connect(dialog.reject)
         btn_submit = QPushButton("Tạo hóa đơn")
+        btn_submit.setObjectName("primaryButton")
+        btn_submit.setCursor(Qt.PointingHandCursor)
         btn_submit.clicked.connect(dialog.accept)
         btn_row.addWidget(btn_cancel)
         btn_row.addWidget(btn_submit)
