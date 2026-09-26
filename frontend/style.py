@@ -114,11 +114,202 @@ QFrame#tableCard,
 QFrame#filterBar,
 QFrame#appointmentCard,
 QFrame#infoCard,
-QFrame#profileHero,
-QFrame#authCard {
+QFrame#profileHero {
     background-color: #ffffff;
     border: 1px solid #D7E0EA;
     border-radius: 14px;
+}
+
+/* Auth Hero & Auth Card (Dual-Panel Layout) */
+QFrame#authHero {
+    background-color: #ffffff;
+    border: 1px solid #E2E8F0;
+    border-radius: 16px;
+}
+
+QFrame#authCard {
+    background-color: #ffffff;
+    border: 1px solid #D7E0EA;
+    border-radius: 16px;
+}
+
+/* Scroll area and container in Auth views */
+QScrollArea#authScroll,
+QScrollArea#authScroll > QWidget,
+QScrollArea#authScroll > QWidget > QWidget,
+QWidget#authContainer {
+    background-color: transparent;
+    border: none;
+}
+
+/* Ensure labels, checkboxes, and field wrappers inside auth cards have clean transparent background */
+QFrame#authCard QLabel,
+QFrame#authCard QCheckBox,
+QFrame#authCard QWidget#fieldWrapper {
+    background-color: transparent;
+}
+
+QFrame#authCard QLineEdit,
+QFrame#authCard QComboBox,
+QFrame#authCard QDateEdit,
+QFrame#authCard QTextEdit {
+    background-color: #ffffff;
+    color: #0f172a;
+    border: 1.5px solid #CBD5E1;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    min-height: 20px;
+}
+
+QFrame#authCard QLineEdit:focus,
+QFrame#authCard QComboBox:focus,
+QFrame#authCard QDateEdit:focus,
+QFrame#authCard QTextEdit:focus {
+    border-color: #0f766e;
+    background-color: #ffffff;
+}
+
+/* Primary and Secondary button variants inside Auth Card */
+QFrame#authCard QPushButton#primaryButton {
+    background-color: #0f766e;
+    color: #ffffff;
+    border: 1px solid #0f766e;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+QFrame#authCard QPushButton#primaryButton:hover {
+    background-color: #0D9488;
+    border-color: #0D9488;
+}
+
+QFrame#authCard QPushButton#primaryButton:pressed {
+    background-color: #134e4a;
+    border-color: #134e4a;
+}
+
+QFrame#authCard QPushButton#secondaryButton {
+    background-color: #ffffff;
+    color: #0f172a;
+    border: 1.5px solid #CBD5E1;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+QFrame#authCard QPushButton#secondaryButton:hover {
+    background-color: #F8FAFC;
+    color: #0f766e;
+    border-color: #0f766e;
+}
+
+QFrame#authCard QPushButton#secondaryButton:pressed {
+    background-color: #f1f5f9;
+}
+
+QLabel#authTagLabel {
+    color: #0f766e;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+QLabel#authMainTitle {
+    color: #0f172a;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+QLabel#authBrandMark {
+    background-color: #0f766e;
+    color: #ffffff;
+    border-radius: 10px;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+QLabel#authBrand {
+    color: #0f172a;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+QLabel#authHeroTitle {
+    color: #0f172a;
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+QLabel#authHeroText {
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+QLabel#authHeroBullet {
+    color: #334155;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+QLabel#authTrustBadge {
+    background-color: #F0FDF4;
+    color: #166534;
+    border: 1px solid #BBF7D0;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+QLabel#authTitle {
+    color: #0f172a;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+}
+
+QLabel#authSectionHeader {
+    color: #0f766e;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding-top: 2px;
+    padding-bottom: 0px;
+}
+
+/* =========================================================================
+   CHECKBOXES
+   ========================================================================= */
+QCheckBox {
+    background-color: transparent;
+    color: #475569;
+    font-size: 13px;
+    font-weight: 500;
+    spacing: 8px;
+}
+
+QCheckBox::indicator {
+    width: 18px;
+    height: 18px;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 4px;
+    background-color: #ffffff;
+}
+
+QCheckBox::indicator:hover {
+    border-color: #0f766e;
+}
+
+QCheckBox::indicator:checked {
+    background-color: #0f766e;
+    border-color: #0f766e;
 }
 
 QFrame#pageHeader {

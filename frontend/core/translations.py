@@ -43,17 +43,21 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     # --------------------------------------------------------------------------
     # Authentication (Login & Register)
     # --------------------------------------------------------------------------
+    "portal_tag": {
+        "vi": "CỔNG THÔNG TIN BỆNH NHÂN",
+        "en": "PATIENT PORTAL",
+    },
     "welcome_back": {
-        "vi": "CHÀO MỪNG TRỞ LẠI",
-        "en": "WELCOME BACK",
+        "vi": "CỔNG THÔNG TIN BỆNH NHÂN",
+        "en": "PATIENT PORTAL",
     },
     "sign_in_title": {
-        "vi": "Đăng nhập vào ClinicCare",
-        "en": "Sign in to ClinicCare",
+        "vi": "ClinicCare",
+        "en": "ClinicCare",
     },
     "sign_in_subtitle": {
-        "vi": "Sử dụng tài khoản bệnh nhân của bạn để tiếp tục.",
-        "en": "Use your patient username to continue.",
+        "vi": "Đăng nhập để tiếp tục",
+        "en": "Sign in to continue",
     },
     "username": {
         "vi": "Tên đăng nhập",
@@ -76,12 +80,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Create a patient account",
     },
     "register_title": {
-        "vi": "Tạo tài khoản bệnh nhân mới",
-        "en": "Create your patient account",
+        "vi": "ClinicCare",
+        "en": "ClinicCare",
     },
     "register_subtitle": {
-        "vi": "Điền các thông tin cơ bản để bắt đầu sử dụng cổng bệnh nhân.",
-        "en": "Fill in your details to start using the patient portal.",
+        "vi": "Đăng ký tài khoản bệnh nhân để tiếp tục",
+        "en": "Create your patient account to continue",
     },
     "full_name": {
         "vi": "Họ và tên",
@@ -130,6 +134,118 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "back_to_login": {
         "vi": "Quay lại đăng nhập",
         "en": "Back to login",
+    },
+    "register_eyebrow": {
+        "vi": "CỔNG THÔNG TIN BỆNH NHÂN",
+        "en": "PATIENT PORTAL",
+    },
+    "account_info": {
+        "vi": "Thông tin tài khoản",
+        "en": "Account information",
+    },
+    "personal_info": {
+        "vi": "Thông tin cá nhân",
+        "en": "Personal information",
+    },
+    "register_hero_title": {
+        "vi": "Khởi đầu hành trình chăm sóc sức khỏe toàn diện.",
+        "en": "Begin your journey to comprehensive healthcare.",
+    },
+    "register_hero_desc": {
+        "vi": "Tạo tài khoản bệnh nhân để dễ dàng đặt lịch khám, theo dõi hồ sơ y tế và quản lý hóa đơn viện phí.",
+        "en": "Create a patient account to easily book appointments, track medical records, and manage clinic invoices.",
+    },
+    "register_bullet_1": {
+        "vi": "Đặt lịch khám với bác sĩ chuyên khoa nhanh chóng",
+        "en": "Fast appointment booking with specialists",
+    },
+    "register_bullet_2": {
+        "vi": "Tra cứu hồ sơ bệnh án và đơn thuốc điện tử an toàn",
+        "en": "Secure access to medical records and prescriptions",
+    },
+    "register_bullet_3": {
+        "vi": "Theo dõi chi phí và hóa đơn thanh toán minh bạch",
+        "en": "Transparent tracking of clinic fees and invoices",
+    },
+    "register_bullet_4": {
+        "vi": "Bảo mật tuyệt đối thông tin sức khỏe cá nhân",
+        "en": "Complete privacy and security for personal health data",
+    },
+    "username_placeholder": {
+        "vi": "Nhập tên đăng nhập...",
+        "en": "Enter your username...",
+    },
+    "password_placeholder": {
+        "vi": "Nhập mật khẩu (tối thiểu 8 ký tự)...",
+        "en": "Enter password (min 8 characters)...",
+    },
+    "confirm_password_placeholder": {
+        "vi": "Nhập lại mật khẩu...",
+        "en": "Re-enter your password...",
+    },
+    "full_name_placeholder": {
+        "vi": "Nhập họ và tên...",
+        "en": "Enter your full name...",
+    },
+    "phone_placeholder": {
+        "vi": "Nhập số điện thoại...",
+        "en": "Enter your phone number...",
+    },
+    "email_placeholder": {
+        "vi": "Nhập địa chỉ email...",
+        "en": "Enter your email address...",
+    },
+    "address_placeholder": {
+        "vi": "Nhập địa chỉ nơi ở...",
+        "en": "Enter residential address...",
+    },
+    "already_have_account": {
+        "vi": "Đã có tài khoản? Đăng nhập ngay",
+        "en": "Already have an account? Sign in",
+    },
+    "create_account_help": {
+        "vi": "Cần hỗ trợ đăng ký? Liên hệ trực tiếp phòng khám.",
+        "en": "Need help registering? Contact your clinic directly.",
+    },
+    "err_username_required": {
+        "vi": "Tên đăng nhập không được để trống.",
+        "en": "Username is required.",
+    },
+    "err_password_len": {
+        "vi": "Mật khẩu phải có ít nhất 8 ký tự.",
+        "en": "Password must be at least 8 characters.",
+    },
+    "err_password_match": {
+        "vi": "Mật khẩu xác nhận không khớp.",
+        "en": "Passwords do not match.",
+    },
+    "err_fullname_required": {
+        "vi": "Họ và tên không được để trống.",
+        "en": "Full name is required.",
+    },
+    "err_email_invalid": {
+        "vi": "Địa chỉ email không hợp lệ.",
+        "en": "Enter a valid email address.",
+    },
+    "err_phone_invalid": {
+        "vi": "Số điện thoại phải từ 7 đến 14 chữ số.",
+        "en": "Phone must contain 7 to 14 digits.",
+    },
+    "err_address_len": {
+        "vi": "Địa chỉ không được vượt quá 255 ký tự.",
+        "en": "Address must be 255 characters or fewer.",
+    },
+    "err_password_required": {
+        "vi": "Mật khẩu không được để trống.",
+        "en": "Password is required.",
+    },
+    "check_details": {
+        "vi": "Vui lòng kiểm tra lại",
+        "en": "Check your details",
+    },
+    "signing_in": {
+        "vi": "Đang đăng nhập…",
+        "en": "Signing in…",
     },
     # --------------------------------------------------------------------------
     # Navigation & Sidebar

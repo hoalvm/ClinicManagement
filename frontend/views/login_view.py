@@ -31,7 +31,7 @@ class LoginView(BaseApiView):
         self.setObjectName("authPage")
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(34, 18, 34, 24)
+        root.setContentsMargins(32, 16, 32, 24)
 
         # Top bar with Language Selector
         top_bar = QHBoxLayout()
@@ -41,109 +41,81 @@ class LoginView(BaseApiView):
         root.addLayout(top_bar)
         root.addStretch()
 
-        shell = QWidget()
-        shell.setMaximumWidth(990)
-        shell_layout = QHBoxLayout(shell)
-        shell_layout.setContentsMargins(0, 0, 0, 0)
-        shell_layout.setSpacing(22)
-
-        hero = QFrame()
-        hero.setObjectName("authHero")
-        hero.setMinimumWidth(350)
-        hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(34, 34, 34, 34)
-        hero_layout.setSpacing(14)
-
-        brand_row = QHBoxLayout()
-        brand_mark = QLabel("+")
-        brand_mark.setObjectName("authBrandMark")
-        brand_mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        brand_mark.setFixedSize(42, 42)
-        brand = QLabel("ClinicCare")
-        brand.setObjectName("authBrand")
-        brand_row.addWidget(brand_mark)
-        brand_row.addWidget(brand)
-        brand_row.addStretch()
-        hero_layout.addLayout(brand_row)
-        hero_layout.addStretch()
-
-        self.hero_title = QLabel("Your health information,\nin one calm place.")
-        self.hero_title.setObjectName("authHeroTitle")
-        self.hero_title.setWordWrap(True)
-        hero_layout.addWidget(self.hero_title)
-
-        self.hero_text = QLabel(
-            "Review appointments, medical records, prescriptions, and invoices "
-            "through one secure patient portal."
-        )
-        self.hero_text.setObjectName("authHeroText")
-        self.hero_text.setWordWrap(True)
-        hero_layout.addWidget(self.hero_text)
-        hero_layout.addSpacing(10)
-
-        self.feature_labels: list[QLabel] = []
-        for _ in range(3):
-            lbl = QLabel()
-            lbl.setObjectName("authHeroText")
-            lbl.setWordWrap(True)
-            hero_layout.addWidget(lbl)
-            self.feature_labels.append(lbl)
-        hero_layout.addStretch()
-
-        self.secure_label = QLabel("SECURE PATIENT PORTAL")
-        self.secure_label.setObjectName("sectionEyebrow")
-        hero_layout.addWidget(self.secure_label)
-
+        # Centered auth card
         card = QFrame()
         card.setObjectName("authCard")
-        card.setMinimumWidth(390)
+        card.setMinimumWidth(400)
         card.setMaximumWidth(450)
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(38, 36, 38, 36)
-        card_layout.setSpacing(11)
+        card_layout.setContentsMargins(36, 36, 36, 36)
+        card_layout.setSpacing(14)
 
-        self.eyebrow_label = QLabel("WELCOME BACK")
-        self.eyebrow_label.setObjectName("sectionEyebrow")
-        self.title_label = QLabel("Sign in to ClinicCare")
-        self.title_label.setObjectName("authTitle")
-        self.subtitle_label = QLabel("Use your patient username to continue.")
-        self.subtitle_label.setObjectName("mutedLabel")
-        self.subtitle_label.setWordWrap(True)
-        card_layout.addWidget(self.eyebrow_label)
+        # Header branding - clean typography, NO ICONS
+        self.tag_label = QLabel()
+        self.tag_label.setObjectName("authTagLabel")
+        self.tag_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card_layout.addWidget(self.tag_label)
+
+        self.title_label = QLabel("ClinicCare")
+        self.title_label.setObjectName("authMainTitle")
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_layout.addWidget(self.title_label)
-        card_layout.addWidget(self.subtitle_label)
-        card_layout.addSpacing(12)
 
+        self.subtitle_label = QLabel()
+        self.subtitle_label.setObjectName("mutedLabel")
+        self.subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.subtitle_label.setWordWrap(True)
+        card_layout.addWidget(self.subtitle_label)
+
+        card_layout.addSpacing(4)
+        card_layout.addWidget(self.feedback)
+        card_layout.addWidget(self.loading)
+
+        # Username input
+        user_box = QVBoxLayout()
+        user_box.setSpacing(5)
         self.username_label = QLabel("Username")
+        self.username_label.setObjectName("fieldLabel")
         self.username = QLineEdit()
         self.username.setMaxLength(50)
         self.username.setClearButtonEnabled(True)
         self.username.setAccessibleName("Username")
         self.username_label.setBuddy(self.username)
-        card_layout.addWidget(self.username_label)
-        card_layout.addWidget(self.username)
+        user_box.addWidget(self.username_label)
+        user_box.addWidget(self.username)
+        card_layout.addLayout(user_box)
 
+        # Password input
+        pwd_box = QVBoxLayout()
+        pwd_box.setSpacing(5)
         self.password_label = QLabel("Password")
+        self.password_label.setObjectName("fieldLabel")
         self.password = QLineEdit()
         self.password.setMaxLength(128)
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
         self.password.setAccessibleName("Password")
         self.password_label.setBuddy(self.password)
-        card_layout.addWidget(self.password_label)
-        card_layout.addWidget(self.password)
+        pwd_box.addWidget(self.password_label)
+        pwd_box.addWidget(self.password)
+        card_layout.addLayout(pwd_box)
 
         self.show_password = QCheckBox("Show password")
+        self.show_password.setCursor(Qt.PointingHandCursor)
         self.show_password.setAccessibleName("Show password")
         self.show_password.toggled.connect(self._toggle_password)
         card_layout.addWidget(self.show_password)
-        card_layout.addWidget(self.feedback)
-        card_layout.addWidget(self.loading)
+
+        card_layout.addSpacing(4)
 
         self.login_button = QPushButton("Sign in")
         self.login_button.setObjectName("primaryButton")
+        self.login_button.setCursor(Qt.PointingHandCursor)
+        self.login_button.setMinimumHeight(42)
         self.login_button.setAccessibleName("Sign in")
         self.register_button = QPushButton("Create a patient account")
         self.register_button.setObjectName("secondaryButton")
+        self.register_button.setCursor(Qt.PointingHandCursor)
+        self.register_button.setMinimumHeight(40)
         card_layout.addWidget(self.login_button)
         card_layout.addWidget(self.register_button)
 
@@ -152,12 +124,9 @@ class LoginView(BaseApiView):
         self.help_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_layout.addWidget(self.help_text)
 
-        shell_layout.addWidget(hero, 1)
-        shell_layout.addWidget(card, 1)
-
         centered = QHBoxLayout()
         centered.addStretch()
-        centered.addWidget(shell)
+        centered.addWidget(card)
         centered.addStretch()
         root.addLayout(centered)
         root.addStretch()
@@ -173,21 +142,13 @@ class LoginView(BaseApiView):
 
     def retranslate_ui(self) -> None:
         """Update all text in LoginView according to current language."""
-        self.hero_title.setText(t("tagline"))
-        self.hero_text.setText(t("tagline_desc"))
-        features = [
-            f"•  {t('hero_bullet_1')}",
-            f"•  {t('hero_bullet_2')}",
-            f"•  {t('hero_bullet_3')}",
-        ]
-        for lbl, feat in zip(self.feature_labels, features, strict=False):
-            lbl.setText(feat)
-        self.secure_label.setText(t("secure_portal"))
-        self.eyebrow_label.setText(t("welcome_back"))
+        self.tag_label.setText(t("portal_tag"))
         self.title_label.setText(t("sign_in_title"))
         self.subtitle_label.setText(t("sign_in_subtitle"))
         self.username_label.setText(t("username"))
+        self.username.setPlaceholderText(t("username_placeholder", default="Nhập tên đăng nhập..."))
         self.password_label.setText(t("password"))
+        self.password.setPlaceholderText(t("password_placeholder", default="Nhập mật khẩu..."))
         self.show_password.setText(t("show_password"))
         self.login_button.setText(t("sign_in_button"))
         self.register_button.setText(t("create_account_button"))
@@ -214,10 +175,10 @@ class LoginView(BaseApiView):
         username = self.username.text().strip()
         password = self.password.text()
         if not username:
-            self._show_validation(self.username, "Enter your username to continue.")
+            self._show_validation(self.username, t("err_username_required"))
             return
         if not password:
-            self._show_validation(self.password, "Enter your password to continue.")
+            self._show_validation(self.password, t("err_password_required"))
             return
 
         def authenticate() -> tuple[str, dict[str, Any]]:
@@ -259,7 +220,7 @@ class LoginView(BaseApiView):
                 self.login_button,
                 self.register_button,
             ),
-            loading_text="Signing in…",
+            loading_text=t("signing_in"),
             expire_on_401=False,
         )
 
@@ -267,7 +228,7 @@ class LoginView(BaseApiView):
         field.setProperty("error", True)
         field.style().unpolish(field)
         field.style().polish(field)
-        self.feedback.show_message("Check your details", message, severity="error")
+        self.feedback.show_message(t("check_details"), message, severity="error")
         field.setFocus()
         field.selectAll()
 
