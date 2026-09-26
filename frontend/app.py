@@ -181,13 +181,14 @@ class DoctorScheduleView(QWidget):
         self.table.setShowGrid(False)
 
         h = self.table.horizontalHeader()
-        h.setFixedHeight(38)
+        h.setFixedHeight(40)
         h.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         h.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         h.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         h.setSectionResizeMode(3, QHeaderView.Stretch)
         h.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        h.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        h.setSectionResizeMode(5, QHeaderView.Fixed)
+        self.table.setColumnWidth(5, 160)
         self.table.setItemDelegateForColumn(4, StatusBadgeDelegate(self.table))
 
         card_layout.addWidget(self.table)
@@ -232,9 +233,10 @@ class DoctorScheduleView(QWidget):
             btn_accept = QPushButton(
                 "Đang khám" if status_text == "IN_PROGRESS" else "Tiếp nhận khám"
             )
-            btn_accept.setObjectName("primaryButton")
+            btn_accept.setObjectName("tableActionPrimary")
             btn_accept.setCursor(Qt.PointingHandCursor)
-            btn_accept.setFixedSize(120, 28)
+            btn_accept.setMinimumWidth(130)
+            btn_accept.setFixedHeight(32)
             btn_accept.clicked.connect(lambda _, a=appt: self.accept_patient(a))
 
             actions_widget = QWidget()
@@ -244,7 +246,7 @@ class DoctorScheduleView(QWidget):
             actions_layout.addWidget(btn_accept)
 
             self.table.setCellWidget(row, 5, actions_widget)
-            self.table.setRowHeight(row, 44)
+            self.table.setRowHeight(row, 50)
 
     def accept_patient(self, appt):
         if appt.get("Status") == "IN_PROGRESS":
@@ -413,7 +415,7 @@ class MedicalExamView(QWidget):
         self.table_med.setShowGrid(False)
 
         h_med = self.table_med.horizontalHeader()
-        h_med.setFixedHeight(34)
+        h_med.setFixedHeight(38)
         h_med.setSectionResizeMode(0, QHeaderView.Stretch)
         h_med.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         h_med.setSectionResizeMode(2, QHeaderView.ResizeToContents)
@@ -470,7 +472,7 @@ class MedicalExamView(QWidget):
         self.table_med.setItem(row, 1, QTableWidgetItem(dosage or "—"))
         self.table_med.setItem(row, 2, QTableWidgetItem(str(qty)))
         self.table_med.setItem(row, 3, QTableWidgetItem(instructions))
-        self.table_med.setRowHeight(row, 36)
+        self.table_med.setRowHeight(row, 44)
 
         self.in_med.clear()
         self.in_dosage.clear()

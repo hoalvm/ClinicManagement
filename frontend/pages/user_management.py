@@ -140,8 +140,10 @@ class UserManagementPage(QWidget):
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.Stretch)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.Fixed)
+        header.setSectionResizeMode(5, QHeaderView.Fixed)
+        self.table.setColumnWidth(4, 135)
+        self.table.setColumnWidth(5, 160)
         self.table.setItemDelegateForColumn(4, StatusBadgeDelegate(self.table))
 
         table_card_layout.addWidget(self.table)
@@ -184,7 +186,7 @@ class UserManagementPage(QWidget):
             edit_btn = QPushButton("Sửa")
             edit_btn.setObjectName("actionEditBtn")
             edit_btn.setCursor(Qt.PointingHandCursor)
-            edit_btn.setFixedSize(54, 28)
+            edit_btn.setFixedSize(56, 28)
             edit_btn.clicked.connect(
                 lambda _, uid=u["UserID"], un=u["Username"], fn=u["FullName"]: self.open_edit_dialog(
                     uid, un, fn
@@ -194,19 +196,19 @@ class UserManagementPage(QWidget):
             del_btn = QPushButton("Khóa" if is_active else "Mở khóa")
             del_btn.setObjectName("actionDeleteBtn")
             del_btn.setCursor(Qt.PointingHandCursor)
-            del_btn.setFixedSize(68, 28)
+            del_btn.setFixedSize(76, 28)
             del_btn.clicked.connect(lambda _, uid=u["UserID"]: self.delete_user(uid))
 
             actions_widget = QWidget()
             actions_layout = QHBoxLayout(actions_widget)
-            actions_layout.setContentsMargins(6, 0, 6, 0)
+            actions_layout.setContentsMargins(4, 0, 4, 0)
             actions_layout.setSpacing(6)
             actions_layout.setAlignment(Qt.AlignCenter)
             actions_layout.addWidget(edit_btn)
             actions_layout.addWidget(del_btn)
 
             self.table.setCellWidget(row, 5, actions_widget)
-            self.table.setRowHeight(row, 44)
+            self.table.setRowHeight(row, 48)
 
     def add_user(self):
         username = self.username_input.text().strip()

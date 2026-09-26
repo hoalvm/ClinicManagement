@@ -466,10 +466,10 @@ QPushButton#actionEditBtn {
     color: #15803d;
     border: 1px solid #bbf7d0;
     border-radius: 6px;
-    padding: 4px 12px;
+    padding: 3px 8px;
     font-size: 12px;
     font-weight: 600;
-    min-height: 28px;
+    min-height: 26px;
 }
 
 QPushButton#actionEditBtn:hover {
@@ -482,10 +482,10 @@ QPushButton#actionDeleteBtn {
     color: #b91c1c;
     border: 1px solid #fecaca;
     border-radius: 6px;
-    padding: 4px 12px;
+    padding: 3px 8px;
     font-size: 12px;
     font-weight: 600;
-    min-height: 28px;
+    min-height: 26px;
 }
 
 QPushButton#actionDeleteBtn:hover {
@@ -536,13 +536,11 @@ QHeaderView {
 QHeaderView::section {
     background-color: #F8FAFC;
     color: #475569;
-    padding: 11px 14px;
+    padding: 8px 12px;
     border: none;
     border-bottom: 2px solid #D7E0EA;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
 }
 
 /* =========================================================================

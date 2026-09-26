@@ -127,8 +127,10 @@ class ClinicManagementPage(QWidget):
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.Stretch)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.Fixed)
+        header.setSectionResizeMode(5, QHeaderView.Fixed)
+        self.table.setColumnWidth(4, 135)
+        self.table.setColumnWidth(5, 120)
         self.table.setItemDelegateForColumn(4, StatusBadgeDelegate(self.table))
 
         table_card_layout.addWidget(self.table)
@@ -163,17 +165,17 @@ class ClinicManagementPage(QWidget):
             del_btn = QPushButton("Khóa" if is_active else "Mở khóa")
             del_btn.setObjectName("actionDeleteBtn")
             del_btn.setCursor(Qt.PointingHandCursor)
-            del_btn.setFixedSize(68, 28)
+            del_btn.setFixedSize(76, 28)
             del_btn.clicked.connect(lambda _, cid=c["ClinicID"]: self.delete_item(cid))
 
             actions_widget = QWidget()
             actions_layout = QHBoxLayout(actions_widget)
-            actions_layout.setContentsMargins(6, 0, 6, 0)
+            actions_layout.setContentsMargins(4, 0, 4, 0)
             actions_layout.setAlignment(Qt.AlignCenter)
             actions_layout.addWidget(del_btn)
 
             self.table.setCellWidget(row, 5, actions_widget)
-            self.table.setRowHeight(row, 44)
+            self.table.setRowHeight(row, 48)
 
     def add_clinic(self):
         name = self.name_input.text().strip()

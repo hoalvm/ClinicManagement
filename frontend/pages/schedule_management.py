@@ -165,7 +165,8 @@ class ScheduleManagementPage(QWidget):
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.Fixed)
+        self.table.setColumnWidth(5, 100)
 
         table_card_layout.addWidget(self.table)
         layout.addWidget(table_card, 1)
@@ -220,17 +221,17 @@ class ScheduleManagementPage(QWidget):
             del_btn = QPushButton("Xóa")
             del_btn.setObjectName("actionDeleteBtn")
             del_btn.setCursor(Qt.PointingHandCursor)
-            del_btn.setFixedSize(54, 28)
+            del_btn.setFixedSize(60, 28)
             del_btn.clicked.connect(lambda _, sid=s["ScheduleID"]: self.delete_item(sid))
 
             actions_widget = QWidget()
             actions_layout = QHBoxLayout(actions_widget)
-            actions_layout.setContentsMargins(6, 0, 6, 0)
+            actions_layout.setContentsMargins(4, 0, 4, 0)
             actions_layout.setAlignment(Qt.AlignCenter)
             actions_layout.addWidget(del_btn)
 
             self.table.setCellWidget(row, 5, actions_widget)
-            self.table.setRowHeight(row, 44)
+            self.table.setRowHeight(row, 48)
 
     def add_schedule(self):
         self.load_doctors()
