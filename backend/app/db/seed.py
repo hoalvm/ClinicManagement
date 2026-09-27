@@ -961,12 +961,17 @@ def seed_database(session: Session) -> None:
 
 def main() -> None:
     try:
+        from backend.app.db.init_db import ensure_database_initialized
+
+        ensure_database_initialized()
         with SessionLocal() as session:
             seed_database(session)
     except SQLAlchemyError as exc:
         raise SystemExit(
             f"Seed failed: {exc}. Verify SQL Server, ClinicManagementDB, credentials, and ODBC Driver 18."
         ) from None
+    except Exception as exc:
+        raise SystemExit(f"Database initialization failed before seed: {exc}") from None
     print("Seed completed successfully. Database populated with realistic clinical demonstration dataset.")
 
 
