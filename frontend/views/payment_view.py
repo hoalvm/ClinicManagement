@@ -46,7 +46,7 @@ class PaymentView(BaseApiView):
 
         self.header = PageHeader(
             "Thu phí",
-            "Thanh toán và xuất biên lai",
+            "Tìm hóa đơn, ghi nhận thanh toán và xuất biên lai.",
             parent=self,
         )
         layout.addWidget(self.header)
@@ -60,17 +60,17 @@ class PaymentView(BaseApiView):
         lookup_layout.setContentsMargins(18, 14, 18, 14)
         lookup_layout.setSpacing(12)
 
-        lookup_label = QLabel("Mã hóa đơn:")
+        lookup_label = QLabel("Tìm hóa đơn")
         lookup_label.setObjectName("fieldLabel")
         lookup_layout.addWidget(lookup_label)
 
         self.inv_input = QLineEdit()
-        self.inv_input.setPlaceholderText("Nhập mã hóa đơn...")
+        self.inv_input.setPlaceholderText("Nhập mã hóa đơn hoặc số điện thoại")
         self.inv_input.setAccessibleName("Mã hóa đơn hoặc số điện thoại bệnh nhân")
         self.inv_input.returnPressed.connect(self._fetch_invoice)
         lookup_layout.addWidget(self.inv_input, 2)
 
-        self.btn_find = QPushButton("Tìm kiếm")
+        self.btn_find = QPushButton("Tìm hóa đơn")
         self.btn_find.setCursor(Qt.PointingHandCursor)
         self.btn_find.clicked.connect(self._fetch_invoice)
         lookup_layout.addWidget(self.btn_find)

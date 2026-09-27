@@ -47,11 +47,13 @@ class ReceptionDashboardView(BaseApiView):
 
         # Page Header
         self.header = PageHeader(
-            "Tiếp đón",
+            "Tổng quan",
             "Hàng đợi tiếp nhận và chỉ số hoạt động trong ngày",
             action_label="Làm mới",
             parent=self,
         )
+        if self.header.action_button is not None:
+            self.header.action_button.setObjectName("secondaryButton")
         self.header.action_clicked.connect(self.refresh)
         content_layout.addWidget(self.header)
         content_layout.addWidget(self.feedback)
@@ -74,7 +76,7 @@ class ReceptionDashboardView(BaseApiView):
         self.btn_check_in.clicked.connect(lambda: self.navigate_requested.emit("check_in"))
         quick_actions_layout.addWidget(self.btn_check_in)
 
-        self.btn_book = QPushButton("Đặt lịch")
+        self.btn_book = QPushButton("Đặt lịch hộ")
         self.btn_book.setObjectName("secondaryButton")
         self.btn_book.setCursor(Qt.PointingHandCursor)
         self.btn_book.clicked.connect(lambda: self.navigate_requested.emit("book_for_patient"))
@@ -102,7 +104,7 @@ class ReceptionDashboardView(BaseApiView):
 
         self.card_today = StatCard("Lịch hẹn hôm nay", "0", tone="brand", parent=self)
         self.card_pending = StatCard("Chờ xác nhận", "0", tone="warning", parent=self)
-        self.card_checked_in = StatCard("Đang chờ khám", "0", tone="info", parent=self)
+        self.card_checked_in = StatCard("Đã tiếp nhận", "0", tone="info", parent=self)
         self.card_unpaid = StatCard("Chưa thanh toán", "0", tone="error", parent=self)
 
         self._stat_cards = [

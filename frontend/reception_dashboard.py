@@ -30,13 +30,13 @@ class ReceptionDashboard(QMainWindow):
     SIDEBAR_COMPACT_BREAKPOINT = 1320
 
     _NAVIGATION = (
-        NavigationItem("dashboard", "Tiếp đón", "dashboard", "NGHIỆP VỤ"),
-        NavigationItem("check_in", "Tiếp nhận", "medical"),
-        NavigationItem("book_for_patient", "Đặt lịch", "calendar"),
+        NavigationItem("dashboard", "Tổng quan", "dashboard", "NGHIỆP VỤ"),
+        NavigationItem("check_in", "Tiếp nhận bệnh nhân", "medical"),
+        NavigationItem("book_for_patient", "Đặt lịch hộ", "calendar"),
         NavigationItem("appointment_management", "Lịch hẹn", "calendar"),
         NavigationItem("invoice_management", "Hóa đơn", "invoice", "THU NGÂN"),
         NavigationItem("payment", "Thu phí", "invoice"),
-        NavigationItem("payment_history", "Lịch sử thu", "invoice"),
+        NavigationItem("payment_history", "Lịch sử thanh toán", "invoice"),
     )
 
     def __init__(self, api_client: ApiClient | None = None) -> None:

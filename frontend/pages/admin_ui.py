@@ -1,9 +1,4 @@
-"""Small UI helpers shared by the legacy Admin management pages.
-
-The Admin screens still use ``QTableWidget`` because their CRUD behaviour is
-stable.  These helpers give those tables one predictable, accessible layout
-policy without coupling them to the patient portal's model/view stack.
-"""
+"""Shared asynchronous lifecycle and list-first UI helpers for Admin pages."""
 
 from __future__ import annotations
 
@@ -11,21 +6,27 @@ from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 from PySide6.QtCore import QObject, Qt, QThreadPool, Signal, Slot
+from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
-    QAbstractItemView,
+    QDialog,
+    QDialogButtonBox,
+    QFrame,
+    QGridLayout,
     QHBoxLayout,
-    QHeaderView,
+    QLabel,
     QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
 from frontend.api.workers import ApiWorker
 from frontend.widgets.feedback_banner import FeedbackBanner
+from frontend.widgets.filter_toolbar import FilterToolbar
+from frontend.widgets.form_field import FormField
 from frontend.widgets.loading_indicator import LoadingIndicator
 from frontend.widgets.state_host import StateHost
+from frontend.widgets.table_actions import RowAction, TableActionMenu
 
 
 class AdminApiError(RuntimeError):
@@ -268,90 +269,224 @@ class AdminApiPage(QWidget):
         return key in self._admin_workers
 
 
-def configure_admin_table(
-    table: QTableWidget,
-    *,
-    accessible_name: str,
-    stretch_column: int,
-    fixed_widths: Mapping[int, int],
-) -> None:
-    """Apply a bounded, read-only column policy suitable for 1100px windows."""
+class AdminSearchBar(FilterToolbar):
+    """Compatibility facade over the shared responsive filter toolbar."""
 
-    table.setAccessibleName(accessible_name)
-    table.setAlternatingRowColors(True)
-    table.verticalHeader().setVisible(False)
-    table.setShowGrid(False)
-    table.setWordWrap(False)
-    table.setTextElideMode(Qt.TextElideMode.ElideRight)
-    table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-    table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-    table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-    table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
-    table.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
-    table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+    def __init__(
+        self,
+        placeholder: str,
+        parent: QWidget | None = None,
+        *,
+        delay_ms: int = 350,
+    ) -> None:
+        super().__init__(
+            placeholder,
+            parent,
+            debounce_ms=delay_ms,
+            clear_text="Xóa bộ lọc",
+            search_accessible_name=placeholder,
+        )
+        self.input = self.search_input
 
-    header = table.horizontalHeader()
-    header.setFixedHeight(38)
-    header.setStretchLastSection(False)
-    header.setCascadingSectionResizes(False)
-    header.setMinimumSectionSize(48)
-    for column in range(table.columnCount()):
-        header.setSectionResizeMode(column, QHeaderView.ResizeMode.Fixed)
-        header_item = table.horizontalHeaderItem(column)
-        if header_item is not None:
-            header_item.setToolTip(header_item.text())
-            header_item.setData(Qt.ItemDataRole.AccessibleTextRole, header_item.text())
-
-    for column, width in fixed_widths.items():
-        table.setColumnWidth(column, width)
-
-    header.setSectionResizeMode(stretch_column, QHeaderView.ResizeMode.Stretch)
+    @property
+    def text(self) -> str:
+        return self.search_input.text().strip()
 
 
-def table_item(
-    value: object,
-    *,
-    alignment: Qt.AlignmentFlag | None = None,
-    tooltip: str | None = None,
-    accessible_text: str | None = None,
-) -> QTableWidgetItem:
-    """Create a non-editable item whose complete value remains discoverable."""
+class AdminFormDialog(QDialog):
+    """Responsive two-column form dialog shared by Admin create/edit flows."""
 
-    text = "—" if value is None or str(value).strip() == "" else str(value)
-    item = QTableWidgetItem(text)
-    item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-    if alignment is not None:
-        item.setTextAlignment(alignment)
-    full_text = tooltip if tooltip is not None else text
-    item.setToolTip(full_text)
-    item.setData(
-        Qt.ItemDataRole.AccessibleTextRole,
-        accessible_text if accessible_text is not None else full_text,
-    )
-    return item
+    COMPACT_BREAKPOINT = 620
+
+    def __init__(
+        self,
+        title: str,
+        subtitle: str,
+        parent: QWidget | None = None,
+        *,
+        save_text: str = "Lưu",
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("adminFormDialog")
+        self.setWindowTitle(title)
+        self.setMinimumWidth(520)
+        self.resize(680, 360)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(24, 22, 24, 22)
+        root.setSpacing(14)
+        heading = QLabel(title)
+        heading.setObjectName("sectionTitle")
+        heading.setAccessibleName(title)
+        root.addWidget(heading)
+        supporting = QLabel(subtitle)
+        supporting.setObjectName("mutedLabel")
+        supporting.setWordWrap(True)
+        root.addWidget(supporting)
+
+        self.feedback = FeedbackBanner(self)
+        root.addWidget(self.feedback)
+        self.form_scroll = QScrollArea()
+        self.form_scroll.setWidgetResizable(True)
+        self.form_scroll.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.form_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.form_scroll.setProperty("uiSurface", "transparent")
+        self.form_content = QWidget()
+        self.form_content.setProperty("uiSurface", "transparent")
+        self.fields_layout = QGridLayout(self.form_content)
+        self.fields_layout.setContentsMargins(0, 2, 0, 0)
+        self.fields_layout.setHorizontalSpacing(14)
+        self.fields_layout.setVerticalSpacing(10)
+        self.fields_layout.setColumnStretch(0, 1)
+        self.fields_layout.setColumnStretch(1, 1)
+        self.form_scroll.setWidget(self.form_content)
+        root.addWidget(self.form_scroll, 1)
+
+        self.buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save
+            | QDialogButtonBox.StandardButton.Cancel
+        )
+        self.save_button = self.buttons.button(QDialogButtonBox.StandardButton.Save)
+        self.cancel_button = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
+        self.save_button.setText(save_text)
+        self.save_button.setObjectName("primaryButton")
+        self.cancel_button.setText("Hủy")
+        self.cancel_button.setObjectName("secondaryButton")
+        self.buttons.rejected.connect(self.reject)
+        root.addWidget(self.buttons)
+        self.fields: list[FormField] = []
+        self._field_positions: list[tuple[int, int, int]] = []
+        self._enabled_before_busy: dict[QWidget, bool] = {}
+        self._compact_fields = False
+
+    def add_field(
+        self,
+        label: str,
+        control: QWidget,
+        row: int,
+        column: int = 0,
+        *,
+        required: bool = False,
+        column_span: int = 1,
+    ) -> FormField:
+        field = FormField(label, control, required=required, parent=self)
+        self.fields_layout.addWidget(field, row, column, 1, column_span)
+        self.fields.append(field)
+        self._field_positions.append((row, column, column_span))
+        self._reflow_fields(force=True)
+        return field
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._reflow_fields()
+
+    def _reflow_fields(self, *, force: bool = False) -> None:
+        compact = self.width() < self.COMPACT_BREAKPOINT
+        if not force and compact == self._compact_fields:
+            return
+        for field in self.fields:
+            self.fields_layout.removeWidget(field)
+        if compact:
+            for row, field in enumerate(self.fields):
+                self.fields_layout.addWidget(field, row, 0, 1, 2)
+        else:
+            for field, (row, column, span) in zip(
+                self.fields, self._field_positions, strict=True
+            ):
+                self.fields_layout.addWidget(field, row, column, 1, span)
+        self._compact_fields = compact
+
+    def set_busy(self, busy: bool) -> None:
+        controls = [field.control for field in self.fields]
+        controls.extend((self.save_button, self.cancel_button))
+        if busy:
+            self._enabled_before_busy = {
+                control: control.isEnabled() for control in controls
+            }
+            for control in controls:
+                control.setEnabled(False)
+            return
+        for control in controls:
+            control.setEnabled(self._enabled_before_busy.get(control, True))
+        self._enabled_before_busy.clear()
+
+    def show_request_error(self, title: str, message: str) -> None:
+        self.feedback.show_message(title, message, severity="error")
 
 
-def action_cell(*buttons: QPushButton, accessible_name: str) -> QWidget:
-    """Return a transparent, keyboard-accessible action container for a row."""
+class AdminRowActions(QWidget):
+    """Neutral edit action plus a chevron-free overflow menu for row actions."""
 
-    container = QWidget()
-    container.setObjectName("tableActions")
-    container.setProperty("uiSurface", "transparent")
-    container.setAccessibleName(accessible_name)
-    layout = QHBoxLayout(container)
-    layout.setContentsMargins(4, 0, 4, 0)
-    layout.setSpacing(6)
-    layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    for button in buttons:
-        layout.addWidget(button)
-    return container
+    def __init__(
+        self,
+        accessible_name: str,
+        parent: QWidget | None = None,
+        *,
+        on_edit: Callable[[], None] | None = None,
+        overflow_actions: Iterable[tuple[str, Callable[[], None]]] = (),
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("tableActions")
+        self.setProperty("uiSurface", "transparent")
+        self.setAccessibleName(accessible_name)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(4, 2, 4, 2)
+        layout.setSpacing(6)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        if on_edit is not None:
+            self.edit_button = QPushButton("Sửa")
+            self.edit_button.setObjectName("actionEditBtn")
+            self.edit_button.setAccessibleName(f"Sửa {accessible_name}")
+            self.edit_button.clicked.connect(on_edit)
+            layout.addWidget(self.edit_button)
+        else:
+            self.edit_button = None
+
+        specifications = tuple(
+            RowAction(
+                label,
+                callback,
+                destructive=("Khóa" in label or "Ngừng" in label or "Xóa" in label),
+            )
+            for label, callback in overflow_actions
+        )
+        self.more_button = TableActionMenu(
+            specifications,
+            self,
+            accessible_name=f"Thêm thao tác cho {accessible_name}",
+        )
+        self.more_button.setVisible(bool(specifications))
+        layout.addWidget(self.more_button)
+
+
+def set_row_actions(table: QWidget, row: int, column: int, widget: QWidget) -> None:
+    """Attach an action widget to a model/view row without editable cell data."""
+
+    model = table.model()
+    if model is None or not hasattr(table, "setIndexWidget"):
+        raise TypeError("table must expose a model and setIndexWidget")
+    table.setIndexWidget(model.index(row, column), widget)
+
+
+def matches_search(item: Mapping[str, Any], query: str, *keys: str) -> bool:
+    """Accent-preserving, case-insensitive local filter for loaded Admin lists."""
+
+    needle = query.strip().casefold()
+    if not needle:
+        return True
+    return any(needle in str(item.get(key) or "").casefold() for key in keys)
 
 
 __all__ = [
     "AdminApiError",
+    "AdminFormDialog",
     "AdminApiPage",
-    "action_cell",
-    "configure_admin_table",
+    "AdminRowActions",
+    "AdminSearchBar",
+    "matches_search",
     "require_success",
-    "table_item",
+    "set_row_actions",
 ]

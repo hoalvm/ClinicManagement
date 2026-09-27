@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from frontend.core.translations import get_translation
+
 
 @dataclass(frozen=True, slots=True)
 class StatusColors:
@@ -34,6 +36,46 @@ _VIOLET: Final = StatusColors("#5B21B6", "#EDE9FE", "#DDD6FE")
 _WARNING: Final = StatusColors("#92400E", "#FEF3C7", "#FDE68A")
 _DANGER: Final = StatusColors("#991B1B", "#FEE2E2", "#FECACA")
 _NEUTRAL: Final = StatusColors("#334155", "#E2E8F0", "#CBD5E1")
+
+_STATUS_TRANSLATION_KEYS: Final = MappingProxyType(
+    {
+        "PAID": "status_paid",
+        "UNPAID": "status_unpaid",
+        "COMPLETED": "status_completed",
+        "CONFIRMED": "status_confirmed",
+        "CHECKED_IN": "status_checked_in",
+        "SCHEDULED": "status_scheduled",
+        "IN_PROGRESS": "status_in_progress",
+        "PENDING": "status_pending",
+        "OVERDUE": "status_overdue",
+        "CANCELLED": "status_cancelled",
+        "CANCELED": "status_cancelled",
+        "FAILED": "status_failed",
+        "ACTIVE": "status_active",
+        "INACTIVE": "status_inactive",
+        "HOAT_DONG": "status_active",
+        "HOẠT_ĐỘNG": "status_active",
+        "DA_KHOA": "status_inactive",
+        "ĐÃ_KHÓA": "status_inactive",
+        "DANG_KHAM": "status_in_progress",
+        "ĐANG_KHÁM": "status_in_progress",
+        "HOAN_TAT": "status_completed",
+        "HOÀN_TẤT": "status_completed",
+        "CHO_KHAM": "status_checked_in",
+        "CHỜ_KHÁM": "status_checked_in",
+        "DA_THANH_TOAN": "status_paid",
+        "ĐÃ_THANH_TOÁN": "status_paid",
+        "CHUA_THANH_TOAN": "status_unpaid",
+        "CHƯA_THANH_TOÁN": "status_unpaid",
+        "PATIENT": "role_patient",
+        "DOCTOR": "role_doctor",
+        "STAFF": "role_staff",
+        "ADMIN": "role_admin",
+        "CASH": "payment_cash",
+        "CARD": "payment_card",
+        "TRANSFER": "payment_transfer",
+    }
+)
 
 STATUS_COLORS = MappingProxyType(
     {
@@ -75,83 +117,6 @@ STATUS_COLORS = MappingProxyType(
     }
 )
 
-STATUS_LABELS_VN: Final[dict[str, str]] = {
-    "PAID": "Đã thanh toán",
-    "UNPAID": "Chưa thanh toán",
-    "COMPLETED": "Hoàn thành",
-    "CONFIRMED": "Đã xác nhận",
-    "CHECKED_IN": "Chờ khám",
-    "SCHEDULED": "Đã đặt",
-    "IN_PROGRESS": "Đang khám",
-    "PENDING": "Chờ xử lý",
-    "OVERDUE": "Quá hạn",
-    "CANCELLED": "Đã hủy",
-    "CANCELED": "Đã hủy",
-    "FAILED": "Thất bại",
-    "ACTIVE": "Hoạt động",
-    "INACTIVE": "Đã khóa",
-    "HOAT_DONG": "Hoạt động",
-    "HOẠT_ĐỘNG": "Hoạt động",
-    "DA_KHOA": "Đã khóa",
-    "ĐÃ_KHÓA": "Đã khóa",
-    "DANG_KHAM": "Đang khám",
-    "ĐANG_KHÁM": "Đang khám",
-    "HOAN_TAT": "Hoàn thành",
-    "HOÀN_TẤT": "Hoàn thành",
-    "CHO_KHAM": "Chờ khám",
-    "CHỜ_KHÁM": "Chờ khám",
-    "DA_THANH_TOAN": "Đã thanh toán",
-    "ĐÃ_THANH_TOÁN": "Đã thanh toán",
-    "CHUA_THANH_TOAN": "Chưa thanh toán",
-    "CHƯA_THANH_TOÁN": "Chưa thanh toán",
-    "PATIENT": "Bệnh nhân",
-    "DOCTOR": "Bác sĩ",
-    "STAFF": "Nhân viên",
-    "ADMIN": "Quản trị viên",
-    "CASH": "Tiền mặt",
-    "CARD": "Thẻ",
-    "TRANSFER": "Chuyển khoản",
-}
-
-STATUS_LABELS_EN: Final[dict[str, str]] = {
-    "PAID": "Paid",
-    "UNPAID": "Unpaid",
-    "COMPLETED": "Completed",
-    "CONFIRMED": "Confirmed",
-    "CHECKED_IN": "Checked In",
-    "SCHEDULED": "Scheduled",
-    "IN_PROGRESS": "In Progress",
-    "PENDING": "Pending",
-    "OVERDUE": "Overdue",
-    "CANCELLED": "Cancelled",
-    "CANCELED": "Cancelled",
-    "FAILED": "Failed",
-    "ACTIVE": "Active",
-    "INACTIVE": "Locked",
-    "HOAT_DONG": "Active",
-    "HOẠT_ĐỘNG": "Active",
-    "DA_KHOA": "Locked",
-    "ĐÃ_KHÓA": "Locked",
-    "DANG_KHAM": "In Progress",
-    "ĐANG_KHÁM": "In Progress",
-    "HOAN_TAT": "Completed",
-    "HOÀN_TẤT": "Completed",
-    "CHO_KHAM": "Checked In",
-    "CHỜ_KHÁM": "Checked In",
-    "DA_THANH_TOAN": "Paid",
-    "ĐÃ_THANH_TOÁN": "Paid",
-    "CHUA_THANH_TOAN": "Unpaid",
-    "CHƯA_THANH_TOÁN": "Unpaid",
-    "PATIENT": "Patient",
-    "DOCTOR": "Doctor",
-    "STAFF": "Staff",
-    "ADMIN": "Admin",
-    "CASH": "Cash",
-    "CARD": "Card",
-    "TRANSFER": "Transfer",
-}
-
-
 def _current_lang() -> str:
     try:
         from frontend.core.i18n import get_i18n
@@ -179,14 +144,12 @@ def display_status(value: object, lang: str | None = None) -> str:
         return "—"
 
     target_lang = lang or _current_lang()
-    if target_lang == "en":
-        if normalized in STATUS_LABELS_EN:
-            return STATUS_LABELS_EN[normalized]
-        return normalized.replace("_", " ").title()
-    else:
-        if normalized in STATUS_LABELS_VN:
-            return STATUS_LABELS_VN[normalized]
-        return str(value).strip()
+    translation_key = _STATUS_TRANSLATION_KEYS.get(normalized)
+    if translation_key:
+        return get_translation(translation_key, target_lang)
+    # Never leak a backend enum into the interface.  Unknown values still use
+    # neutral colors, while the full raw code remains available to logs/data.
+    return get_translation("status_unknown", target_lang)
 
 
 def status_colors(value: object) -> StatusColors:
@@ -347,6 +310,7 @@ class StatusBadgeDelegate(QStyledItemDelegate):
     ) -> None:
         background_option = QStyleOptionViewItem(option)
         self.initStyleOption(background_option, index)
+        background_option.state &= ~QStyle.StateFlag.State_HasFocus
         background_option.text = ""
         background_option.icon = QIcon()
         style = option.widget.style() if option.widget is not None else QApplication.style()
@@ -367,8 +331,8 @@ class StatusBadgeDelegate(QStyledItemDelegate):
             -self.horizontal_margin,
             -4,
         )
-        max_text_width = max(0, available.width() - 14)
-        text = metrics.elidedText(text, Qt.TextElideMode.ElideRight, max_text_width)
+        # Status columns are allocated from the full translated label by the
+        # adaptive table.  Never replace operational state with an ellipsis.
         badge_width = min(available.width(), metrics.horizontalAdvance(text) + 16)
         badge_height = min(26, available.height())
         badge_rect = QRectF(

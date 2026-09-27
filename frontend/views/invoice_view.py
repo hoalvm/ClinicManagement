@@ -7,7 +7,6 @@ from typing import Any
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QComboBox,
     QDialog,
     QFormLayout,
     QFrame,
@@ -23,12 +22,20 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient
-from frontend.ui.design_system import ColumnPriority, ColumnSpec
+from frontend.ui.design_system import (
+    CellValue,
+    ColumnDisplayMode,
+    ColumnPriority,
+    ColumnSpec,
+)
 from frontend.views.common import BaseApiView, format_money
 from frontend.widgets.adaptive_data_table import AdaptiveDataTable
+from frontend.widgets.filter_toolbar import FilterToolbar
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.pagination import Pagination
 from frontend.widgets.state_host import StateHost
+from frontend.widgets.status_badge import display_status
+from frontend.widgets.table_actions import table_action_cell
 
 
 class InvoiceManagementView(BaseApiView):
@@ -61,100 +68,105 @@ class InvoiceManagementView(BaseApiView):
         layout.addWidget(self.feedback)
         layout.addWidget(self.loading)
 
-        # Filters
-        filter_card = QFrame()
-        filter_card.setObjectName("filterCard")
-        filter_layout = QHBoxLayout(filter_card)
-        filter_layout.setContentsMargins(16, 10, 16, 10)
-        filter_layout.setSpacing(12)
-
-        self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Tìm theo tên bệnh nhân, SĐT hoặc mã HĐ...")
-        self.search_input.setAccessibleName("Tìm kiếm hóa đơn")
-        self.search_input.returnPressed.connect(self._apply_filter)
-        filter_layout.addWidget(self.search_input, 2)
-
-        self.status_combo = QComboBox()
-        self.status_combo.addItem("Tất cả hóa đơn", "")
-        self.status_combo.addItem("Chưa thanh toán", "UNPAID")
-        self.status_combo.addItem("Đã thanh toán", "PAID")
-        self.status_combo.currentIndexChanged.connect(self._apply_filter)
-        filter_layout.addWidget(self.status_combo, 1)
-
-        self.btn_filter = QPushButton("Lọc")
-        self.btn_filter.setCursor(Qt.PointingHandCursor)
-        self.btn_filter.clicked.connect(self._apply_filter)
-        filter_layout.addWidget(self.btn_filter)
-
-        layout.addWidget(filter_card)
+        self.filters = FilterToolbar(
+            "Tìm tên bệnh nhân, số điện thoại hoặc mã hóa đơn",
+            search_accessible_name="Tìm kiếm hóa đơn",
+        )
+        self.search_input = self.filters.search_input
+        self.status_combo = self.filters.add_filter(
+            "status",
+            (
+                ("Tất cả hóa đơn", ""),
+                (display_status("UNPAID", "vi"), "UNPAID"),
+                (display_status("PAID", "vi"), "PAID"),
+            ),
+            accessible_name="Lọc hóa đơn theo trạng thái",
+        )
+        self.btn_filter = self.filters.clear_button
+        self.filters.filters_changed.connect(self._apply_filter)
+        self.search_input.returnPressed.connect(self.filters.flush_search)
+        layout.addWidget(self.filters)
 
         self.table = AdaptiveDataTable(
             [
                 ColumnSpec(
-                    "Mã HĐ",
-                    "invoice_id",
-                    minimum_width=76,
-                    preferred_width=84,
+                    "Mã hóa đơn",
+                    "reference",
+                    minimum_width=130,
+                    preferred_width=140,
+                    maximum_width=150,
                     priority=ColumnPriority.HIGH,
-                    formatter=lambda value: f"INV-{int(value or 0):04d}",
-                    alignment=Qt.AlignmentFlag.AlignCenter,
-                ),
-                ColumnSpec(
-                    "Mã hẹn",
-                    "appointment_id",
-                    minimum_width=68,
-                    preferred_width=76,
-                    priority=ColumnPriority.NORMAL,
-                    formatter=lambda value: f"#{int(value or 0)}",
-                    alignment=Qt.AlignmentFlag.AlignCenter,
+                    display_mode=ColumnDisplayMode.WRAP_2,
+                    line_limit=2,
                 ),
                 ColumnSpec(
                     "Bệnh nhân",
-                    "patient_name",
+                    "patient",
                     minimum_width=120,
+                    preferred_width=166,
+                    maximum_width=270,
                     priority=ColumnPriority.CRITICAL,
+                    grow_weight=3,
+                    display_mode=ColumnDisplayMode.WRAP_2,
+                    line_limit=2,
                     stretch=True,
-                ),
-                ColumnSpec(
-                    "Số điện thoại",
-                    "patient_phone",
-                    minimum_width=96,
-                    preferred_width=106,
-                    priority=ColumnPriority.HIGH,
-                    alignment=Qt.AlignmentFlag.AlignCenter,
                 ),
                 ColumnSpec(
                     "Bác sĩ",
                     "doctor_name",
-                    minimum_width=100,
-                    preferred_width=120,
+                    minimum_width=110,
+                    preferred_width=146,
+                    maximum_width=230,
                     priority=ColumnPriority.NORMAL,
+                    grow_weight=2,
+                    display_mode=ColumnDisplayMode.WRAP_2,
+                    line_limit=2,
                 ),
                 ColumnSpec(
                     "Tổng tiền",
                     "total_amount",
-                    minimum_width=100,
-                    preferred_width=112,
+                    minimum_width=120,
+                    preferred_width=126,
+                    maximum_width=136,
                     priority=ColumnPriority.CRITICAL,
                     formatter=format_money,
+                    display_mode=ColumnDisplayMode.FULL,
                     alignment=Qt.AlignmentFlag.AlignRight
                     | Qt.AlignmentFlag.AlignVCenter,
                 ),
                 ColumnSpec(
+                    "Hình thức",
+                    "payment_method",
+                    minimum_width=110,
+                    preferred_width=110,
+                    maximum_width=118,
+                    priority=ColumnPriority.HIGH,
+                    formatter=lambda value: {
+                        "CASH": "Tiền mặt",
+                        "CARD": "Thẻ",
+                    }.get(str(value or ""), "—"),
+                    display_mode=ColumnDisplayMode.ELIDE,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+                ColumnSpec(
                     "Trạng thái",
                     "status",
-                    minimum_width=100,
-                    preferred_width=110,
+                    minimum_width=126,
+                    preferred_width=134,
+                    maximum_width=144,
                     priority=ColumnPriority.CRITICAL,
+                    display_mode=ColumnDisplayMode.FULL,
                     alignment=Qt.AlignmentFlag.AlignCenter,
                     status=True,
                 ),
                 ColumnSpec(
-                    "Thao tác",
+                    "Xử lý",
                     "_actions",
-                    minimum_width=112,
+                    minimum_width=120,
                     preferred_width=124,
+                    maximum_width=132,
                     priority=ColumnPriority.CRITICAL,
+                    display_mode=ColumnDisplayMode.ELIDE,
                     alignment=Qt.AlignmentFlag.AlignCenter,
                 ),
             ],
@@ -190,9 +202,12 @@ class InvoiceManagementView(BaseApiView):
         super().showEvent(event)
         self.load_invoices()
 
-    def _apply_filter(self) -> None:
+    def _apply_filter(self, _values: object | None = None) -> None:
         self._current_page = 1
         self.load_invoices()
+
+    def _clear_filters(self) -> None:
+        self.filters.clear()
 
     def _go_to_page(self, page: int) -> None:
         self._current_page = page
@@ -232,12 +247,17 @@ class InvoiceManagementView(BaseApiView):
 
         rows = [
             {
-                "invoice_id": inv.get("invoice_id", 0),
-                "appointment_id": inv.get("appointment_id", 0),
-                "patient_name": inv.get("patient_name", ""),
-                "patient_phone": inv.get("patient_phone", "") or "—",
+                "reference": CellValue(
+                    f"INV-{int(inv.get('invoice_id') or 0):04d}",
+                    f"Hẹn #{int(inv.get('appointment_id') or 0)}",
+                ),
+                "patient": CellValue(
+                    str(inv.get("patient_name", "") or "—"),
+                    str(inv.get("patient_phone", "") or "Chưa có số điện thoại"),
+                ),
                 "doctor_name": inv.get("doctor_name", ""),
                 "total_amount": inv.get("total_amount", 0),
+                "payment_method": inv.get("payment_method"),
                 "status": inv.get("status", "UNPAID"),
                 "_actions": "",
             }
@@ -259,28 +279,55 @@ class InvoiceManagementView(BaseApiView):
             inv_id = inv.get("invoice_id", 0)
             status = inv.get("status", "UNPAID")
 
-            action_widget = QWidget()
-            action_widget.setObjectName("tableCellWidget")
-            act_layout = QHBoxLayout(action_widget)
-            act_layout.setContentsMargins(4, 0, 4, 0)
-            act_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
             if status == "UNPAID":
-                btn_pay = QPushButton("Thu phí")
-                btn_pay.setObjectName("tableActionPrimary")
-                btn_pay.setCursor(Qt.PointingHandCursor)
-                btn_pay.setAccessibleName(f"Thu phí hóa đơn INV-{inv_id:04d}")
-                btn_pay.clicked.connect(lambda _, i_id=inv_id: self.pay_invoice_requested.emit(i_id))
-                act_layout.addWidget(btn_pay)
+                action = QPushButton("Thu phí")
+                action.setObjectName("tableActionPrimary")
+                action.setCursor(Qt.PointingHandCursor)
+                action.setAccessibleName(f"Thu phí hóa đơn INV-{inv_id:04d}")
+                action.clicked.connect(
+                    lambda _, i_id=inv_id: self.pay_invoice_requested.emit(i_id)
+                )
             else:
-                method = "Tiền mặt" if inv.get("payment_method") == "CASH" else "Thẻ"
-                paid_label = QLabel(f"Đã thu ({method})")
-                paid_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                paid_label.setObjectName("paidLabel")
-                act_layout.addWidget(paid_label)
+                action = QPushButton("Xem thông tin")
+                action.setObjectName("tableActionSecondary")
+                action.setCursor(Qt.PointingHandCursor)
+                action.setAccessibleName(f"Xem hóa đơn INV-{inv_id:04d}")
+                action.clicked.connect(
+                    lambda _, invoice=inv: self._show_invoice_details(invoice)
+                )
+            action_widget = table_action_cell(
+                action,
+                accessible_name=f"Thao tác hóa đơn INV-{inv_id:04d}",
+            )
+            self.table.setIndexWidget(self.table.model().index(row, 6), action_widget)
+            self.table.verticalHeader().resizeSection(row, 60)
 
-            self.table.setIndexWidget(self.table.model().index(row, 7), action_widget)
-            self.table.verticalHeader().resizeSection(row, 50)
+    def _show_invoice_details(self, invoice: dict[str, Any]) -> None:
+        dialog = QDialog(self)
+        invoice_id = int(invoice.get("invoice_id") or 0)
+        dialog.setWindowTitle(f"Hóa đơn INV-{invoice_id:04d}")
+        dialog.setMinimumWidth(420)
+        layout = QVBoxLayout(dialog)
+        details = QLabel(
+            "\n".join(
+                (
+                    f"Bệnh nhân: {invoice.get('patient_name', '—')}",
+                    f"Bác sĩ: {invoice.get('doctor_name', '—')}",
+                    f"Tổng tiền: {format_money(invoice.get('total_amount', 0))}",
+                    "Phương thức: "
+                    + {"CASH": "Tiền mặt", "CARD": "Thẻ"}.get(
+                        str(invoice.get("payment_method") or ""), "Chưa ghi nhận"
+                    ),
+                )
+            )
+        )
+        details.setWordWrap(True)
+        layout.addWidget(details)
+        close = QPushButton("Đóng")
+        close.setObjectName("primaryButton")
+        close.clicked.connect(dialog.accept)
+        layout.addWidget(close, 0, Qt.AlignmentFlag.AlignRight)
+        dialog.exec()
 
     def _retry(self) -> None:
         self.load_invoices()
@@ -329,7 +376,7 @@ class InvoiceManagementView(BaseApiView):
 
         form = QFormLayout()
         appt_input = QLineEdit()
-        form.addRow("Mã lịch hẹn (*):", appt_input)
+        form.addRow("Mã lịch hẹn *", appt_input)
         d_layout.addLayout(form)
 
         items_label = QLabel("Chi tiết dịch vụ:")

@@ -17,8 +17,13 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient
-from frontend.ui.design_system import ColumnPriority, ColumnSpec
-from frontend.views.common import BaseApiView
+from frontend.ui.design_system import (
+    CellValue,
+    ColumnDisplayMode,
+    ColumnPriority,
+    ColumnSpec,
+)
+from frontend.views.common import BaseApiView, format_date, format_time
 from frontend.widgets.adaptive_data_table import AdaptiveDataTable
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.state_host import StateHost
@@ -47,6 +52,8 @@ class CheckInView(BaseApiView):
             action_label="Làm mới",
             parent=self,
         )
+        if self.header.action_button is not None:
+            self.header.action_button.setObjectName("secondaryButton")
         self.header.action_clicked.connect(self.refresh)
         layout.addWidget(self.header)
         layout.addWidget(self.feedback)
@@ -97,54 +104,55 @@ class CheckInView(BaseApiView):
                     "appointment_id",
                     minimum_width=64,
                     preferred_width=72,
+                    maximum_width=88,
                     priority=ColumnPriority.HIGH,
                     formatter=lambda value: f"#{int(value or 0)}",
+                    display_mode=ColumnDisplayMode.FULL,
+                    preserve_full=True,
                     alignment=Qt.AlignmentFlag.AlignCenter,
                 ),
                 ColumnSpec(
-                    "Ngày khám",
-                    "appointment_date",
-                    minimum_width=88,
-                    preferred_width=96,
+                    "Thời gian",
+                    "appointment_time",
+                    minimum_width=116,
+                    preferred_width=132,
+                    maximum_width=154,
                     priority=ColumnPriority.HIGH,
-                    alignment=Qt.AlignmentFlag.AlignCenter,
-                ),
-                ColumnSpec(
-                    "Giờ khám",
-                    "start_time",
-                    minimum_width=66,
-                    preferred_width=74,
-                    priority=ColumnPriority.HIGH,
-                    alignment=Qt.AlignmentFlag.AlignCenter,
+                    display_mode=ColumnDisplayMode.WRAP_2,
+                    line_limit=2,
                 ),
                 ColumnSpec(
                     "Bệnh nhân",
-                    "patient_name",
-                    minimum_width=116,
+                    "patient",
+                    minimum_width=154,
+                    preferred_width=188,
+                    maximum_width=270,
                     priority=ColumnPriority.CRITICAL,
+                    grow_weight=3,
+                    display_mode=ColumnDisplayMode.WRAP_2,
+                    line_limit=2,
                     stretch=True,
-                ),
-                ColumnSpec(
-                    "Số điện thoại",
-                    "patient_phone",
-                    minimum_width=96,
-                    preferred_width=108,
-                    priority=ColumnPriority.HIGH,
-                    alignment=Qt.AlignmentFlag.AlignCenter,
                 ),
                 ColumnSpec(
                     "Bác sĩ",
                     "doctor_name",
-                    minimum_width=104,
-                    preferred_width=126,
+                    minimum_width=132,
+                    preferred_width=160,
+                    maximum_width=230,
                     priority=ColumnPriority.NORMAL,
+                    grow_weight=2,
+                    display_mode=ColumnDisplayMode.WRAP_2,
+                    line_limit=2,
                 ),
                 ColumnSpec(
                     "Trạng thái",
                     "status",
                     minimum_width=100,
                     preferred_width=112,
+                    maximum_width=126,
                     priority=ColumnPriority.CRITICAL,
+                    display_mode=ColumnDisplayMode.FULL,
+                    preserve_full=True,
                     alignment=Qt.AlignmentFlag.AlignCenter,
                     status=True,
                 ),
@@ -153,7 +161,10 @@ class CheckInView(BaseApiView):
                     "_actions",
                     minimum_width=112,
                     preferred_width=122,
+                    maximum_width=136,
                     priority=ColumnPriority.CRITICAL,
+                    display_mode=ColumnDisplayMode.FULL,
+                    preserve_full=True,
                     alignment=Qt.AlignmentFlag.AlignCenter,
                 ),
             ],
@@ -219,10 +230,14 @@ class CheckInView(BaseApiView):
             rows.append(
                 {
                     "appointment_id": appt.get("appointment_id", 0),
-                    "appointment_date": str(appt.get("appointment_date", "")),
-                    "start_time": str(appt.get("start_time", ""))[:5],
-                    "patient_name": patient.get("full_name", ""),
-                    "patient_phone": patient.get("phone", "") or "—",
+                    "appointment_time": CellValue(
+                        format_date(appt.get("appointment_date")),
+                        format_time(appt.get("start_time")),
+                    ),
+                    "patient": CellValue(
+                        str(patient.get("full_name", "") or "—"),
+                        str(patient.get("phone", "") or "Chưa có số điện thoại"),
+                    ),
                     "doctor_name": doctor.get("full_name", ""),
                     "status": appt.get("status", "PENDING"),
                     "_actions": "",
@@ -264,10 +279,10 @@ class CheckInView(BaseApiView):
             act_layout.addWidget(btn)
 
             self.results_table.setIndexWidget(
-                self.results_table.model().index(row, 7),
+                self.results_table.model().index(row, 5),
                 action_widget,
             )
-            self.results_table.verticalHeader().resizeSection(row, 50)
+            self.results_table.verticalHeader().resizeSection(row, 60)
 
     def _execute_check_in(self, appt_id: int) -> None:
         queue_no = self.queue_num_input.text().strip() or None

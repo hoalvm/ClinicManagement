@@ -6,18 +6,14 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QTableWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from frontend.api_client import api_client
-from frontend.pages.admin_ui import (
-    AdminApiPage,
-    configure_admin_table,
-    require_success,
-    table_item,
-)
+from frontend.pages.admin_ui import AdminApiPage, require_success
+from frontend.ui.design_system import ColumnPriority, ColumnSpec
+from frontend.widgets.adaptive_data_table import AdaptiveDataTable
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.stat_card import ModernStatCard
 
@@ -67,14 +63,30 @@ class StatisticsPage(AdminApiPage):
         lbl_sp.setObjectName("sectionTitle")
         layout_sp.addWidget(lbl_sp)
 
-        self.specialty_table = QTableWidget()
-        self.specialty_table.setColumnCount(2)
-        self.specialty_table.setHorizontalHeaderLabels(["Chuyên khoa", "Số lượng bác sĩ"])
-        configure_admin_table(
-            self.specialty_table,
+        self.specialty_table = AdaptiveDataTable(
+            (
+                ColumnSpec(
+                    "Chuyên khoa",
+                    "name",
+                    minimum_width=180,
+                    preferred_width=280,
+                    maximum_width=520,
+                    grow_weight=1,
+                    line_limit=2,
+                    wrap=True,
+                ),
+                ColumnSpec(
+                    "Số bác sĩ",
+                    "count",
+                    minimum_width=100,
+                    preferred_width=112,
+                    maximum_width=128,
+                    priority=int(ColumnPriority.CRITICAL),
+                    preserve_full=True,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+            ),
             accessible_name="Phân bổ bác sĩ theo chuyên khoa",
-            stretch_column=0,
-            fixed_widths={1: 148},
         )
         layout_sp.addWidget(self.specialty_table)
         sub_layout.addWidget(card_sp)
@@ -90,14 +102,30 @@ class StatisticsPage(AdminApiPage):
         lbl_cl.setObjectName("sectionTitle")
         layout_cl.addWidget(lbl_cl)
 
-        self.clinic_table = QTableWidget()
-        self.clinic_table.setColumnCount(2)
-        self.clinic_table.setHorizontalHeaderLabels(["Phòng khám", "Số lượng bác sĩ"])
-        configure_admin_table(
-            self.clinic_table,
+        self.clinic_table = AdaptiveDataTable(
+            (
+                ColumnSpec(
+                    "Phòng khám",
+                    "name",
+                    minimum_width=180,
+                    preferred_width=280,
+                    maximum_width=520,
+                    grow_weight=1,
+                    line_limit=2,
+                    wrap=True,
+                ),
+                ColumnSpec(
+                    "Số bác sĩ",
+                    "count",
+                    minimum_width=100,
+                    preferred_width=112,
+                    maximum_width=128,
+                    priority=int(ColumnPriority.CRITICAL),
+                    preserve_full=True,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+            ),
             accessible_name="Phân bổ bác sĩ theo phòng khám",
-            stretch_column=0,
-            fixed_widths={1: 148},
         )
         layout_cl.addWidget(self.clinic_table)
         sub_layout.addWidget(card_cl)
@@ -178,21 +206,11 @@ class StatisticsPage(AdminApiPage):
 
         # Populate specialty table
         doc_sp = d.get("doctors_by_specialty", [])
-        self.specialty_table.setRowCount(len(doc_sp))
-        for row, item in enumerate(doc_sp):
-            self.specialty_table.setItem(row, 0, table_item(item.get("name")))
-            count_item = table_item(item.get("count", 0), alignment=Qt.AlignCenter)
-            self.specialty_table.setItem(row, 1, count_item)
-            self.specialty_table.setRowHeight(row, 40)
+        self.specialty_table.set_rows(doc_sp)
 
         # Populate clinic table
         doc_cl = d.get("doctors_by_clinic", [])
-        self.clinic_table.setRowCount(len(doc_cl))
-        for row, item in enumerate(doc_cl):
-            self.clinic_table.setItem(row, 0, table_item(item.get("name")))
-            count_item = table_item(item.get("count", 0), alignment=Qt.AlignCenter)
-            self.clinic_table.setItem(row, 1, count_item)
-            self.clinic_table.setRowHeight(row, 40)
+        self.clinic_table.set_rows(doc_cl)
 
     def _card_column_count(self) -> int:
         width = self.width()

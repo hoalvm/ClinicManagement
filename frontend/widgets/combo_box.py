@@ -2,9 +2,28 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, Qt
-from PySide6.QtGui import QColor, QPainter, QPaintEvent, QPen
-from PySide6.QtWidgets import QComboBox, QStyle, QStyleOptionComboBox, QWidget
+from PySide6.QtCore import QModelIndex, QPointF, Qt
+from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPaintEvent, QPen
+from PySide6.QtWidgets import (
+    QComboBox,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionComboBox,
+    QStyleOptionViewItem,
+    QWidget,
+)
+
+
+class _ComboItemDelegate(QStyledItemDelegate):
+    """Retain selection while suppressing the native inner focus rectangle."""
+
+    def initStyleOption(  # noqa: N802
+        self,
+        option: QStyleOptionViewItem,
+        index: QModelIndex,
+    ) -> None:
+        super().initStyleOption(option, index)
+        option.state &= ~QStyle.StateFlag.State_HasFocus
 
 
 class ChevronComboBox(QComboBox):
@@ -18,6 +37,25 @@ class ChevronComboBox(QComboBox):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setProperty("paintedChevron", True)
+        self.setProperty("managedFocus", True)
+        self.view().setItemDelegate(_ComboItemDelegate(self.view()))
+
+    def showPopup(self) -> None:  # noqa: N802
+        """Open a popup wide enough for useful labels without leaving the screen."""
+
+        metrics = self.view().fontMetrics()
+        natural_width = self.width()
+        for index in range(self.count()):
+            natural_width = max(
+                natural_width,
+                metrics.horizontalAdvance(self.itemText(index)) + 48,
+            )
+        screen = QGuiApplication.screenAt(self.mapToGlobal(self.rect().center()))
+        available_width = (
+            screen.availableGeometry().width() - 48 if screen is not None else 960
+        )
+        self.view().setMinimumWidth(min(natural_width, available_width))
+        super().showPopup()
 
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802
         super().paintEvent(event)

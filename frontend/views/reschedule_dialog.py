@@ -6,7 +6,6 @@ from typing import Any
 
 from PySide6.QtCore import QDate, Qt, Signal
 from PySide6.QtWidgets import (
-    QComboBox,
     QDateEdit,
     QDialog,
     QFrame,
@@ -20,8 +19,10 @@ from PySide6.QtWidgets import (
 
 from frontend.api.api_client import ApiClient, ApiError
 from frontend.core.i18n import get_i18n, t
+from frontend.views.common import format_date, format_time_range
 from frontend.widgets.async_task_controller import AsyncTaskController
 from frontend.widgets.calendar_dialog import CalendarDialog
+from frontend.widgets.combo_box import ChevronComboBox
 
 
 class RescheduleAppointmentDialog(QDialog):
@@ -62,8 +63,11 @@ class RescheduleAppointmentDialog(QDialog):
 
         doc_name = doctor_info.get("full_name", "Bác sĩ")
         spec_name = doctor_info.get("specialty", "")
-        curr_date = appointment.get("appointment_date", "")
-        curr_time = f"{appointment.get('start_time', '')} - {appointment.get('end_time', '')}"
+        curr_date = format_date(appointment.get("appointment_date"))
+        curr_time = format_time_range(
+            appointment.get("start_time"),
+            appointment.get("end_time"),
+        )
 
         self._summary_doctor_name = doc_name
         self._summary_specialty_name = spec_name
@@ -91,7 +95,7 @@ class RescheduleAppointmentDialog(QDialog):
         self.lbl_doctor.setObjectName("fieldLabel")
         layout.addWidget(self.lbl_doctor)
 
-        self.doctor_combo = QComboBox()
+        self.doctor_combo = ChevronComboBox()
         self.doctor_combo.setAccessibleName(self.lbl_doctor.text())
         layout.addWidget(self.doctor_combo)
 
@@ -103,6 +107,7 @@ class RescheduleAppointmentDialog(QDialog):
         date_row = QHBoxLayout()
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
+        self.date_edit.setDisplayFormat("dd/MM/yyyy")
         self.date_edit.setDate(QDate.currentDate().addDays(1))
         self.date_edit.setMinimumDate(QDate.currentDate())
         self.date_edit.setMaximumDate(QDate.currentDate().addDays(60))
@@ -120,7 +125,7 @@ class RescheduleAppointmentDialog(QDialog):
         self.lbl_slot.setObjectName("fieldLabel")
         layout.addWidget(self.lbl_slot)
 
-        self.slot_combo = QComboBox()
+        self.slot_combo = ChevronComboBox()
         self.slot_combo.setAccessibleName(self.lbl_slot.text())
         layout.addWidget(self.slot_combo)
 
@@ -323,7 +328,7 @@ class RescheduleAppointmentDialog(QDialog):
                     start_t = slot["start_time"]
                     end_t = slot["end_time"]
                     self.slot_combo.addItem(
-                        f"{start_t} - {end_t}",
+                        format_time_range(start_t, end_t),
                         userData=(start_t, end_t),
                     )
 

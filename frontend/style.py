@@ -167,10 +167,10 @@ QFrame#authCard QTextEdit {
     min-height: 24px;
 }
 
-QFrame#authCard QLineEdit:focus,
-QFrame#authCard QComboBox:focus,
-QFrame#authCard QDateEdit:focus,
-QFrame#authCard QTextEdit:focus {
+QFrame#authCard QLineEdit[focusVisible="true"],
+QFrame#authCard QComboBox[focusVisible="true"],
+QFrame#authCard QDateEdit[focusVisible="true"],
+QFrame#authCard QTextEdit[focusVisible="true"] {
     border-color: #0f766e;
     background-color: #ffffff;
 }
@@ -389,12 +389,12 @@ QTextEdit:hover {
     border-color: #94a3b8;
 }
 
-QLineEdit:focus,
-QComboBox:focus,
-QSpinBox:focus,
-QTimeEdit:focus,
-QDateEdit:focus,
-QTextEdit:focus {
+QLineEdit[focusVisible="true"],
+QComboBox[focusVisible="true"],
+QSpinBox[focusVisible="true"],
+QTimeEdit[focusVisible="true"],
+QDateEdit[focusVisible="true"],
+QTextEdit[focusVisible="true"] {
     border: 1.5px solid #0f766e;
     background-color: #ffffff;
 }
@@ -425,6 +425,18 @@ QComboBox::drop-down:hover {
     background-color: #f1f5f9;
 }
 
+QComboBox[paintedChevron="true"]::drop-down {
+    width: 34px;
+    border: none;
+    background-color: transparent;
+}
+
+QComboBox[paintedChevron="true"]::down-arrow {
+    image: none;
+    width: 0;
+    height: 0;
+}
+
 QComboBox QAbstractItemView {
     background-color: #ffffff;
     color: #0f172a;
@@ -433,11 +445,13 @@ QComboBox QAbstractItemView {
     padding: 4px;
     selection-background-color: #f0fdfa;
     selection-color: #0f766e;
+    outline: 0;
 }
 
 QComboBox QAbstractItemView::item {
     min-height: 32px;
     padding: 5px 12px;
+    border: 1px solid transparent;
     border-radius: 6px;
 }
 
@@ -898,6 +912,12 @@ QPushButton#navButton:checked {
     font-weight: 600;
 }
 
+QPushButton#navButton[focusVisible="true"] {
+    outline: none;
+    border: 1px solid #14b8a6;
+    border-left: 3px solid #0f766e;
+}
+
 QPushButton#logoutButton {
     color: #cbd5e1;
     background-color: transparent;
@@ -1155,12 +1175,18 @@ QTextEdit[error="true"] {{
     background-color: #FFF7F7;
 }}
 
-QLineEdit[hasError="true"]:focus,
-QComboBox[hasError="true"]:focus,
-QSpinBox[hasError="true"]:focus,
-QTimeEdit[hasError="true"]:focus,
-QDateEdit[hasError="true"]:focus,
-QTextEdit[hasError="true"]:focus {{
+QLineEdit[hasError="true"][focusVisible="true"],
+QComboBox[hasError="true"][focusVisible="true"],
+QSpinBox[hasError="true"][focusVisible="true"],
+QTimeEdit[hasError="true"][focusVisible="true"],
+QDateEdit[hasError="true"][focusVisible="true"],
+QTextEdit[hasError="true"][focusVisible="true"],
+QLineEdit[error="true"][focusVisible="true"],
+QComboBox[error="true"][focusVisible="true"],
+QSpinBox[error="true"][focusVisible="true"],
+QTimeEdit[error="true"][focusVisible="true"],
+QDateEdit[error="true"][focusVisible="true"],
+QTextEdit[error="true"][focusVisible="true"] {{
     border-color: #B91C1C;
 }}
 
@@ -1173,22 +1199,22 @@ QTextEdit[readOnly="true"] {{
     border-color: {UI_TOKENS.border};
 }}
 
-QPushButton:focus {{
+QPushButton[focusVisible="true"] {{
     border: 2px solid {UI_TOKENS.focus};
 }}
 
-QLineEdit:focus,
-QComboBox:focus,
-QSpinBox:focus,
-QTimeEdit:focus,
-QDateEdit:focus,
-QTextEdit:focus {{
+QLineEdit[focusVisible="true"],
+QComboBox[focusVisible="true"],
+QSpinBox[focusVisible="true"],
+QTimeEdit[focusVisible="true"],
+QDateEdit[focusVisible="true"],
+QTextEdit[focusVisible="true"] {{
     border: 2px solid {UI_TOKENS.brand};
 }}
 
-QTableView:focus,
-QTableWidget:focus,
-QListWidget:focus {{
+QTableView[focusVisible="true"],
+QTableWidget[focusVisible="true"],
+QListWidget[focusVisible="true"] {{
     border: 2px solid {UI_TOKENS.focus};
 }}
 
@@ -1211,6 +1237,12 @@ QToolButton#tableMoreButton {{
     font-weight: 700;
 }}
 
+QToolButton#tableMoreButton::menu-indicator {{
+    image: none;
+    width: 0;
+    height: 0;
+}}
+
 QToolButton#tableMoreButton:hover {{
     background-color: #F0FDFA;
     color: {UI_TOKENS.brand};
@@ -1222,7 +1254,7 @@ QToolButton#tableMoreButton:pressed {{
     border-color: {UI_TOKENS.brand};
 }}
 
-QToolButton#tableMoreButton:focus {{
+QToolButton#tableMoreButton[focusVisible="true"] {{
     border: 2px solid {UI_TOKENS.focus};
 }}
 
@@ -1282,7 +1314,7 @@ QFrame#emptyState[stateRole="error"] {{
     border-color: #FECACA;
 }}
 
-QFrame#statCard:focus {{
+QFrame#statCard[focusVisible="true"] {{
     border: 2px solid {UI_TOKENS.focus};
 }}
 
@@ -1302,10 +1334,98 @@ APP_STYLE += """
 /* =========================================================================
    15. PATIENT & RECEPTION BOOKING FLOWS
    ========================================================================= */
+QWidget#filterToolbar {
+    background-color: #ffffff;
+    border: 1px solid #d7e0ea;
+    border-radius: 10px;
+}
+
+QWidget#filterToolbar QLineEdit,
+QWidget#filterToolbar QComboBox,
+QWidget#filterToolbar QPushButton {
+    min-height: 30px;
+}
+
 QLabel#bookingStepIndicator {
     color: #0f766e;
     font-size: 13px;
     font-weight: 700;
+}
+
+QFrame#bookingWizardSurface {
+    background-color: transparent;
+    border: none;
+}
+
+QPushButton#bookingContextChip {
+    background-color: #ecfdf5;
+    color: #0f766e;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 650;
+}
+
+QPushButton#bookingContextChip:hover {
+    background-color: #ccfbf1;
+}
+
+QPushButton#bookingContextChip[focusVisible="true"] {
+    border-color: #14b8a6;
+}
+
+QFrame#wizardStepper {
+    background-color: transparent;
+    border: none;
+}
+
+QWidget#wizardStep {
+    background-color: transparent;
+}
+
+QLabel#wizardStepMarker {
+    background-color: #e2e8f0;
+    color: #64748b;
+    border: 1px solid transparent;
+    border-radius: 13px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+QLabel#wizardStepMarker[stepState="active"] {
+    background-color: #0f766e;
+    color: #ffffff;
+}
+
+QLabel#wizardStepMarker[stepState="complete"] {
+    background-color: #ccfbf1;
+    color: #0f766e;
+}
+
+QLabel#wizardStepLabel {
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+QLabel#wizardStepLabel[stepState="active"] {
+    color: #0f172a;
+    font-weight: 700;
+}
+
+QLabel#wizardStepLabel[stepState="complete"] {
+    color: #0f766e;
+    font-weight: 600;
+}
+
+QFrame#wizardStepConnector {
+    background-color: #e2e8f0;
+    border: none;
+}
+
+QFrame#wizardStepConnector[stepState="complete"] {
+    background-color: #5eead4;
 }
 
 QLabel#bookingSupportingText {
@@ -1343,29 +1463,34 @@ QLabel#bookingModeLabel {
     font-weight: 700;
 }
 
+QFrame#bookingSegmentedControl {
+    background-color: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+}
+
 QPushButton#bookingModeOption {
-    background-color: #ffffff;
+    background-color: transparent;
     color: #475569;
-    border: 1.5px solid #cbd5e1;
-    border-radius: 8px;
+    border: 1px solid transparent;
+    border-radius: 7px;
     padding: 6px 14px;
     font-weight: 600;
 }
 
 QPushButton#bookingModeOption:hover {
-    background-color: #f8fafc;
-    border-color: #94a3b8;
+    background-color: #e2e8f0;
 }
 
 QPushButton#bookingModeOption[selected="true"] {
     background-color: #0f766e;
     color: #ffffff;
-    border-color: #0f766e;
+    border-color: transparent;
     font-weight: 700;
 }
 
-QPushButton#bookingModeOption:focus {
-    border: 2px solid #14b8a6;
+QPushButton#bookingModeOption[focusVisible="true"] {
+    border-color: #14b8a6;
 }
 
 QPushButton#bookingDateChip {
@@ -1386,12 +1511,12 @@ QPushButton#bookingDateChip:hover {
 QPushButton#bookingDateChip[active="true"] {
     background-color: #0f766e;
     color: #ffffff;
-    border-color: #0f766e;
+    border-color: transparent;
     font-weight: 700;
 }
 
-QPushButton#bookingDateChip:focus {
-    border: 2px solid #14b8a6;
+QPushButton#bookingDateChip[focusVisible="true"] {
+    border-color: #14b8a6;
 }
 
 QLabel#bookingAccentLabel {
@@ -1476,7 +1601,7 @@ QPushButton#bookingSlotButton[selected="true"],
 QPushButton#bookingSlotButton[selected="true"]:hover {
     background-color: #0f766e;
     color: #ffffff;
-    border: 2px solid #0d5f58;
+    border: 1.5px solid transparent;
 }
 
 QPushButton#bookingSlotButton:disabled {
@@ -1485,8 +1610,8 @@ QPushButton#bookingSlotButton:disabled {
     border: 1px solid #e2e8f0;
 }
 
-QPushButton#bookingSlotButton:focus {
-    border: 2px solid #14b8a6;
+QPushButton#bookingSlotButton[focusVisible="true"] {
+    border-color: #14b8a6;
 }
 
 QFrame#card[bookingRole="confirmation"] {

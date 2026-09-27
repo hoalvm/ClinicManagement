@@ -3,6 +3,8 @@
 from frontend.ui.design_system import (
     DEFAULT_UI_TOKENS,
     UI_TOKENS,
+    CellValue,
+    ColumnDisplayMode,
     ColumnPriority,
     ColumnSpec,
     FeedbackSeverity,
@@ -20,6 +22,8 @@ from frontend.ui.icons import (
 )
 
 __all__ = [
+    "CellValue",
+    "ColumnDisplayMode",
     "AVAILABLE_ICONS",
     "ColumnPriority",
     "ColumnSpec",

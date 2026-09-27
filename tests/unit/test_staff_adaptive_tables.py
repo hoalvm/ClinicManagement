@@ -19,7 +19,11 @@ from frontend.views.check_in_view import CheckInView
 from frontend.views.common import BaseApiView
 from frontend.views.invoice_view import InvoiceManagementView
 from frontend.views.payment_history_view import PaymentHistoryView
-from frontend.widgets.adaptive_data_table import RAW_VALUE_ROLE, AdaptiveDataTable
+from frontend.widgets.adaptive_data_table import (
+    RAW_VALUE_ROLE,
+    SECONDARY_TEXT_ROLE,
+    AdaptiveDataTable,
+)
 
 
 @pytest.fixture(scope="module")
@@ -136,9 +140,9 @@ def test_status_and_primary_actions_stay_visible_at_staff_minimum_width(
     qt_app.processEvents()
 
     action_tables = (
-        (appointment.table, 5, 6),
-        (check_in.results_table, 6, 7),
-        (invoice.table, 6, 7),
+        (appointment.table, 4, 5),
+        (check_in.results_table, 4, 5),
+        (invoice.table, 5, 6),
     )
     for table, status_column, action_column in action_tables:
         assert table.horizontalScrollBar().maximum() == 0
@@ -153,6 +157,18 @@ def test_status_and_primary_actions_stay_visible_at_staff_minimum_width(
         assert table.viewport().rect().contains(action_rect.center())
 
     assert payment.table.horizontalScrollBar().maximum() == 0
+    assert (
+        appointment.table.model().index(0, 2).data(SECONDARY_TEXT_ROLE)
+        == "0912345678"
+    )
+    assert (
+        invoice.table.model().index(0, 0).data(SECONDARY_TEXT_ROLE)
+        == "Hẹn #987654"
+    )
+    assert (
+        payment.table.model().index(0, 0).data(SECONDARY_TEXT_ROLE)
+        == "INV-987654"
+    )
     for view in staff_views:
         view.close()
         view.deleteLater()

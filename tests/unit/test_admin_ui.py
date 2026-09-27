@@ -5,12 +5,10 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QPushButton,
-    QTableWidget,
     QWidget,
 )
 
@@ -19,7 +17,13 @@ from frontend.pages import admin_ui
 from frontend.pages.admin_ui import AdminApiError, AdminApiPage, require_success
 from frontend.style import APP_STYLE
 from frontend.ui.design_system import ViewState
+from frontend.widgets.adaptive_data_table import AdaptiveDataTable
+from frontend.widgets.app_sidebar import AppSidebar
+from frontend.widgets.combo_box import ChevronComboBox
+from frontend.widgets.filter_toolbar import FilterToolbar
+from frontend.widgets.form_field import FormField
 from frontend.widgets.state_host import StateHost
+from frontend.widgets.table_actions import TableActionMenu
 
 
 class _Response:
@@ -69,6 +73,8 @@ def admin_window(monkeypatch: pytest.MonkeyPatch, qt_app: QApplication):
                 "SpecialtyName": "Chuyên khoa tim mạch can thiệp",
                 "ClinicName": "Phòng khám trung tâm thành phố",
                 "LicenseNumber": "CCHN-123456789",
+                "SpecialtyID": 1,
+                "ClinicID": 1,
                 "IsActive": True,
             }
         ],
@@ -96,6 +102,8 @@ def admin_window(monkeypatch: pytest.MonkeyPatch, qt_app: QApplication):
                 "DayOfWeek": 2,
                 "StartTime": "08:00:00",
                 "EndTime": "17:00:00",
+                "SlotDuration": 30,
+                "IsActive": True,
             }
         ],
         "/statistics/overview": {
@@ -136,23 +144,25 @@ def test_minimum_admin_window_uses_compact_sidebar_and_tables_fit(
 ) -> None:
     assert admin_window._sidebar_compact is True
     assert admin_window.sidebar.width() == admin_window.COMPACT_SIDEBAR_WIDTH
-    assert admin_window.user_card.styleSheet() == ""
+    assert isinstance(admin_window.sidebar, AppSidebar)
+    assert admin_window.sidebar.styleSheet() == ""
 
-    for page_index in range(admin_window.pages.count()):
-        admin_window.menu.setCurrentRow(page_index)
+    for route in admin_window._routes:
+        admin_window._navigate(route)
         qt_app.processEvents()
         page = admin_window.pages.currentWidget()
-        for table in page.findChildren(QTableWidget):
+        for table in page.findChildren(AdaptiveDataTable):
             assert table.editTriggers() == QAbstractItemView.EditTrigger.NoEditTriggers
-            assert table.horizontalScrollBar().maximum() == 0
+            assert table.horizontalScrollBar().maximum() == 0, (
+                route,
+                table.accessibleName(),
+                table.viewport().width(),
+                [table.columnWidth(index) for index in range(len(table.column_specs))],
+            )
             assert table.accessibleName()
-            for row in range(table.rowCount()):
-                for column in range(table.columnCount()):
-                    item = table.item(row, column)
-                    if item is None:
-                        continue
-                    assert item.toolTip()
-                    assert item.data(Qt.ItemDataRole.AccessibleTextRole)
+            assert all(
+                spec.maximum_width is not None for spec in table.column_specs
+            )
 
     admin_window.resize(1280, 800)
     qt_app.processEvents()
@@ -165,7 +175,7 @@ def test_statistics_cards_reflow_without_duplicates(
     qt_app: QApplication,
 ) -> None:
     admin_window.resize(1100, 680)
-    admin_window.menu.setCurrentRow(5)
+    admin_window._navigate("statistics")
     qt_app.processEvents()
     page = admin_window.pages.currentWidget()
 
@@ -202,7 +212,7 @@ def test_admin_sidebar_boundary_does_not_reduce_stat_card_columns(
     admin_window,
     qt_app: QApplication,
 ) -> None:
-    admin_window.menu.setCurrentRow(5)
+    admin_window._navigate("statistics")
     page = admin_window.pages.currentWidget()
 
     admin_window.resize(admin_window.COMPACT_BREAKPOINT - 1, 680)
@@ -222,14 +232,92 @@ def test_all_admin_pages_use_explicit_content_state(
     admin_window,
     qt_app: QApplication,
 ) -> None:
-    for page_index in range(admin_window.pages.count()):
-        admin_window.menu.setCurrentRow(page_index)
+    for route in admin_window._routes:
+        admin_window._navigate(route)
         qt_app.processEvents()
         page = admin_window.pages.currentWidget()
 
         assert isinstance(page.state_host, StateHost)
         assert page.state_host.state in ViewState
-        assert page.state_host.content_widget.findChildren(QTableWidget)
+        assert page.state_host.content_widget.findChildren(AdaptiveDataTable)
+
+
+def test_admin_crud_pages_are_list_first_with_dialog_ctas(
+    admin_window,
+    qt_app: QApplication,
+) -> None:
+    expected = {
+        "users": "Tạo tài khoản",
+        "doctors": "Thêm bác sĩ",
+        "specialties": "Thêm chuyên khoa",
+        "clinics": "Thêm phòng khám",
+        "schedules": "Thêm lịch trực",
+    }
+    for route, action_label in expected.items():
+        admin_window._navigate(route)
+        qt_app.processEvents()
+        page = admin_window.pages.currentWidget()
+        assert page.header.action_button.text() == action_label
+        assert page.table.data_model.rowCount() == 1
+        menus = page.table.findChildren(TableActionMenu)
+        assert menus
+        assert all(menu.text() == "⋯" for menu in menus)
+
+
+def test_admin_grouped_cells_keep_full_secondary_information(
+    admin_window,
+    qt_app: QApplication,
+) -> None:
+    admin_window._navigate("doctors")
+    qt_app.processEvents()
+    page = admin_window.pages.currentWidget()
+    doctor_item = page.table.data_model.item(0, 1)
+    assert "CCHN-123456789" in doctor_item.toolTip()
+    assert "số giấy phép hành nghề" in doctor_item.accessibleText()
+    assert page.table.column_specs[1].line_limit == 2
+
+
+def test_admin_search_uses_shared_debounced_filter_toolbar(
+    admin_window,
+    qt_app: QApplication,
+) -> None:
+    for route in ("users", "doctors", "clinics"):
+        admin_window._navigate(route)
+        qt_app.processEvents()
+        page = admin_window.pages.currentWidget()
+        assert isinstance(page.search, FilterToolbar)
+        page.search.set_debounce_ms(0)
+        page.search.search_input.setText("không tồn tại")
+        qt_app.processEvents()
+        assert page.table.data_model.rowCount() == 0
+        assert page.search.clear_button.isVisible()
+        page.search.clear()
+        qt_app.processEvents()
+        assert page.table.data_model.rowCount() == 1
+
+
+def test_admin_dialogs_use_form_fields_and_painted_combos(
+    admin_window,
+    qt_app: QApplication,
+) -> None:
+    for route in ("users", "doctors", "specialties", "clinics", "schedules"):
+        admin_window._navigate(route)
+        qt_app.processEvents()
+        page = admin_window.pages.currentWidget()
+        built = page._build_dialog()
+        dialog = built[0]
+        fields = dialog.findChildren(FormField)
+        assert fields
+        enabled_before = [field.control.isEnabled() for field in fields]
+        dialog.set_busy(True)
+        assert not any(field.control.isEnabled() for field in fields)
+        dialog.set_busy(False)
+        assert [field.control.isEnabled() for field in fields] == enabled_before
+        for combo in dialog.findChildren(ChevronComboBox):
+            assert combo.property("paintedChevron") is True
+        dialog.reject()
+        dialog.deleteLater()
+    qt_app.processEvents()
 
 
 def test_admin_state_host_distinguishes_empty_and_error_and_retries(

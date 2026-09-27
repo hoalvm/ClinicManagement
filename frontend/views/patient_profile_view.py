@@ -7,7 +7,6 @@ from typing import Any
 
 from PySide6.QtCore import QDate, Qt, Signal
 from PySide6.QtWidgets import (
-    QComboBox,
     QDateEdit,
     QFormLayout,
     QFrame,
@@ -25,6 +24,7 @@ from frontend.api.api_client import ApiClient
 from frontend.core.i18n import get_i18n, t
 from frontend.core.session import SessionState
 from frontend.views.common import BaseApiView, require_dict
+from frontend.widgets.combo_box import ChevronComboBox
 from frontend.widgets.page_header import PageHeader
 
 NULL_DATE = QDate(1752, 9, 14)
@@ -126,7 +126,7 @@ class PatientProfileView(BaseApiView):
         self.date_of_birth.setSpecialValueText(t("not_set"))
         self.date_of_birth.setMaximumDate(QDate.currentDate())
         self.date_of_birth.setAccessibleName(t("date_of_birth"))
-        self.gender = QComboBox()
+        self.gender = ChevronComboBox()
         self._populate_gender_combo()
         self.gender.setAccessibleName(t("gender"))
         self.address = QTextEdit()

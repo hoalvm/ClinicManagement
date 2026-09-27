@@ -5,7 +5,6 @@ from __future__ import annotations
 from PySide6.QtCore import QModelIndex, Qt, Signal
 from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
-    QComboBox,
     QFrame,
     QGridLayout,
     QLabel,
@@ -25,6 +24,7 @@ from frontend.views.common import (
     require_page,
     table_item,
 )
+from frontend.widgets.combo_box import ChevronComboBox
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.pagination import PaginationWidget
 from frontend.widgets.state_host import StateHost
@@ -59,7 +59,7 @@ class InvoiceHistoryView(BaseApiView):
 
         self.status_label = QLabel(t("field_payment_status"))
         self.status_label.setObjectName("fieldLabel")
-        self.status = QComboBox()
+        self.status = ChevronComboBox()
         self.status.setMinimumWidth(170)
         self.status.setAccessibleName(t("a11y_filter_invoices"))
         self.status.addItem(t("status_all"), "All")

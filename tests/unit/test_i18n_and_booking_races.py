@@ -205,7 +205,7 @@ def test_booking_slot_reads_replace_older_dates(
     }
     if second["is_current"]():
         second["on_success"](latest_result)
-    assert [button.text() for button in view._slot_widgets] == ["10:00 - 10:30"]
+    assert [button.text() for button in view._slot_widgets] == ["10:00–10:30"]
 
     # Moving back to the old date would create a new request; the old response
     # cannot become current merely because it completes later.

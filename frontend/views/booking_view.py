@@ -7,7 +7,6 @@ from typing import Any
 from PySide6.QtCore import QDate, Qt, Signal
 from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
-    QComboBox,
     QDateEdit,
     QFrame,
     QGridLayout,
@@ -24,10 +23,12 @@ from PySide6.QtWidgets import (
 
 from frontend.api.api_client import ApiClient
 from frontend.core.i18n import get_i18n, t
-from frontend.views.common import BaseApiView
+from frontend.views.common import BaseApiView, format_time_range
 from frontend.widgets.calendar_dialog import CalendarDialog
+from frontend.widgets.combo_box import ChevronComboBox
 from frontend.widgets.empty_state import EmptyState
 from frontend.widgets.page_header import PageHeader
+from frontend.widgets.wizard_stepper import WizardStepper
 
 
 def _set_style_state(widget: QWidget, name: str, value: object) -> None:
@@ -98,22 +99,38 @@ class BookingView(BaseApiView):
         self.header.add_action(self.cancel_nav_btn)
         root_layout.addWidget(self.header)
 
-        # Step indicator
-        self.step_indicator = QLabel()
-        self.step_indicator.setObjectName("bookingStepIndicator")
-        root_layout.addWidget(self.step_indicator)
+        # A single, canonical indicator avoids repeating "Bước n" inside
+        # every surface and keeps the patient oriented throughout the flow.
+        self.step_indicator = WizardStepper(self._step_labels())
+        self.step_indicator.setMaximumWidth(900)
+        self.step_indicator.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed,
+        )
+        stepper_row = QHBoxLayout()
+        stepper_row.setContentsMargins(0, 0, 0, 0)
+        stepper_row.addStretch(1)
+        stepper_row.addWidget(self.step_indicator, 100)
+        stepper_row.addStretch(1)
+        root_layout.addLayout(stepper_row)
 
         root_layout.addWidget(self.feedback)
         root_layout.addWidget(self.loading)
 
         # Stacked layout for 4 steps
         self.step_container = QFrame()
-        self.step_container.setObjectName("card")
+        self.step_container.setObjectName("bookingWizardSurface")
+        self.step_container.setMaximumWidth(1280)
         self.step_container.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         self.step_layout = QStackedLayout(self.step_container)
-        root_layout.addWidget(self.step_container, 1)
+        canvas_row = QHBoxLayout()
+        canvas_row.setContentsMargins(0, 0, 0, 0)
+        canvas_row.addStretch(1)
+        canvas_row.addWidget(self.step_container, 100)
+        canvas_row.addStretch(1)
+        root_layout.addLayout(canvas_row, 1)
 
         self._current_step_index = 0
 
@@ -155,9 +172,9 @@ class BookingView(BaseApiView):
         search_row = QHBoxLayout()
         search_row.setSpacing(10)
 
-        self.spec_combo = QComboBox()
+        self.spec_combo = ChevronComboBox()
         self.spec_combo.setEditable(True)
-        self.spec_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.spec_combo.setInsertPolicy(ChevronComboBox.InsertPolicy.NoInsert)
         self.spec_combo.setMinimumHeight(42)
         self.spec_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.spec_combo.setAccessibleName(t("step_1_title"))
@@ -344,41 +361,51 @@ class BookingView(BaseApiView):
         layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(12)
 
-        # Top navigation
-        top_nav = QHBoxLayout()
-        self.step2_back_btn = QPushButton("Đổi chuyên khoa")
-        self.step2_back_btn.setObjectName("secondaryButton")
-        self.step2_back_btn.clicked.connect(lambda: self._go_to_step(0))
-        top_nav.addWidget(self.step2_back_btn)
-
-        self.step2_title = QLabel("Bước 2: Chọn lịch khám")
+        # Clear title and one compact context chip.  The global stepper already
+        # communicates that this is step two.
+        self.step2_title = QLabel(t("step_2_title_by_date"))
         self.step2_title.setObjectName("sectionTitle")
         self.step2_title.setWordWrap(True)
-        top_nav.addWidget(self.step2_title, 1)
+        layout.addWidget(self.step2_title)
+
+        top_nav = QHBoxLayout()
+        self.step2_back_btn = QPushButton("Đổi chuyên khoa")
+        self.step2_back_btn.setObjectName("bookingContextChip")
+        self.step2_back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.step2_back_btn.clicked.connect(lambda: self._go_to_step(0))
+        top_nav.addWidget(self.step2_back_btn)
+        top_nav.addStretch(1)
         layout.addLayout(top_nav)
 
-        # Mode selection bar
-        mode_row = QGridLayout()
-        mode_row.setHorizontalSpacing(10)
-        mode_row.setVerticalSpacing(8)
+        # One segmented control, instead of two independent bordered buttons.
+        mode_section = QWidget()
+        mode_section.setObjectName("bookingModeSection")
+        mode_section_layout = QVBoxLayout(mode_section)
+        mode_section_layout.setContentsMargins(0, 0, 0, 0)
+        mode_section_layout.setSpacing(8)
         self.mode_label = QLabel(t("lbl_booking_mode"))
         self.mode_label.setObjectName("bookingModeLabel")
-        mode_row.addWidget(self.mode_label, 0, 0, 1, 2)
+        mode_section_layout.addWidget(self.mode_label)
+
+        self.mode_segment = QFrame()
+        self.mode_segment.setObjectName("bookingSegmentedControl")
+        mode_row = QHBoxLayout(self.mode_segment)
+        mode_row.setContentsMargins(3, 3, 3, 3)
+        mode_row.setSpacing(0)
 
         self.mode_by_date_btn = QPushButton(t("mode_by_date"))
         self.mode_by_date_btn.setObjectName("bookingModeOption")
         self.mode_by_date_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.mode_by_date_btn.clicked.connect(lambda: self._set_booking_mode("by_date"))
-        mode_row.addWidget(self.mode_by_date_btn, 1, 0)
+        mode_row.addWidget(self.mode_by_date_btn, 1)
 
         self.mode_by_doctor_btn = QPushButton(t("mode_by_doctor"))
         self.mode_by_doctor_btn.setObjectName("bookingModeOption")
         self.mode_by_doctor_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.mode_by_doctor_btn.clicked.connect(lambda: self._set_booking_mode("by_doctor"))
-        mode_row.addWidget(self.mode_by_doctor_btn, 1, 1)
-        mode_row.setColumnStretch(0, 1)
-        mode_row.setColumnStretch(1, 1)
-        layout.addLayout(mode_row)
+        mode_row.addWidget(self.mode_by_doctor_btn, 1)
+        mode_section_layout.addWidget(self.mode_segment)
+        layout.addWidget(mode_section)
 
         # Stacked layout for the 2 modes
         self.step2_stack = QStackedLayout()
@@ -412,34 +439,32 @@ class BookingView(BaseApiView):
             s2_quick_row.addWidget(chip_btn, 1 + offset // 3, offset % 3)
         for column in range(3):
             s2_quick_row.setColumnStretch(column, 1)
-        by_date_layout.addLayout(s2_quick_row)
-        self._update_s2_quick_chip_labels()
 
-        # Date picker row
-        s2_date_row = QHBoxLayout()
-        self.s2_date_lbl = QLabel(t("field_appointment_date", default="Chọn ngày khám:"))
-        self.s2_date_lbl.setObjectName("fieldLabel")
-        s2_date_row.addWidget(self.s2_date_lbl)
-
+        # Keep the date editor as the canonical value/model for compatibility,
+        # but expose only one date-picking affordance to the patient.
         self.step2_date_edit = QDateEdit()
         self.step2_date_edit.setCalendarPopup(True)
+        self.step2_date_edit.setDisplayFormat("dd/MM/yyyy")
         self.step2_date_edit.setDate(QDate.currentDate().addDays(1))
         self.step2_date_edit.setMinimumDate(QDate.currentDate())
         self.step2_date_edit.setMaximumDate(QDate.currentDate().addDays(60))
         self.step2_date_edit.dateChanged.connect(self._load_doctors_for_date)
-        s2_date_row.addWidget(self.step2_date_edit)
+        self.step2_date_edit.hide()
 
-        self.s2_open_cal_btn = QPushButton(t("btn_open_calendar", default="Chọn ngày"))
-        self.s2_open_cal_btn.setObjectName("secondaryButton")
+        self.s2_date_lbl = QLabel()
+        self.s2_date_lbl.hide()
+
+        self.s2_open_cal_btn = QPushButton(t("btn_other_date", default="Ngày khác…"))
+        self.s2_open_cal_btn.setObjectName("bookingDateChip")
         self.s2_open_cal_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.s2_open_cal_btn.clicked.connect(self._open_s2_calendar_dialog)
-        s2_date_row.addWidget(self.s2_open_cal_btn)
+        s2_quick_row.addWidget(self.s2_open_cal_btn, 3, 0, 1, 3)
+        by_date_layout.addLayout(s2_quick_row)
+        self._update_s2_quick_chip_labels()
 
         self.step2_day_of_week_lbl = QLabel()
         self.step2_day_of_week_lbl.setObjectName("bookingAccentLabel")
-        s2_date_row.addWidget(self.step2_day_of_week_lbl)
-        s2_date_row.addStretch(1)
-        by_date_layout.addLayout(s2_date_row)
+        self.step2_day_of_week_lbl.hide()
 
         self.by_date_doc_header = QLabel(t("lbl_choose_doctor_on_date"))
         self.by_date_doc_header.setObjectName("bookingSectionLead")
@@ -503,6 +528,20 @@ class BookingView(BaseApiView):
         _set_style_state(self.mode_by_date_btn, "selected", by_date)
         _set_style_state(self.mode_by_doctor_btn, "selected", not by_date)
 
+    def _update_step2_heading(self) -> None:
+        """Keep the page title simple and put the current specialty in context."""
+
+        self.step2_title.setText(t("step_2_title_by_date"))
+        specialty_name = (
+            str(self.selected_specialty.get("specialty_name", "")).strip()
+            if self.selected_specialty
+            else ""
+        )
+        change_label = t("change_short", default="Thay đổi")
+        self.step2_back_btn.setText(
+            f"{specialty_name} · {change_label}" if specialty_name else t("step_2_back")
+        )
+
     def _open_s2_calendar_dialog(self) -> None:
         dlg = CalendarDialog(
             current_date=self.step2_date_edit.date(),
@@ -550,12 +589,13 @@ class BookingView(BaseApiView):
         self.step2_day_of_week_lbl.setText(f"({t(f'day_{day_num}')})")
         self._highlight_s2_quick_chips(qdate)
 
-        spec_name = self.selected_specialty.get("specialty_name", "")
-        self.step2_title.setText(
-            f"{t('step_2_title_by_date')} ({spec_name})" if spec_name else t("step_2_title_by_date")
-        )
+        self._update_step2_heading()
         self.by_date_doc_header.setText(
-            f"{t('lbl_choose_doctor_on_date')} ({qdate.toString('dd/MM/yyyy')} - {t(f'day_{day_num}')})"
+            t(
+                "doctors_working_heading",
+                weekday=t(f"day_{day_num}"),
+                date=qdate.toString("dd/MM/yyyy"),
+            )
         )
 
         request_version = self._next_request_version("doctors_by_date")
@@ -612,7 +652,7 @@ class BookingView(BaseApiView):
 
             info_layout = QVBoxLayout()
             info_layout.setSpacing(4)
-            name_lbl = QLabel(f"Bác sĩ: {doc.get('full_name', '')}")
+            name_lbl = QLabel(str(doc.get("full_name", "")))
             name_lbl.setObjectName("bookingDoctorName")
             name_lbl.setWordWrap(True)
             info_layout.addWidget(name_lbl)
@@ -654,10 +694,7 @@ class BookingView(BaseApiView):
         self._load_available_slots()
 
     def _load_doctors_for_specialty(self, specialty_id: int | None) -> None:
-        spec_name = self.selected_specialty.get("specialty_name", "") if self.selected_specialty else ""
-        self.step2_title.setText(
-            f"{t('step_2_title_by_doctor')} ({spec_name})" if spec_name else t("step_2_title_by_doctor")
-        )
+        self._update_step2_heading()
         request_version = self._next_request_version("doctors_by_specialty")
         self.run_api_task(
             f"load_doctors:{request_version}",
@@ -700,7 +737,7 @@ class BookingView(BaseApiView):
 
             info_layout = QVBoxLayout()
             info_layout.setSpacing(4)
-            name_lbl = QLabel(f"Bác sĩ: {doc.get('full_name', '')}")
+            name_lbl = QLabel(str(doc.get("full_name", "")))
             name_lbl.setObjectName("bookingDoctorName")
             name_lbl.setWordWrap(True)
             info_layout.addWidget(name_lbl)
@@ -757,7 +794,7 @@ class BookingView(BaseApiView):
                     day_name = t(f"day_{d}") if d else ""
                     st = str(item.get("start_time", ""))[:5]
                     et = str(item.get("end_time", ""))[:5]
-                    parts.append(f"{day_name} ({st} - {et})")
+                    parts.append(f"{day_name} ({format_time_range(st, et)})")
                 schedule_text = ", ".join(parts)
                 self.doc_schedule_lbl.setText(f"<b>{t('doctor_schedule_info')}</b> {schedule_text}")
                 self.doc_schedule_lbl.show()
@@ -849,35 +886,32 @@ class BookingView(BaseApiView):
             quick_row.addWidget(chip_btn, 1 + offset // 3, offset % 3)
         for column in range(3):
             quick_row.setColumnStretch(column, 1)
-        layout.addLayout(quick_row)
-        self._update_quick_chip_labels()
 
-        # Date picker row
-        date_row = QHBoxLayout()
-        self.date_lbl = QLabel(t("field_appointment_date", default="Chọn ngày khám:"))
-        self.date_lbl.setObjectName("fieldLabel")
-        date_row.addWidget(self.date_lbl)
-
+        # The hidden editor remains the canonical model; patients choose via
+        # quick dates or the single "Ngày khác…" calendar action.
         self.slot_date_edit = QDateEdit()
         self.slot_date_edit.setCalendarPopup(True)
+        self.slot_date_edit.setDisplayFormat("dd/MM/yyyy")
         self.slot_date_edit.setDate(QDate.currentDate().addDays(1))
         self.slot_date_edit.setMinimumDate(QDate.currentDate())
         self.slot_date_edit.setMaximumDate(QDate.currentDate().addDays(60))
         self.slot_date_edit.dateChanged.connect(self._load_available_slots)
-        date_row.addWidget(self.slot_date_edit)
+        self.slot_date_edit.hide()
 
-        self.open_cal_btn = QPushButton(t("btn_open_calendar", default="Chọn ngày"))
-        self.open_cal_btn.setObjectName("secondaryButton")
+        self.date_lbl = QLabel()
+        self.date_lbl.hide()
+
+        self.open_cal_btn = QPushButton(t("btn_other_date", default="Ngày khác…"))
+        self.open_cal_btn.setObjectName("bookingDateChip")
         self.open_cal_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.open_cal_btn.setToolTip("Nhấp để mở bảng lịch chọn ngày trực quan")
         self.open_cal_btn.clicked.connect(self._open_calendar_dialog)
-        date_row.addWidget(self.open_cal_btn)
+        quick_row.addWidget(self.open_cal_btn, 3, 0, 1, 3)
+        layout.addLayout(quick_row)
+        self._update_quick_chip_labels()
 
         self.day_of_week_lbl = QLabel()
         self.day_of_week_lbl.setObjectName("bookingAccentLabel")
-        date_row.addWidget(self.day_of_week_lbl)
-        date_row.addStretch(1)
-        layout.addLayout(date_row)
+        self.day_of_week_lbl.hide()
 
         # Slots container
         scroll = QScrollArea()
@@ -1036,7 +1070,7 @@ class BookingView(BaseApiView):
             is_avail = s.get("is_available", False)
             reason = s.get("reason") or "Không khả dụng"
 
-            btn = QPushButton(f"{start_t} - {end_t}")
+            btn = QPushButton(format_time_range(start_t, end_t))
             btn.setObjectName("bookingSlotButton")
             btn.setProperty("selected", False)
             btn.setMinimumHeight(44)
@@ -1074,7 +1108,7 @@ class BookingView(BaseApiView):
 
     def _select_slot(self, start_t: str, end_t: str, active_btn: QPushButton) -> None:
         self.selected_slot = (start_t, end_t)
-        self.slot_selected_lbl.setText(f"Đã chọn: {start_t} - {end_t}")
+        self.slot_selected_lbl.setText(f"Đã chọn: {format_time_range(start_t, end_t)}")
         self.to_confirm_btn.setEnabled(True)
 
         for btn, _, _ in self._slot_buttons:
@@ -1173,7 +1207,7 @@ class BookingView(BaseApiView):
         <p><b>{t("summary_doctor")}:</b> {doc_name}</p>
         <p><b>{t("summary_location")}:</b> {clinic_name} ({clinic_addr})</p>
         <p><b>{t("summary_date")}:</b> <b>{self.selected_date}</b></p>
-        <p><b>{t("summary_time")}:</b> <b>{start_t} - {end_t}</b></p>
+        <p><b>{t("summary_time")}:</b> <b>{format_time_range(start_t, end_t)}</b></p>
         <p><i>{t("summary_note")}</i></p>
         """
         self.summary_details_lbl.setText(html)
@@ -1226,34 +1260,24 @@ class BookingView(BaseApiView):
                     loading_text="Đang tải danh mục chuyên khoa…",
                 )
         elif step_index == 1:
-            spec_name = (
-                self.selected_specialty.get("specialty_name", "") if self.selected_specialty else ""
-            )
-            title_key = (
-                "step_2_title_by_date"
-                if getattr(self, "_booking_mode", "by_date") == "by_date"
-                else "step_2_title_by_doctor"
-            )
-            self.step2_title.setText(f"{t(title_key)} ({spec_name})" if spec_name else t(title_key))
+            self._update_step2_heading()
         elif step_index == 3:
             self._render_confirmation_summary()
 
     def _update_step_indicator(self) -> None:
-        if self._current_step_index == 1:
-            mode_text = (
-                t("mode_by_date")
-                if getattr(self, "_booking_mode", "by_date") == "by_date"
-                else t("mode_by_doctor")
-            )
-            self.step_indicator.setText(f"Bước 2/4: {mode_text}")
-        else:
-            step_keys = [
-                "step_1_indicator",
-                "step_2_indicator",
-                "step_3_indicator",
-                "step_4_indicator",
-            ]
-            self.step_indicator.setText(t(step_keys[self._current_step_index]))
+        labels = self._step_labels()
+        if self.step_indicator.steps != tuple(labels):
+            self.step_indicator.set_steps(labels)
+        self.step_indicator.set_current_step(self._current_step_index)
+
+    @staticmethod
+    def _step_labels() -> list[str]:
+        return [
+            t("wizard_specialty", default="Chuyên khoa"),
+            t("wizard_doctor", default="Bác sĩ"),
+            t("wizard_datetime", default="Ngày & giờ"),
+            t("wizard_confirm", default="Xác nhận"),
+        ]
 
     def retranslate_ui(self) -> None:
         """Dynamically update all visible text in BookingView."""
@@ -1274,16 +1298,7 @@ class BookingView(BaseApiView):
             self._render_specialties_grid(self.specialties_data)
 
         # Step 2
-        self.step2_back_btn.setText(t("step_2_back"))
-        spec_name = (
-            self.selected_specialty.get("specialty_name", "") if self.selected_specialty else ""
-        )
-        title_key = (
-            "step_2_title_by_date"
-            if getattr(self, "_booking_mode", "by_date") == "by_date"
-            else "step_2_title_by_doctor"
-        )
-        self.step2_title.setText(f"{t(title_key)} ({spec_name})" if spec_name else t(title_key))
+        self._update_step2_heading()
         if hasattr(self, "mode_label"):
             self.mode_label.setText(t("lbl_booking_mode"))
         if hasattr(self, "mode_by_date_btn"):
@@ -1297,14 +1312,18 @@ class BookingView(BaseApiView):
         if hasattr(self, "s2_date_lbl"):
             self.s2_date_lbl.setText(t("field_appointment_date", default="Chọn ngày khám:"))
         if hasattr(self, "s2_open_cal_btn"):
-            self.s2_open_cal_btn.setText(t("btn_open_calendar", default="Chọn ngày"))
+            self.s2_open_cal_btn.setText(t("btn_other_date", default="Ngày khác…"))
         self._update_s2_quick_chip_labels()
         if hasattr(self, "step2_date_edit") and hasattr(self, "step2_day_of_week_lbl"):
             day_num = self.step2_date_edit.date().dayOfWeek()
             self.step2_day_of_week_lbl.setText(f"({t(f'day_{day_num}')})")
             if hasattr(self, "by_date_doc_header"):
                 self.by_date_doc_header.setText(
-                    f"{t('lbl_choose_doctor_on_date')} ({self.step2_date_edit.date().toString('dd/MM/yyyy')} - {t(f'day_{day_num}')})"
+                    t(
+                        "doctors_working_heading",
+                        weekday=t(f"day_{day_num}"),
+                        date=self.step2_date_edit.date().toString("dd/MM/yyyy"),
+                    )
                 )
 
         # Step 3
@@ -1315,7 +1334,7 @@ class BookingView(BaseApiView):
         if hasattr(self, "date_lbl"):
             self.date_lbl.setText(t("field_appointment_date", default="Chọn ngày khám:"))
         if hasattr(self, "open_cal_btn"):
-            self.open_cal_btn.setText(t("btn_open_calendar", default="Chọn ngày"))
+            self.open_cal_btn.setText(t("btn_other_date", default="Ngày khác…"))
         self._update_quick_chip_labels()
         if hasattr(self, "slot_date_edit") and hasattr(self, "day_of_week_lbl"):
             day_num = self.slot_date_edit.date().dayOfWeek()

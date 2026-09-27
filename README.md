@@ -23,7 +23,7 @@ Hệ thống hỗ trợ 4 nhóm người dùng chính:
 
 3. **Tiếp đón & Thu ngân (STAFF):**
    - Đặt lịch khám và điều chỉnh lịch hẹn cho bệnh nhân tại quầy.
-   - Tiếp đón bệnh nhân, thực hiện check-in vào phòng khám theo số thứ tự.
+   - Tiếp nhận bệnh nhân vào phòng khám theo số thứ tự.
    - Xuất hóa đơn viện phí, ghi nhận thanh toán tiền mặt (CASH) hoặc chuyển khoản/thẻ (CARD).
 
 4. **Bệnh nhân (PATIENT):**

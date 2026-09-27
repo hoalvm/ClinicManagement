@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
-from PySide6.QtWidgets import QAbstractItemView, QApplication
+from PySide6.QtWidgets import QAbstractItemView, QApplication, QMessageBox, QToolButton
 
 import frontend.app as doctor_app
 from frontend.app import DoctorDashboard, DoctorScheduleView, MedicalExamView
@@ -67,6 +67,29 @@ class _ControllableScheduleWorker(QObject):
         self.running = False
         self.error.emit(message)
         self.finished.emit()
+
+
+class _ControllableCompleteWorker(QObject):
+    finished = Signal(bool, str)
+    instances: list["_ControllableCompleteWorker"] = []
+
+    def __init__(self, appt_id: int, payload: dict, token: str) -> None:
+        super().__init__()
+        self.appt_id = appt_id
+        self.payload = payload
+        self.token = token
+        self.running = False
+        self.instances.append(self)
+
+    def start(self) -> None:
+        self.running = True
+
+    def isRunning(self) -> bool:  # noqa: N802 - Qt-compatible test double
+        return self.running
+
+    def resolve(self, ok: bool, message: str) -> None:
+        self.running = False
+        self.finished.emit(ok, message)
 
 
 def test_schedule_table_is_read_only_and_preserves_full_text(
@@ -233,6 +256,165 @@ def test_exam_reflows_without_horizontal_overflow_or_overlapping_fields(
 
     view.close()
     view.deleteLater()
+    qt_app.processEvents()
+
+
+def test_exam_v2_uses_full_width_summary_balanced_body_and_fixed_footer(
+    qt_app: QApplication,
+) -> None:
+    view = MedicalExamView(SimpleNamespace(token="test-token", doctor_id=7))
+    view.load_patient_data(_appointment())
+    view.resize(1240, 780)
+    view.show()
+    qt_app.processEvents()
+
+    assert view.header.title == "Khám bệnh"
+    assert view.breadcrumb.text() == "← Lịch khám hôm nay"
+    assert view.patient_summary.parent() is view.scroll_content
+    assert view.patient_summary.width() > view.left_panel.width()
+    assert view.body_layout.columnStretch(0) == 11
+    assert view.body_layout.columnStretch(1) == 9
+    assert view.txt_symptoms.height() == 120
+    assert view.txt_diagnosis.height() == 120
+    assert view.txt_notes.height() == 96
+    assert view.spin_qty.value() == 1
+    assert view.prescription_empty.isVisible()
+    assert not view.table_med.isVisible()
+    assert view.footer.parent() is view
+    assert view.footer.geometry().top() >= view.scroll_area.geometry().bottom()
+    assert view.btn_finish.text() == "Lưu và hoàn tất khám"
+
+    view.close()
+    view.deleteLater()
+    qt_app.processEvents()
+
+
+def test_prescription_supports_local_edit_delete_and_single_overflow_action(
+    qt_app: QApplication,
+) -> None:
+    view = MedicalExamView(SimpleNamespace(token="test-token", doctor_id=7))
+    view.load_patient_data(_appointment())
+    view.show()
+    qt_app.processEvents()
+
+    view.in_med.setText("Paracetamol")
+    view.in_dosage.setText("500 mg")
+    view.in_instructions.setText("Uống sau ăn")
+    view.add_medicine()
+
+    assert view.table_med.rowCount() == 1
+    assert view.table_med.columnCount() == 5
+    assert not view.prescription_empty.isVisible()
+    assert view.table_med.isVisible()
+    action = view.table_med.cellWidget(0, 4).findChild(
+        QToolButton,
+        "tableMoreButton",
+    )
+    assert action is not None
+    assert action.text() == "⋯"
+    assert action.menu() is None
+    assert view.has_unsaved_changes()
+
+    view.edit_medicine(0)
+    assert view.btn_add_medicine.text() == "Lưu thay đổi"
+    assert view.btn_cancel_medicine_edit.isVisible()
+    view.in_instructions.setText("Uống sau ăn, ngày hai lần")
+    view.add_medicine()
+
+    assert view.table_med.rowCount() == 1
+    assert view.table_med.item(0, 3).text() == "Uống sau ăn, ngày hai lần"
+    assert view.btn_add_medicine.text() == "Thêm vào đơn"
+    assert not view.btn_cancel_medicine_edit.isVisible()
+    assert view.spin_qty.value() == 1
+
+    view.delete_medicine(0)
+    assert view.table_med.rowCount() == 0
+    assert view.prescription_empty.isVisible()
+    assert not view.table_med.isVisible()
+
+    view.close()
+    view.deleteLater()
+    qt_app.processEvents()
+
+
+def test_exam_confirms_completion_and_keeps_api_payload_compatible(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _ControllableCompleteWorker.instances.clear()
+    monkeypatch.setattr(doctor_app, "CompleteExamWorker", _ControllableCompleteWorker)
+    view = MedicalExamView(SimpleNamespace(token="test-token", doctor_id=7))
+    view.load_patient_data(_appointment())
+    view.txt_diagnosis.setText("Đau đầu do thiếu ngủ")
+
+    monkeypatch.setattr(view, "_ask_confirmation", lambda *_args, **_kwargs: False)
+    view.submit_examination()
+    assert _ControllableCompleteWorker.instances == []
+
+    monkeypatch.setattr(view, "_ask_confirmation", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(QMessageBox, "information", lambda *_args, **_kwargs: None)
+    completed: list[bool] = []
+    view.examination_done.connect(lambda: completed.append(True))
+    view.submit_examination()
+
+    worker = _ControllableCompleteWorker.instances[0]
+    assert worker.appt_id == _appointment()["AppointmentID"]
+    assert worker.payload == {
+        "symptoms": _appointment()["Reason"].strip(),
+        "diagnosis": "Đau đầu do thiếu ngủ",
+        "notes": None,
+        "prescription_items": [],
+    }
+    assert not view.btn_finish.isEnabled()
+
+    worker.resolve(True, "Đã lưu")
+    assert view.btn_finish.isEnabled()
+    assert view.btn_finish.text() == "Lưu và hoàn tất khám"
+    assert completed == [True]
+    assert not view.has_unsaved_changes()
+
+    view.close()
+    view.deleteLater()
+    qt_app.processEvents()
+
+
+def test_dashboard_warns_before_discarding_dirty_examination(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(doctor_app.FetchScheduleWorker, "start", lambda _worker: None)
+    dashboard = DoctorDashboard(
+        {
+            "access_token": "test-token",
+            "doctor_id": 7,
+            "doctor_name": "Nguyễn Văn Bác Sĩ",
+            "license_number": "CCHN-001",
+        }
+    )
+    dashboard.go_to_exam(_appointment())
+    dashboard.exam_view.txt_diagnosis.setText("Chẩn đoán chưa lưu")
+    assert dashboard.exam_view.has_unsaved_changes()
+
+    monkeypatch.setattr(
+        dashboard.exam_view,
+        "_ask_confirmation",
+        lambda *_args, **_kwargs: False,
+    )
+    assert dashboard.go_to_schedule() is False
+    assert dashboard.stack.currentWidget() is dashboard.exam_view
+    assert dashboard.sidebar.exam_button.isChecked()
+
+    monkeypatch.setattr(
+        dashboard.exam_view,
+        "_ask_confirmation",
+        lambda *_args, **_kwargs: True,
+    )
+    assert dashboard.go_to_schedule() is True
+    assert dashboard.stack.currentWidget() is dashboard.schedule_view
+    assert not dashboard.exam_view.has_unsaved_changes()
+
+    dashboard.close()
+    dashboard.deleteLater()
     qt_app.processEvents()
 
 

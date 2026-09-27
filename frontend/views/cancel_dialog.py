@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from frontend.api.api_client import ApiClient, ApiError
 from frontend.core.i18n import t
+from frontend.views.common import format_date, format_time_range
 from frontend.widgets.async_task_controller import AsyncTaskController
 
 
@@ -67,8 +68,11 @@ class CancelAppointmentDialog(QDialog):
         doctor_info = appointment.get("doctor", {})
         doc_name = doctor_info.get("full_name", "Bác sĩ")
         spec_name = doctor_info.get("specialty", "")
-        date_str = appointment.get("appointment_date", "")
-        time_str = f"{appointment.get('start_time', '')} - {appointment.get('end_time', '')}"
+        date_str = format_date(appointment.get("appointment_date"))
+        time_str = format_time_range(
+            appointment.get("start_time"),
+            appointment.get("end_time"),
+        )
 
         card_layout.addWidget(QLabel(f"<b>{t('field_doctor')}:</b> {doc_name} ({spec_name})"))
         card_layout.addWidget(QLabel(f"<b>{t('field_date')}:</b> {date_str}"))

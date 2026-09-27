@@ -6,7 +6,6 @@ import re
 
 from PySide6.QtCore import QDate, Qt, Signal
 from PySide6.QtWidgets import (
-    QComboBox,
     QDateEdit,
     QFrame,
     QGridLayout,
@@ -23,6 +22,7 @@ from PySide6.QtWidgets import (
 from frontend.api.api_client import ApiClient
 from frontend.core.i18n import get_i18n, t
 from frontend.views.common import BaseApiView
+from frontend.widgets.combo_box import ChevronComboBox
 from frontend.widgets.language_selector import LanguageSelector
 
 NULL_DATE = QDate(1752, 9, 14)
@@ -174,7 +174,7 @@ class RegisterView(BaseApiView):
 
         self.gender_label = QLabel()
         self.gender_label.setObjectName("fieldLabel")
-        self.gender = QComboBox()
+        self.gender = ChevronComboBox()
         self.gender.setAccessibleName("Gender")
         self._add_grid_field(grid_pers, 2, 1, self.gender_label, self.gender)
 

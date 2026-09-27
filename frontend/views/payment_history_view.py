@@ -6,23 +6,38 @@ from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QComboBox,
     QFrame,
-    QHBoxLayout,
-    QLineEdit,
-    QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
 from frontend.api.api_client import ApiClient
-from frontend.ui.design_system import ColumnPriority, ColumnSpec
+from frontend.ui.design_system import (
+    CellValue,
+    ColumnDisplayMode,
+    ColumnPriority,
+    ColumnSpec,
+)
 from frontend.views.common import BaseApiView, format_datetime, format_money
 from frontend.widgets.adaptive_data_table import AdaptiveDataTable
+from frontend.widgets.filter_toolbar import FilterToolbar
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.pagination import Pagination
 from frontend.widgets.state_host import StateHost
+
+
+def _format_payment_datetime(value: object) -> CellValue:
+    """Keep date and time fully readable without making the column too wide."""
+
+    formatted = format_datetime(value)
+    date_text, separator, time_text = formatted.partition(" · ")
+    return CellValue(
+        date_text,
+        time_text if separator else None,
+        tooltip=formatted,
+        accessible_text=formatted,
+    )
 
 
 class PaymentHistoryView(BaseApiView):
@@ -43,85 +58,84 @@ class PaymentHistoryView(BaseApiView):
         layout.setSpacing(16)
 
         self.header = PageHeader(
-            "Lịch sử thu phí",
+            "Lịch sử thanh toán",
             "Nhật ký giao dịch thanh toán viện phí",
             action_label="Làm mới",
             parent=self,
         )
+        if self.header.action_button is not None:
+            self.header.action_button.setObjectName("secondaryButton")
         self.header.action_clicked.connect(self.load_payments)
         layout.addWidget(self.header)
         layout.addWidget(self.feedback)
         layout.addWidget(self.loading)
 
-        # Filters
-        filter_card = QFrame()
-        filter_card.setObjectName("filterCard")
-        filter_bar = QHBoxLayout(filter_card)
-        filter_bar.setContentsMargins(16, 10, 16, 10)
-        filter_bar.setSpacing(12)
-
-        self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Tìm kiếm theo tên bệnh nhân, SĐT hoặc mã HĐ...")
-        self.search_input.setAccessibleName("Tìm kiếm lịch sử thu phí")
-        self.search_input.returnPressed.connect(self._apply_filter)
-        filter_bar.addWidget(self.search_input, 2)
-
-        self.method_combo = QComboBox()
-        self.method_combo.addItem("Tất cả phương thức", None)
-        self.method_combo.addItem("Tiền mặt", "CASH")
-        self.method_combo.addItem("Thẻ ngân hàng", "CARD")
-        self.method_combo.currentIndexChanged.connect(self._apply_filter)
-        filter_bar.addWidget(self.method_combo, 1)
-
-        self.btn_filter = QPushButton("Lọc")
-        self.btn_filter.setCursor(Qt.PointingHandCursor)
-        self.btn_filter.clicked.connect(self._apply_filter)
-        filter_bar.addWidget(self.btn_filter)
-
-        layout.addWidget(filter_card)
+        self.filters = FilterToolbar(
+            "Tìm tên bệnh nhân, số điện thoại hoặc mã hóa đơn",
+            search_accessible_name="Tìm kiếm lịch sử thanh toán",
+        )
+        self.search_input = self.filters.search_input
+        self.method_combo = self.filters.add_filter(
+            "payment_method",
+            (
+                ("Tất cả phương thức", None),
+                ("Tiền mặt", "CASH"),
+                ("Thẻ ngân hàng", "CARD"),
+            ),
+            accessible_name="Lọc theo phương thức thanh toán",
+        )
+        self.btn_filter = self.filters.clear_button
+        self.filters.filters_changed.connect(self._apply_filter)
+        self.search_input.returnPressed.connect(self.filters.flush_search)
+        layout.addWidget(self.filters)
 
         # Payments Table
         self.table = AdaptiveDataTable(
             [
                 ColumnSpec(
-                    "Mã GD",
-                    "payment_id",
-                    minimum_width=82,
-                    preferred_width=92,
+                    "Giao dịch",
+                    "reference",
+                    minimum_width=104,
+                    preferred_width=116,
+                    maximum_width=136,
                     priority=ColumnPriority.CRITICAL,
-                    formatter=lambda value: f"TXN-{int(value or 0):04d}",
-                    alignment=Qt.AlignmentFlag.AlignCenter,
-                ),
-                ColumnSpec(
-                    "Mã HĐ",
-                    "invoice_id",
-                    minimum_width=78,
-                    preferred_width=88,
-                    priority=ColumnPriority.HIGH,
-                    formatter=lambda value: f"INV-{int(value or 0):04d}",
-                    alignment=Qt.AlignmentFlag.AlignCenter,
+                    display_mode=ColumnDisplayMode.WRAP_2,
+                    line_limit=2,
+                    preserve_full=True,
                 ),
                 ColumnSpec(
                     "Bệnh nhân",
                     "patient_name",
-                    minimum_width=130,
+                    minimum_width=118,
+                    preferred_width=180,
+                    maximum_width=260,
+                    grow_weight=3,
+                    display_mode=ColumnDisplayMode.WRAP_2,
+                    line_limit=2,
                     stretch=True,
                     priority=ColumnPriority.CRITICAL,
                 ),
                 ColumnSpec(
                     "Bác sĩ",
                     "doctor_name",
-                    minimum_width=112,
-                    preferred_width=140,
+                    minimum_width=106,
+                    preferred_width=160,
+                    maximum_width=230,
+                    grow_weight=2,
                     priority=ColumnPriority.NORMAL,
+                    display_mode=ColumnDisplayMode.WRAP_2,
+                    line_limit=2,
                 ),
                 ColumnSpec(
                     "Số tiền",
                     "amount",
                     minimum_width=104,
                     preferred_width=116,
+                    maximum_width=128,
                     priority=ColumnPriority.CRITICAL,
                     formatter=format_money,
+                    display_mode=ColumnDisplayMode.FULL,
+                    preserve_full=True,
                     alignment=Qt.AlignmentFlag.AlignRight
                     | Qt.AlignmentFlag.AlignVCenter,
                 ),
@@ -130,18 +144,25 @@ class PaymentHistoryView(BaseApiView):
                     "payment_method",
                     minimum_width=96,
                     preferred_width=110,
+                    maximum_width=122,
                     formatter=lambda value: {
                         "CASH": "Tiền mặt",
                         "CARD": "Thẻ",
                     }.get(str(value), str(value or "—")),
+                    display_mode=ColumnDisplayMode.FULL,
+                    preserve_full=True,
                     alignment=Qt.AlignmentFlag.AlignCenter,
                 ),
                 ColumnSpec(
                     "Thời gian",
                     "payment_date",
                     minimum_width=126,
-                    preferred_width=148,
-                    formatter=format_datetime,
+                    preferred_width=132,
+                    maximum_width=148,
+                    formatter=_format_payment_datetime,
+                    display_mode=ColumnDisplayMode.WRAP_2,
+                    line_limit=2,
+                    preserve_full=True,
                 ),
             ],
             accessible_name="Lịch sử giao dịch thu phí",
@@ -172,9 +193,12 @@ class PaymentHistoryView(BaseApiView):
         super().showEvent(event)
         self.load_payments()
 
-    def _apply_filter(self) -> None:
+    def _apply_filter(self, _values: object | None = None) -> None:
         self._current_page = 1
         self.load_payments()
+
+    def _clear_filters(self) -> None:
+        self.filters.clear()
 
     def _go_to_page(self, page: int) -> None:
         self._current_page = page
@@ -212,7 +236,17 @@ class PaymentHistoryView(BaseApiView):
         total_pages = data.get("total_pages", 1)
         self.pagination.update_state(self._current_page, total_pages, total)
 
-        self.table.set_rows(items)
+        rows = [
+            {
+                **payment,
+                "reference": CellValue(
+                    f"TXN-{int(payment.get('payment_id') or 0):04d}",
+                    f"INV-{int(payment.get('invoice_id') or 0):04d}",
+                ),
+            }
+            for payment in items
+        ]
+        self.table.set_rows(rows)
         if items:
             self.state_host.show_content()
         else:

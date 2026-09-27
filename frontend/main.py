@@ -19,6 +19,7 @@ from frontend.login_window import LoginWindow
 from frontend.main_window import MainWindow
 from frontend.reception_dashboard import ReceptionDashboard
 from frontend.style import APP_STYLE
+from frontend.widgets.focus_visible import install_focus_visible
 
 app: QApplication | None = None
 dashboard = None
@@ -235,7 +236,7 @@ def _open_doctor_dashboard(
         "access_token": snapshot.access_token,
         "doctor_id": profile_response["doctor_id"],
         "doctor_name": profile_response["doctor_name"],
-        "license_number": profile_response.get("license_number") or "N/A",
+        "license_number": profile_response.get("license_number") or "—",
     }
     dashboard = DoctorDashboard(session_data)
     dashboard.logout_requested.connect(show_login)
@@ -274,6 +275,7 @@ def main() -> int:
     app = QApplication.instance() or QApplication(sys.argv)
     app.setFont(QFont("Segoe UI", 10))
     app.setStyleSheet(APP_STYLE)
+    install_focus_visible(app)
     login = LoginWindow(on_success=open_dashboard)
     login.show()
     return app.exec()

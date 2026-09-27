@@ -22,6 +22,7 @@ from frontend.widgets.adaptive_data_table import configure_table_view
 from frontend.widgets.feedback_banner import FeedbackBanner
 from frontend.widgets.loading_indicator import LoadingIndicator
 from frontend.widgets.state_host import StateHost
+from frontend.widgets.status_badge import display_status
 
 
 class _TaskHandler(QObject):
@@ -268,8 +269,7 @@ def table_item(value: object, *, user_data: object | None = None) -> QStandardIt
 
 
 def status_item(value: object) -> QStandardItem:
-    status = str(value or "").strip().replace("_", " ").title()
-    item = table_item(status)
+    item = table_item(display_status(value))
     item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
     return item
 
@@ -298,7 +298,7 @@ def format_datetime(value: object) -> str:
         parsed = datetime.fromisoformat(raw)
     except ValueError:
         return str(value)
-    return parsed.strftime("%d/%m/%Y %H:%M")
+    return parsed.strftime("%d/%m/%Y · %H:%M")
 
 
 def format_time(value: object) -> str:
@@ -312,12 +312,22 @@ def format_time(value: object) -> str:
     return parsed.strftime("%H:%M")
 
 
+def format_time_range(start: object, end: object) -> str:
+    """Format one clinical slot consistently with a compact en dash."""
+
+    start_text = format_time(start)
+    end_text = format_time(end)
+    if start_text == "—" and end_text == "—":
+        return "—"
+    return f"{start_text}–{end_text}"
+
+
 def format_money(value: object) -> str:
     try:
         amount = Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError):
         return "—"
-    return f"{amount:,.0f} ₫"
+    return f"{amount:,.0f}".replace(",", ".") + " ₫"
 
 
 def require_dict(value: Any) -> dict[str, Any]:

@@ -11,6 +11,7 @@ from frontend.core.i18n import t
 from frontend.style import APP_STYLE
 from frontend.ui.design_system import (
     UI_TOKENS,
+    ColumnDisplayMode,
     ColumnPriority,
     ColumnSpec,
     FeedbackSeverity,
@@ -48,6 +49,8 @@ def test_design_contracts_validate_and_normalize_legacy_values() -> None:
         ColumnSpec("Name", minimum_width=20)
     with pytest.raises(ValueError, match="preferred_width"):
         ColumnSpec("Name", minimum_width=100, preferred_width=80)
+    assert display_status("NEW_BACKEND_STATUS", "vi") == "Không xác định"
+    assert display_status("NEW_BACKEND_STATUS", "en") == "Unknown"
 
 
 def test_bare_widgets_are_not_forced_to_page_background(qt_app: QApplication) -> None:
@@ -128,19 +131,55 @@ def test_adaptive_table_is_read_only_and_preserves_raw_status(
     assert not table.model().item(0, 0).isEditable()
     assert table.model().item(0, 1).data(RAW_VALUE_ROLE) == "PAID"
     assert table.model().item(0, 1).text() == display_status("PAID")
+    assert table.column_specs[1].display_mode is ColumnDisplayMode.FULL
+    assert table.column_specs[1].preserve_full
     assert table.accessibleDescription() == t("a11y_read_only_table")
     table.deleteLater()
     qt_app.processEvents()
 
 
-def test_adaptive_table_rejects_multiple_stretch_columns() -> None:
-    with pytest.raises(ValueError, match="Only one"):
-        AdaptiveDataTable(
-            [
-                ColumnSpec("A", stretch=True),
-                ColumnSpec("B", stretch=True),
-            ]
-        )
+def test_adaptive_table_supports_multiple_bounded_growth_columns() -> None:
+    table = AdaptiveDataTable(
+        [
+            ColumnSpec("A", stretch=True, maximum_width=180),
+            ColumnSpec("B", grow_weight=2, maximum_width=240),
+        ]
+    )
+
+    assert [column.grow_weight for column in table.column_specs] == [1, 2]
+    assert [column.maximum_width for column in table.column_specs] == [180, 240]
+
+
+def test_preserved_content_uses_natural_width_before_horizontal_fallback(
+    qt_app: QApplication,
+) -> None:
+    long_reference = "TXN-2026-09-27-VERY-LONG-REFERENCE-000001"
+    table = AdaptiveDataTable(
+        [
+            ColumnSpec(
+                "Mã giao dịch",
+                key="reference",
+                minimum_width=80,
+                preferred_width=100,
+                maximum_width=100,
+                display_mode=ColumnDisplayMode.FULL,
+                preserve_full=True,
+            )
+        ]
+    )
+    table.resize(220, 150)
+    table.set_rows([{"reference": long_reference}])
+    table.show()
+    qt_app.processEvents()
+
+    # maximum_width caps surplus growth; it must not truncate content that is
+    # explicitly marked as operationally important.
+    assert table.columnWidth(0) > 100
+    assert table.model().item(0, 0).text() == long_reference
+    assert table.horizontalScrollBar().maximum() > 0
+    table.close()
+    table.deleteLater()
+    qt_app.processEvents()
 
 
 def test_page_header_and_pagination_reflow_at_compact_width(

@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from unittest.mock import MagicMock
 
 import pytest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QLabel
 
 from frontend.api.api_client import ApiClient
 from frontend.style import APP_STYLE
@@ -66,6 +66,9 @@ def test_cancel_dialog_runs_once_without_blocking_caller(
     client = MagicMock(spec=ApiClient)
     client.post.return_value = {"appointment_id": 42, "status": "CANCELLED"}
     dialog = CancelAppointmentDialog(client, _appointment())
+    assert any(
+        "01/10/2026" in label.text() for label in dialog.findChildren(QLabel)
+    )
     emitted: list[dict[str, object]] = []
     dialog.appointment_canceled.connect(emitted.append)
 
@@ -114,6 +117,7 @@ def test_reschedule_dialog_loads_and_submits_through_workers(
     client.get.side_effect = get
     client.post.return_value = {"appointment_id": 42, "status": "PENDING"}
     dialog = RescheduleAppointmentDialog(client, _appointment())
+    assert "01/10/2026" in dialog.summary_current_label.text()
     emitted: list[dict[str, object]] = []
     dialog.appointment_rescheduled.connect(emitted.append)
 

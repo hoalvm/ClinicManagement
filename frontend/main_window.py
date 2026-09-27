@@ -290,11 +290,13 @@ if __name__ == "__main__":
     from frontend.core.config import get_frontend_settings
     from frontend.core.session import SessionState
     from frontend.style import APP_STYLE
+    from frontend.widgets.focus_visible import install_focus_visible
 
     settings = get_frontend_settings()
     app = QApplication.instance() or QApplication(sys.argv)
     app.setFont(QFont("Segoe UI", 10))
     app.setStyleSheet(APP_STYLE)
+    install_focus_visible(app)
 
     portal_client = ApiClient(
         base_url=settings.api_base_url,

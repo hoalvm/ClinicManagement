@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
 from frontend.core.i18n import get_i18n
+from frontend.widgets.combo_box import ChevronComboBox
 
 
 class LanguageSelector(QWidget):
@@ -26,7 +27,7 @@ class LanguageSelector(QWidget):
         else:
             self.label = None
 
-        self.combo = QComboBox(self)
+        self.combo = ChevronComboBox(self)
         self.combo.setObjectName("languageCombo")
         self.combo.setCursor(Qt.CursorShape.PointingHandCursor)
         self.combo.setMinimumHeight(32)

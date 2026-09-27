@@ -109,6 +109,40 @@ class ColumnPriority(IntEnum):
     LOW = 300
 
 
+class ColumnDisplayMode(StrEnum):
+    """How a table cell presents text when space is constrained."""
+
+    FULL = "full"
+    ELIDE = "elide"
+    WRAP_2 = "wrap_2"
+
+
+@dataclass(frozen=True, slots=True)
+class CellValue:
+    """Structured table content with an optional muted supporting line."""
+
+    primary: str
+    secondary: str | None = None
+    tooltip: str | None = None
+    accessible_text: str | None = None
+
+    @property
+    def display_text(self) -> str:
+        return (
+            f"{self.primary}\n{self.secondary}"
+            if self.secondary
+            else self.primary
+        )
+
+    @property
+    def full_text(self) -> str:
+        return self.tooltip or (
+            f"{self.primary} — {self.secondary}"
+            if self.secondary
+            else self.primary
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class ColumnSpec:
     """Presentation and data-extraction contract for an adaptive table column."""
@@ -117,8 +151,13 @@ class ColumnSpec:
     key: str | None = None
     minimum_width: int = 88
     preferred_width: int | None = None
+    maximum_width: int | None = None
+    grow_weight: int = 0
     priority: int = int(ColumnPriority.NORMAL)
-    formatter: Callable[[object], str] | None = None
+    formatter: Callable[[object], str | CellValue] | None = None
+    display_mode: ColumnDisplayMode = ColumnDisplayMode.ELIDE
+    line_limit: int = 1
+    preserve_full: bool = False
     wrap: bool = False
     alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
     stretch: bool = False
@@ -131,6 +170,35 @@ class ColumnSpec:
             raise ValueError("ColumnSpec.minimum_width must be at least 40")
         if self.preferred_width is not None and self.preferred_width < self.minimum_width:
             raise ValueError("ColumnSpec.preferred_width cannot be less than minimum_width")
+        if self.maximum_width is not None:
+            baseline = self.preferred_width or self.minimum_width
+            if self.maximum_width < baseline:
+                raise ValueError(
+                    "ColumnSpec.maximum_width cannot be less than preferred_width"
+                )
+        if self.grow_weight < 0:
+            raise ValueError("ColumnSpec.grow_weight cannot be negative")
+        if self.line_limit not in (1, 2):
+            raise ValueError("ColumnSpec.line_limit must be 1 or 2")
+
+        # Compatibility for the first UI upgrade.  New declarations should use
+        # the explicit display/growth contracts, while legacy call sites keep
+        # their behavior until they are migrated.
+        if self.stretch and self.grow_weight == 0:
+            object.__setattr__(self, "grow_weight", 1)
+        if self.wrap and self.display_mode is ColumnDisplayMode.ELIDE:
+            object.__setattr__(self, "display_mode", ColumnDisplayMode.WRAP_2)
+            object.__setattr__(self, "line_limit", 2)
+        if self.display_mode is ColumnDisplayMode.WRAP_2 and self.line_limit == 1:
+            object.__setattr__(self, "line_limit", 2)
+        if self.display_mode is ColumnDisplayMode.FULL:
+            object.__setattr__(self, "preserve_full", True)
+        if self.status:
+            # Status is operational information, not decorative metadata.  It
+            # must remain readable instead of degrading to an ambiguous pill
+            # such as "Đã xác…" when the viewport becomes constrained.
+            object.__setattr__(self, "display_mode", ColumnDisplayMode.FULL)
+            object.__setattr__(self, "preserve_full", True)
 
 
 def set_surface_role(widget: QWidget, role: SurfaceRole | str) -> None:
@@ -145,6 +213,8 @@ def set_surface_role(widget: QWidget, role: SurfaceRole | str) -> None:
 
 
 __all__ = [
+    "CellValue",
+    "ColumnDisplayMode",
     "ColumnPriority",
     "ColumnSpec",
     "DEFAULT_UI_TOKENS",

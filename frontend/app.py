@@ -9,7 +9,6 @@ from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QFormLayout,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -17,6 +16,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPushButton,
     QScrollArea,
@@ -26,12 +26,15 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from frontend.core.config import get_frontend_settings
 from frontend.ui.icons import apply_line_icon
+from frontend.views.common import format_time_range
+from frontend.widgets.app_sidebar import AppSidebar, NavigationItem
 from frontend.widgets.application_shell import ApplicationShell
 from frontend.widgets.feedback_banner import FeedbackBanner
 from frontend.widgets.page_header import PageHeader
@@ -276,7 +279,7 @@ class DoctorScheduleView(QWidget):
         self.state_host.empty_action_requested.connect(self.load_schedule)
         self.state_host.show_empty(
             "Chưa có bệnh nhân trong hàng đợi hôm nay",
-            "Danh sách sẽ tự cập nhật khi lễ tân hoàn tất check-in.",
+            "Danh sách sẽ tự cập nhật khi lễ tân tiếp nhận bệnh nhân.",
             action_text="Làm mới",
         )
 
@@ -334,7 +337,7 @@ class DoctorScheduleView(QWidget):
         if not items:
             self.state_host.show_empty(
                 "Chưa có bệnh nhân trong hàng đợi hôm nay",
-                "Danh sách sẽ tự cập nhật khi lễ tân hoàn tất check-in.",
+                "Danh sách sẽ tự cập nhật khi lễ tân tiếp nhận bệnh nhân.",
                 action_text="Làm mới",
             )
             return
@@ -347,7 +350,7 @@ class DoctorScheduleView(QWidget):
             )
             self.table.setItem(row, 0, item_id)
 
-            time_str = f"{appt.get('StartTime', '')} - {appt.get('EndTime', '')}"
+            time_str = format_time_range(appt.get("StartTime"), appt.get("EndTime"))
             item_time = _table_item(
                 time_str,
                 alignment=Qt.AlignmentFlag.AlignCenter,
@@ -466,6 +469,8 @@ class MedicalExamView(QWidget):
         self.current_appt = None
         self.worker: CompleteExamWorker | None = None
         self._stacked_layout: bool | None = None
+        self._editing_medicine_row: int | None = None
+        self._baseline_state: tuple[object, ...] | None = None
         self.setup_ui()
 
     def setup_ui(self):
@@ -489,21 +494,82 @@ class MedicalExamView(QWidget):
             QSizePolicy.Policy.Preferred,
         )
         content_root = QVBoxLayout(self.scroll_content)
-        content_root.setContentsMargins(28, 20, 28, 28)
+        content_root.setContentsMargins(28, 20, 28, 22)
         content_root.setSpacing(14)
 
-        self.header = PageHeader(
-            "Khám bệnh và chẩn đoán",
-            "Bệnh nhân: —",
-            show_back=True,
-            back_text="Quay lại lịch khám",
+        self.breadcrumb = QPushButton("← Lịch khám hôm nay")
+        self.breadcrumb.setObjectName("ghostButton")
+        self.breadcrumb.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.breadcrumb.setSizePolicy(
+            QSizePolicy.Policy.Maximum,
+            QSizePolicy.Policy.Fixed,
         )
-        self.header.back_requested.connect(self.back_to_schedule)
+        self.breadcrumb.setAccessibleName("Quay lại lịch khám hôm nay")
+        self.breadcrumb.clicked.connect(self.back_to_schedule.emit)
+        content_root.addWidget(self.breadcrumb, 0, Qt.AlignmentFlag.AlignLeft)
+
+        self.header = PageHeader(
+            "Khám bệnh",
+            "Ghi nhận chẩn đoán và đơn thuốc cho bệnh nhân",
+        )
         self.sub_title = self.header.subtitle_label
         content_root.addWidget(self.header)
 
         self.feedback = FeedbackBanner(self)
         content_root.addWidget(self.feedback)
+
+        self.patient_summary = QFrame()
+        self.patient_summary.setObjectName("contentCard")
+        patient_layout = QGridLayout(self.patient_summary)
+        patient_layout.setContentsMargins(20, 16, 20, 16)
+        patient_layout.setHorizontalSpacing(28)
+        patient_layout.setVerticalSpacing(8)
+
+        patient_title = QLabel("Bệnh nhân")
+        patient_title.setObjectName("sectionTitle")
+        patient_layout.addWidget(patient_title, 0, 0, 1, 3)
+
+        def add_summary_field(column: int, title: str) -> QLabel:
+            field = QWidget()
+            field_layout = QVBoxLayout(field)
+            field_layout.setContentsMargins(0, 0, 0, 0)
+            field_layout.setSpacing(2)
+            label = QLabel(title)
+            label.setObjectName("mutedLabel")
+            value = QLabel("—")
+            value.setObjectName("fieldValueStrong")
+            value.setWordWrap(True)
+            value.setTextInteractionFlags(
+                Qt.TextInteractionFlag.TextSelectableByMouse
+            )
+            field_layout.addWidget(label)
+            field_layout.addWidget(value)
+            patient_layout.addWidget(field, 1, column)
+            return value
+
+        self.lb_name = add_summary_field(0, "Họ và tên")
+        self.lb_gender_dob = add_summary_field(1, "Giới tính và tuổi")
+        self.lb_phone = add_summary_field(2, "Số điện thoại")
+
+        address_field = QWidget()
+        address_layout = QVBoxLayout(address_field)
+        address_layout.setContentsMargins(0, 0, 0, 0)
+        address_layout.setSpacing(2)
+        address_label = QLabel("Địa chỉ")
+        address_label.setObjectName("mutedLabel")
+        self.lb_address = QLabel("—")
+        self.lb_address.setObjectName("fieldValue")
+        self.lb_address.setWordWrap(True)
+        self.lb_address.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        address_layout.addWidget(address_label)
+        address_layout.addWidget(self.lb_address)
+        patient_layout.addWidget(address_field, 2, 0, 1, 3)
+        patient_layout.setColumnStretch(0, 4)
+        patient_layout.setColumnStretch(1, 3)
+        patient_layout.setColumnStretch(2, 3)
+        content_root.addWidget(self.patient_summary)
 
         self.body_layout = QGridLayout()
         self.body_layout.setContentsMargins(0, 0, 0, 0)
@@ -520,84 +586,48 @@ class MedicalExamView(QWidget):
         left_col.setContentsMargins(0, 0, 0, 0)
         left_col.setSpacing(14)
 
-        card_pat = QFrame()
-        card_pat.setObjectName("contentCard")
-        pat_card_layout = QVBoxLayout(card_pat)
-        pat_card_layout.setContentsMargins(20, 18, 20, 18)
-        pat_card_layout.setSpacing(12)
-
-        lbl_pat_title = QLabel("Thông tin bệnh nhân")
-        lbl_pat_title.setObjectName("sectionTitle")
-        pat_card_layout.addWidget(lbl_pat_title)
-
-        form_pat = QFormLayout()
-        form_pat.setSpacing(8)
-        form_pat.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
-        form_pat.setFieldGrowthPolicy(
-            QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
-        )
-        self.lb_name = QLabel("—")
-        self.lb_name.setObjectName("fieldValue")
-        self.lb_phone = QLabel("—")
-        self.lb_gender_dob = QLabel("—")
-        self.lb_address = QLabel("—")
-        for label in (
-            self.lb_name,
-            self.lb_phone,
-            self.lb_gender_dob,
-            self.lb_address,
-        ):
-            label.setWordWrap(True)
-            label.setTextInteractionFlags(
-                Qt.TextInteractionFlag.TextSelectableByMouse
-            )
-
-        form_pat.addRow("Họ và tên:", self.lb_name)
-        form_pat.addRow("Số điện thoại:", self.lb_phone)
-        form_pat.addRow("Giới tính / Ngày sinh:", self.lb_gender_dob)
-        form_pat.addRow("Địa chỉ:", self.lb_address)
-        pat_card_layout.addLayout(form_pat)
-        left_col.addWidget(card_pat)
-
         card_exam = QFrame()
         card_exam.setObjectName("contentCard")
         exam_card_layout = QVBoxLayout(card_exam)
         exam_card_layout.setContentsMargins(20, 18, 20, 18)
         exam_card_layout.setSpacing(12)
 
-        lbl_exam_title = QLabel("Ghi nhận chẩn đoán lâm sàng")
+        lbl_exam_title = QLabel("Nội dung khám")
         lbl_exam_title.setObjectName("sectionTitle")
         exam_card_layout.addWidget(lbl_exam_title)
 
-        lbl_sym = QLabel("Triệu chứng lâm sàng (*)")
+        lbl_sym = QLabel("Triệu chứng *")
         lbl_sym.setObjectName("fieldLabel")
         self.txt_symptoms = QTextEdit()
         self.txt_symptoms.setPlaceholderText("Ghi nhận triệu chứng của bệnh nhân...")
         self._configure_clinical_text_edit(
             self.txt_symptoms,
-            "Triệu chứng lâm sàng",
+            "Triệu chứng",
+            120,
         )
         exam_card_layout.addWidget(lbl_sym)
         exam_card_layout.addWidget(self.txt_symptoms)
 
-        lbl_diag = QLabel("Chẩn đoán y khoa (*)")
+        lbl_diag = QLabel("Chẩn đoán *")
         lbl_diag.setObjectName("fieldLabel")
         self.txt_diagnosis = QTextEdit()
         self.txt_diagnosis.setPlaceholderText("Nhập kết luận chẩn đoán...")
         self._configure_clinical_text_edit(
             self.txt_diagnosis,
-            "Chẩn đoán y khoa",
+            "Chẩn đoán",
+            120,
         )
         exam_card_layout.addWidget(lbl_diag)
         exam_card_layout.addWidget(self.txt_diagnosis)
 
-        lbl_note = QLabel("Ghi chú / Lời dặn của bác sĩ")
+        lbl_note = QLabel("Dặn dò")
         lbl_note.setObjectName("fieldLabel")
         self.txt_notes = QTextEdit()
         self.txt_notes.setPlaceholderText("Chế độ ăn uống, sinh hoạt, tái khám...")
         self._configure_clinical_text_edit(
             self.txt_notes,
-            "Ghi chú và lời dặn của bác sĩ",
+            "Dặn dò",
+            96,
         )
         exam_card_layout.addWidget(lbl_note)
         exam_card_layout.addWidget(self.txt_notes)
@@ -620,7 +650,7 @@ class MedicalExamView(QWidget):
         pres_card_layout.setContentsMargins(20, 18, 20, 18)
         pres_card_layout.setSpacing(12)
 
-        lbl_pres_title = QLabel("Kê đơn thuốc điện tử")
+        lbl_pres_title = QLabel("Đơn thuốc")
         lbl_pres_title.setObjectName("sectionTitle")
         pres_card_layout.addWidget(lbl_pres_title)
 
@@ -629,13 +659,13 @@ class MedicalExamView(QWidget):
         med_form.setHorizontalSpacing(10)
         med_form.setVerticalSpacing(6)
 
-        med_label = QLabel("Tên thuốc (*)")
+        med_label = QLabel("Tên thuốc *")
         med_label.setObjectName("fieldLabel")
         dosage_label = QLabel("Hàm lượng")
         dosage_label.setObjectName("fieldLabel")
         qty_label = QLabel("Số lượng")
         qty_label.setObjectName("fieldLabel")
-        instruction_label = QLabel("Cách dùng (*)")
+        instruction_label = QLabel("Hướng dẫn sử dụng *")
         instruction_label.setObjectName("fieldLabel")
 
         self.in_med = QLineEdit()
@@ -646,16 +676,29 @@ class MedicalExamView(QWidget):
         self.in_dosage.setAccessibleName("Hàm lượng thuốc")
         self.spin_qty = QSpinBox()
         self.spin_qty.setRange(1, 200)
-        self.spin_qty.setValue(10)
+        self.spin_qty.setValue(1)
         self.spin_qty.setAccessibleName("Số lượng thuốc")
         self.in_instructions = QLineEdit()
         self.in_instructions.setPlaceholderText("Ví dụ: Uống 2 lần/ngày sau ăn")
-        self.in_instructions.setAccessibleName("Cách dùng thuốc")
-        self.btn_add_medicine = QPushButton("Thêm thuốc")
+        self.in_instructions.setAccessibleName("Hướng dẫn sử dụng thuốc")
+        self.btn_add_medicine = QPushButton("Thêm vào đơn")
         self.btn_add_medicine.setObjectName("primaryButton")
         self.btn_add_medicine.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_add_medicine.setAccessibleName("Thêm thuốc vào đơn")
         self.btn_add_medicine.clicked.connect(self.add_medicine)
+        self.btn_cancel_medicine_edit = QPushButton("Hủy sửa")
+        self.btn_cancel_medicine_edit.setObjectName("ghostButton")
+        self.btn_cancel_medicine_edit.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_cancel_medicine_edit.setAccessibleName("Hủy sửa thuốc")
+        self.btn_cancel_medicine_edit.clicked.connect(self.cancel_medicine_edit)
+        self.btn_cancel_medicine_edit.hide()
+
+        medicine_actions = QWidget()
+        medicine_actions_layout = QHBoxLayout(medicine_actions)
+        medicine_actions_layout.setContentsMargins(0, 0, 0, 0)
+        medicine_actions_layout.setSpacing(6)
+        medicine_actions_layout.addWidget(self.btn_cancel_medicine_edit)
+        medicine_actions_layout.addWidget(self.btn_add_medicine, 1)
 
         med_form.addWidget(med_label, 0, 0)
         med_form.addWidget(dosage_label, 0, 1)
@@ -665,16 +708,30 @@ class MedicalExamView(QWidget):
         med_form.addWidget(self.spin_qty, 1, 2)
         med_form.addWidget(instruction_label, 2, 0, 1, 3)
         med_form.addWidget(self.in_instructions, 3, 0, 1, 2)
-        med_form.addWidget(self.btn_add_medicine, 3, 2)
+        med_form.addWidget(medicine_actions, 3, 2)
         med_form.setColumnStretch(0, 3)
         med_form.setColumnStretch(1, 2)
         med_form.setColumnStretch(2, 1)
         pres_card_layout.addLayout(med_form)
 
+        self.prescription_empty = QWidget()
+        self.prescription_empty.setObjectName("prescriptionEmptyState")
+        empty_layout = QVBoxLayout(self.prescription_empty)
+        empty_layout.setContentsMargins(18, 24, 18, 24)
+        empty_layout.setSpacing(4)
+        empty_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_title = QLabel("Chưa thêm thuốc")
+        empty_title.setObjectName("emptyStateTitle")
+        empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_layout.addWidget(empty_title)
+        self.prescription_empty.setAccessibleName(
+            "Chưa thêm thuốc."
+        )
+
         self.table_med = QTableWidget()
-        self.table_med.setColumnCount(4)
+        self.table_med.setColumnCount(5)
         self.table_med.setHorizontalHeaderLabels(
-            ["Tên thuốc", "Hàm lượng", "Số lượng", "Hướng dẫn sử dụng"]
+            ["Tên thuốc", "Hàm lượng", "Số lượng", "Hướng dẫn sử dụng", "Thao tác"]
         )
         self.table_med.setAlternatingRowColors(True)
         self.table_med.verticalHeader().setVisible(False)
@@ -702,38 +759,54 @@ class MedicalExamView(QWidget):
         h_med = self.table_med.horizontalHeader()
         h_med.setFixedHeight(38)
         h_med.setMinimumSectionSize(72)
-        h_med.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        h_med.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
         h_med.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
         h_med.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
         h_med.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
-        self.table_med.setColumnWidth(1, 116)
-        self.table_med.setColumnWidth(2, 90)
+        h_med.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
+        self.table_med.setColumnWidth(0, 140)
+        self.table_med.setColumnWidth(1, 104)
+        self.table_med.setColumnWidth(2, 78)
+        self.table_med.setColumnWidth(4, 76)
 
+        pres_card_layout.addWidget(self.prescription_empty)
         pres_card_layout.addWidget(self.table_med)
         right_col.addWidget(card_pres)
-
-        self.btn_finish = QPushButton("Hoàn tất khám")
-        self.btn_finish.setObjectName("primaryButton")
-        self.btn_finish.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_finish.setMinimumHeight(44)
-        self.btn_finish.setAccessibleName("Hoàn tất và lưu kết quả khám")
-        self.btn_finish.clicked.connect(self.submit_examination)
-        right_col.addWidget(self.btn_finish)
 
         content_root.addLayout(self.body_layout)
         content_root.addStretch(1)
         self.scroll_area.setWidget(self.scroll_content)
-        root_layout.addWidget(self.scroll_area)
+        root_layout.addWidget(self.scroll_area, 1)
+
+        self.footer = QFrame(self)
+        self.footer.setObjectName("doctorExamFooter")
+        footer_layout = QHBoxLayout(self.footer)
+        footer_layout.setContentsMargins(28, 10, 28, 14)
+        footer_layout.setSpacing(10)
+        footer_layout.addStretch(1)
+        self.btn_finish = QPushButton("Lưu và hoàn tất khám")
+        self.btn_finish.setObjectName("primaryButton")
+        self.btn_finish.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_finish.setMinimumHeight(44)
+        self.btn_finish.setMinimumWidth(240)
+        self.btn_finish.setAccessibleName("Lưu và hoàn tất khám")
+        self.btn_finish.clicked.connect(self.submit_examination)
+        footer_layout.addWidget(self.btn_finish)
+        root_layout.addWidget(self.footer)
 
         self._update_medicine_table_height()
         self._update_body_layout(self.width())
 
     @staticmethod
-    def _configure_clinical_text_edit(widget: QTextEdit, accessible_name: str) -> None:
-        widget.setMinimumHeight(92)
+    def _configure_clinical_text_edit(
+        widget: QTextEdit,
+        accessible_name: str,
+        preferred_height: int,
+    ) -> None:
+        widget.setFixedHeight(preferred_height)
         widget.setSizePolicy(
             QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.MinimumExpanding,
+            QSizePolicy.Policy.Fixed,
         )
         widget.setTabChangesFocus(True)
         widget.setAccessibleName(accessible_name)
@@ -779,13 +852,18 @@ class MedicalExamView(QWidget):
                 1,
                 alignment=Qt.AlignmentFlag.AlignTop,
             )
-            self.body_layout.setColumnStretch(0, 5)
-            self.body_layout.setColumnStretch(1, 6)
+            self.body_layout.setColumnStretch(0, 11)
+            self.body_layout.setColumnStretch(1, 9)
 
         self.scroll_content.setProperty("stacked", stacked)
         self.scroll_content.updateGeometry()
 
     def _update_medicine_table_height(self) -> None:
+        has_medicines = self.table_med.rowCount() > 0
+        self.prescription_empty.setVisible(not has_medicines)
+        self.table_med.setVisible(has_medicines)
+        if not has_medicines:
+            return
         header_height = max(38, self.table_med.horizontalHeader().height())
         rows_height = sum(
             self.table_med.rowHeight(row) for row in range(self.table_med.rowCount())
@@ -821,13 +899,101 @@ class MedicalExamView(QWidget):
         widget.style().unpolish(widget)
         widget.style().polish(widget)
 
+    @staticmethod
+    def _patient_age(value: object) -> int | None:
+        raw = str(value or "").strip()
+        try:
+            born = date.fromisoformat(raw[:10])
+        except ValueError:
+            return None
+        today = date.today()
+        return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+
+    def _prescription_state(self) -> tuple[tuple[str, str, int, str], ...]:
+        rows: list[tuple[str, str, int, str]] = []
+        for row in range(self.table_med.rowCount()):
+            rows.append(
+                (
+                    self.table_med.item(row, 0).text(),
+                    self.table_med.item(row, 1).text(),
+                    int(self.table_med.item(row, 2).text()),
+                    self.table_med.item(row, 3).text(),
+                )
+            )
+        return tuple(rows)
+
+    def _capture_state(self) -> tuple[object, ...]:
+        """Capture editable values so leave-page warnings avoid false negatives."""
+
+        return (
+            self.txt_symptoms.toPlainText(),
+            self.txt_diagnosis.toPlainText(),
+            self.txt_notes.toPlainText(),
+            self._prescription_state(),
+            self.in_med.text(),
+            self.in_dosage.text(),
+            self.spin_qty.value(),
+            self.in_instructions.text(),
+            self._editing_medicine_row,
+        )
+
+    def has_unsaved_changes(self) -> bool:
+        return (
+            self.current_appt is not None
+            and self._baseline_state is not None
+            and self._capture_state() != self._baseline_state
+        )
+
+    def _ask_confirmation(
+        self,
+        title: str,
+        message: str,
+        *,
+        confirm_text: str,
+        cancel_text: str,
+    ) -> bool:
+        dialog = QMessageBox(self)
+        dialog.setIcon(QMessageBox.Icon.Question)
+        dialog.setWindowTitle(title)
+        dialog.setText(message)
+        confirm_button = dialog.addButton(
+            confirm_text,
+            QMessageBox.ButtonRole.AcceptRole,
+        )
+        cancel_button = dialog.addButton(
+            cancel_text,
+            QMessageBox.ButtonRole.RejectRole,
+        )
+        dialog.setDefaultButton(cancel_button)
+        dialog.setEscapeButton(cancel_button)
+        dialog.exec()
+        return dialog.clickedButton() is confirm_button
+
+    def confirm_discard_changes(self) -> bool:
+        if not self.has_unsaved_changes():
+            return True
+        return self._ask_confirmation(
+            "Rời trang khám?",
+            "Các thay đổi chưa lưu sẽ bị mất. Bạn có muốn rời trang khám không?",
+            confirm_text="Rời trang",
+            cancel_text="Ở lại",
+        )
+
+    def discard_changes(self) -> None:
+        """Restore the loaded appointment while keeping it available to resume."""
+
+        if self.current_appt is not None:
+            self.load_patient_data(self.current_appt)
+
     def load_patient_data(self, appt):
         self.current_appt = appt
         pat = appt.get("Patient", {})
         full_name = pat.get("FullName", "—")
-        self.sub_title.setText(f"Bệnh nhân: {full_name} | Mã hẹn: #{appt['AppointmentID']}")
+        self.sub_title.setText(
+            f"Ghi nhận chẩn đoán và đơn thuốc · Mã hẹn #{appt['AppointmentID']}"
+        )
         self.lb_name.setText(full_name)
-        self.lb_phone.setText(pat.get("Phone") or "—")
+        self.lb_phone.setText(pat.get("Phone") or "Chưa cập nhật")
 
         raw_gender = str(pat.get("Gender") or "").strip()
         gender_value = raw_gender.upper()
@@ -847,7 +1013,10 @@ class MedicalExamView(QWidget):
             else raw_gender,
         )
         dob = _display_date(pat.get("DateOfBirth"))
-        self.lb_gender_dob.setText(f"{gender} | Ngày sinh: {dob}")
+        age = self._patient_age(pat.get("DateOfBirth"))
+        age_text = f"{age} tuổi" if age is not None else "Chưa cập nhật tuổi"
+        self.lb_gender_dob.setText(f"{gender} · {age_text}")
+        self.lb_gender_dob.setToolTip(f"Ngày sinh: {dob}")
         self.lb_address.setText(pat.get("Address") or "Chưa cập nhật")
 
         self.feedback.clear()
@@ -857,8 +1026,10 @@ class MedicalExamView(QWidget):
         self._set_field_error(self.txt_symptoms, False)
         self._set_field_error(self.txt_diagnosis, False)
         self.table_med.setRowCount(0)
+        self.cancel_medicine_edit()
         self._update_medicine_table_height()
         self.scroll_area.verticalScrollBar().setValue(0)
+        self._baseline_state = self._capture_state()
 
     def add_medicine(self):
         med = self.in_med.text().strip()
@@ -871,15 +1042,17 @@ class MedicalExamView(QWidget):
         if not med or not instructions:
             self.feedback.show_message(
                 "Thiếu thông tin thuốc",
-                "Vui lòng nhập tên thuốc và cách dùng.",
+                "Vui lòng nhập tên thuốc và hướng dẫn sử dụng.",
                 severity="error",
             )
             (self.in_med if not med else self.in_instructions).setFocus()
             return
 
         self.feedback.clear()
-        row = self.table_med.rowCount()
-        self.table_med.insertRow(row)
+        row = self._editing_medicine_row
+        if row is None:
+            row = self.table_med.rowCount()
+            self.table_med.insertRow(row)
         self.table_med.setItem(
             row,
             0,
@@ -902,16 +1075,114 @@ class MedicalExamView(QWidget):
         self.table_med.setItem(
             row,
             3,
-            _table_item(instructions, accessible_label="Cách dùng"),
+            _table_item(instructions, accessible_label="Hướng dẫn sử dụng"),
         )
+        self._set_medicine_action(row)
         self._resize_medicine_rows()
+        self.cancel_medicine_edit()
 
+    def _set_medicine_action(self, row: int) -> None:
+        button = QToolButton()
+        button.setObjectName("tableMoreButton")
+        button.setText("⋯")
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.setAccessibleName(
+            f"Thao tác với thuốc {self.table_med.item(row, 0).text()}"
+        )
+        button.setProperty("medicineRow", row)
+        button.clicked.connect(
+            lambda _checked=False, source=button: self._show_medicine_menu(
+                int(source.property("medicineRow")),
+                source,
+            )
+        )
+
+        container = QWidget()
+        container.setObjectName("tableActionContainer")
+        container.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(4, 0, 4, 0)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(button)
+        self.table_med.setCellWidget(row, 4, container)
+
+    def _show_medicine_menu(self, row: int, source: QToolButton) -> None:
+        if not 0 <= row < self.table_med.rowCount():
+            return
+        menu = QMenu(self)
+        edit_action = menu.addAction("Sửa")
+        delete_action = menu.addAction("Xóa")
+        edit_action.triggered.connect(lambda: self.edit_medicine(row))
+        delete_action.triggered.connect(lambda: self._confirm_delete_medicine(row))
+        menu.exec(source.mapToGlobal(source.rect().bottomLeft()))
+
+    def _confirm_delete_medicine(self, row: int) -> None:
+        if not 0 <= row < self.table_med.rowCount():
+            return
+        medicine_name = self.table_med.item(row, 0).text()
+        if self._ask_confirmation(
+            "Xóa thuốc khỏi đơn?",
+            f"Bạn có chắc muốn xóa {medicine_name} khỏi đơn thuốc?",
+            confirm_text="Xóa thuốc",
+            cancel_text="Giữ lại",
+        ):
+            self.delete_medicine(row)
+
+    def _refresh_medicine_action_rows(self) -> None:
+        for row in range(self.table_med.rowCount()):
+            container = self.table_med.cellWidget(row, 4)
+            if container is None:
+                self._set_medicine_action(row)
+                continue
+            button = container.findChild(QToolButton, "tableMoreButton")
+            if button is not None:
+                button.setProperty("medicineRow", row)
+                button.setAccessibleName(
+                    f"Thao tác với thuốc {self.table_med.item(row, 0).text()}"
+                )
+
+    def edit_medicine(self, row: int) -> None:
+        if not 0 <= row < self.table_med.rowCount():
+            return
+        self._editing_medicine_row = row
+        self.in_med.setText(self.table_med.item(row, 0).text())
+        dosage = self.table_med.item(row, 1).text()
+        self.in_dosage.setText("" if dosage == "—" else dosage)
+        self.spin_qty.setValue(int(self.table_med.item(row, 2).text()))
+        self.in_instructions.setText(self.table_med.item(row, 3).text())
+        self.btn_add_medicine.setText("Lưu thay đổi")
+        self.btn_add_medicine.setAccessibleName("Lưu thay đổi thuốc")
+        self.btn_cancel_medicine_edit.show()
+        self.in_med.setFocus()
+        self.scroll_area.ensureWidgetVisible(self.in_med)
+
+    def cancel_medicine_edit(self) -> None:
+        self._editing_medicine_row = None
         self.in_med.clear()
         self.in_dosage.clear()
         self.in_instructions.clear()
-        self.spin_qty.setValue(10)
+        self.spin_qty.setValue(1)
+        self._set_field_error(self.in_med, False)
+        self._set_field_error(self.in_instructions, False)
+        self.btn_add_medicine.setText("Thêm vào đơn")
+        self.btn_add_medicine.setAccessibleName("Thêm thuốc vào đơn")
+        self.btn_cancel_medicine_edit.hide()
+
+    def delete_medicine(self, row: int) -> None:
+        if not 0 <= row < self.table_med.rowCount():
+            return
+        self.table_med.removeRow(row)
+        if self._editing_medicine_row == row:
+            self.cancel_medicine_edit()
+        elif self._editing_medicine_row is not None and self._editing_medicine_row > row:
+            self._editing_medicine_row -= 1
+        self._refresh_medicine_action_rows()
+        self._resize_medicine_rows()
 
     def submit_examination(self):
+        if self.worker is not None and self.worker.isRunning():
+            return
+
         symptoms = self.txt_symptoms.toPlainText().strip()
         diagnosis = self.txt_diagnosis.toPlainText().strip()
 
@@ -955,6 +1226,14 @@ class MedicalExamView(QWidget):
             "prescription_items": med_items,
         }
 
+        if not self._ask_confirmation(
+            "Xác nhận hoàn tất",
+            "Lưu kết quả và hoàn tất lượt khám này?",
+            confirm_text="Lưu và hoàn tất",
+            cancel_text="Kiểm tra lại",
+        ):
+            return
+
         self.feedback.clear()
         self.btn_finish.setEnabled(False)
         self.btn_finish.setText("Đang lưu kết quả…")
@@ -966,8 +1245,9 @@ class MedicalExamView(QWidget):
 
     def on_submit_finished(self, ok, msg):
         self.btn_finish.setEnabled(True)
-        self.btn_finish.setText("Hoàn tất khám")
+        self.btn_finish.setText("Lưu và hoàn tất khám")
         if ok:
+            self._baseline_state = self._capture_state()
             QMessageBox.information(self, "Thành công", msg)
             self.examination_done.emit()
         else:
@@ -978,96 +1258,50 @@ class MedicalExamView(QWidget):
             )
 
 
-class DoctorSidebar(QFrame):
+class DoctorSidebar(AppSidebar):
     """Role-aware navigation that remains usable in compact mode."""
 
     schedule_requested = Signal()
     exam_requested = Signal()
     logout_requested = Signal()
 
-    EXPANDED_WIDTH = 232
+    EXPANDED_WIDTH = 264
     COMPACT_WIDTH = 78
 
     def __init__(self, doctor_name: str, license_number: str, parent=None):
-        super().__init__(parent)
-        self.setObjectName("sidebar")
-        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
+        super().__init__(
+            (
+                NavigationItem("schedule", "Lịch khám hôm nay", "calendar", "NGHIỆP VỤ"),
+                NavigationItem("exam", "Hồ sơ đang khám", "medical"),
+            ),
+            parent,
+            brand_subtitle="Cổng bác sĩ",
+            logout_text="Đăng xuất",
+        )
         self.setAccessibleName("Điều hướng cổng bác sĩ")
-        self._compact = False
         self._doctor_name = doctor_name
         self._license_number = license_number
-
-        self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(14, 20, 14, 16)
-        self._layout.setSpacing(7)
-        self._build_brand()
-        self._layout.addSpacing(22)
-
-        self.section_label = QLabel("NGHIỆP VỤ")
-        self.section_label.setObjectName("sidebarSectionLabel")
-        self._layout.addWidget(self.section_label)
-
-        self.schedule_button = self._navigation_button(
-            "Lịch khám hôm nay",
-            "calendar",
-            self.schedule_requested.emit,
-        )
-        self.exam_button = self._navigation_button(
-            "Hồ sơ đang khám",
-            "medical",
-            self.exam_requested.emit,
-        )
+        self.schedule_button = self._buttons["schedule"]
+        self.exam_button = self._buttons["exam"]
         self.exam_button.setEnabled(False)
-        self._layout.addWidget(self.schedule_button)
-        self._layout.addWidget(self.exam_button)
-
-        self._layout.addStretch(1)
-        self._build_user_context()
-        self._layout.addSpacing(10)
-
-        self.logout_button = QPushButton("Đăng xuất")
-        self.logout_button.setObjectName("logoutButton")
-        self.logout_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.logout_button.setToolTip("Đăng xuất khỏi ClinicCare")
-        apply_line_icon(
-            self.logout_button,
-            "logout",
-            active_color="#F87171",
-            accessible_name="Đăng xuất",
+        self._user_name_label.setWordWrap(True)
+        self._user_role_label.setWordWrap(True)
+        self.set_user(
+            {"full_name": doctor_name},
+            role_label=f"Giấy phép: {license_number}",
         )
-        self.logout_button.clicked.connect(
-            lambda _checked=False: self.logout_requested.emit()
+        self._user_name_label.setToolTip(doctor_name)
+        self._user_role_label.setToolTip(
+            f"Số giấy phép hành nghề: {license_number}"
         )
-        self._layout.addWidget(self.logout_button)
-
+        self.navigation_requested.connect(self._dispatch_navigation)
         self.set_active("schedule")
-        self.set_compact(False)
 
-    def _build_brand(self) -> None:
-        self.brand_row = QWidget()
-        brand_layout = QHBoxLayout(self.brand_row)
-        brand_layout.setContentsMargins(4, 0, 2, 0)
-        brand_layout.setSpacing(11)
-
-        self.brand_mark = QLabel("C")
-        self.brand_mark.setObjectName("sidebarBrandMark")
-        self.brand_mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.brand_mark.setFixedSize(36, 36)
-        self.brand_mark.setAccessibleName("ClinicCare")
-        brand_layout.addWidget(self.brand_mark)
-
-        self.brand_text = QWidget()
-        brand_text_layout = QVBoxLayout(self.brand_text)
-        brand_text_layout.setContentsMargins(0, 1, 0, 0)
-        brand_text_layout.setSpacing(0)
-        brand_label = QLabel("ClinicCare")
-        brand_label.setObjectName("brandLabel")
-        brand_subtitle = QLabel("Cổng bác sĩ")
-        brand_subtitle.setObjectName("sidebarSubtitle")
-        brand_text_layout.addWidget(brand_label)
-        brand_text_layout.addWidget(brand_subtitle)
-        brand_layout.addWidget(self.brand_text, 1)
-        self._layout.addWidget(self.brand_row)
+    def _dispatch_navigation(self, route: str) -> None:
+        if route == "schedule":
+            self.schedule_requested.emit()
+        elif route == "exam":
+            self.exam_requested.emit()
 
     @staticmethod
     def _initials(name: str) -> str:
@@ -1078,67 +1312,8 @@ class DoctorSidebar(QFrame):
             return words[0][0].upper()
         return f"{words[0][0]}{words[-1][0]}".upper()
 
-    def _build_user_context(self) -> None:
-        self.user_row = QFrame()
-        self.user_row.setObjectName("sidebarUser")
-        user_layout = QHBoxLayout(self.user_row)
-        user_layout.setContentsMargins(5, 8, 3, 7)
-        user_layout.setSpacing(10)
-
-        avatar = QFrame()
-        avatar.setObjectName("userAvatar")
-        avatar.setFixedSize(38, 38)
-        avatar_layout = QVBoxLayout(avatar)
-        avatar_layout.setContentsMargins(0, 0, 0, 0)
-        avatar_text = QLabel(self._initials(self._doctor_name))
-        avatar_text.setObjectName("userAvatarText")
-        avatar_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        avatar_layout.addWidget(avatar_text)
-        user_layout.addWidget(avatar)
-
-        self.user_text = QWidget()
-        user_text_layout = QVBoxLayout(self.user_text)
-        user_text_layout.setContentsMargins(0, 0, 0, 0)
-        user_text_layout.setSpacing(1)
-        name_label = QLabel(self._doctor_name)
-        name_label.setObjectName("sidebarUserName")
-        name_label.setToolTip(self._doctor_name)
-        name_label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
-        role_label = QLabel(f"Bác sĩ • CCHN {self._license_number}")
-        role_label.setObjectName("sidebarUserRole")
-        role_label.setToolTip(f"Số chứng chỉ hành nghề: {self._license_number}")
-        user_text_layout.addWidget(name_label)
-        user_text_layout.addWidget(role_label)
-        user_layout.addWidget(self.user_text, 1)
-
-        context = f"Bác sĩ {self._doctor_name}, CCHN {self._license_number}"
-        self.user_row.setAccessibleName(context)
-        self.user_row.setToolTip(context)
-        self._layout.addWidget(self.user_row)
-
-    def _navigation_button(self, label: str, icon: str, callback) -> QPushButton:
-        button = QPushButton(label)
-        button.setObjectName("navButton")
-        button.setCheckable(True)
-        button.setCursor(Qt.CursorShape.PointingHandCursor)
-        button.setAccessibleName(label)
-        button.setToolTip(label)
-        button.setProperty("fullLabel", label)
-        apply_line_icon(
-            button,
-            icon,
-            active_color="#2DD4BF",
-            selected_color="#2DD4BF",
-            accessible_name=label,
-        )
-        button.clicked.connect(lambda _checked=False, handler=callback: handler())
-        return button
-
     def set_active(self, route: str) -> None:
-        self.schedule_button.setChecked(route == "schedule")
-        self.exam_button.setChecked(route == "exam")
+        super().set_active(route)
 
     def set_exam_patient(self, patient_name: str | None) -> None:
         enabled = bool(patient_name)
@@ -1148,38 +1323,6 @@ class DoctorSidebar(QFrame):
         self.exam_button.setAccessibleName(tooltip)
         self.exam_button.setToolTip(tooltip)
         self.exam_button.setText("" if self._compact else label)
-
-    @property
-    def is_compact(self) -> bool:
-        return self._compact
-
-    def set_compact(self, compact: bool) -> None:
-        compact = bool(compact)
-        self._compact = compact
-        self.setProperty("compact", compact)
-        self.setFixedWidth(self.COMPACT_WIDTH if compact else self.EXPANDED_WIDTH)
-        margin = 10 if compact else 14
-        self._layout.setContentsMargins(margin, 20, margin, 16)
-
-        self.brand_text.setVisible(not compact)
-        self.section_label.setVisible(not compact)
-        self.user_text.setVisible(not compact)
-        self.schedule_button.setText("" if compact else "Lịch khám hôm nay")
-        self.exam_button.setText("" if compact else "Hồ sơ đang khám")
-        self.logout_button.setText("" if compact else "Đăng xuất")
-
-        for button in (
-            self.schedule_button,
-            self.exam_button,
-            self.logout_button,
-        ):
-            button.setProperty("compact", compact)
-            button.style().unpolish(button)
-            button.style().polish(button)
-        self.style().unpolish(self)
-        self.style().polish(self)
-        self.updateGeometry()
-
 
 # ==========================================
 # 4. KHUNG CHÍNH: DOCTORDASHBOARD (MAIN CONTAINER)
@@ -1202,7 +1345,7 @@ class DoctorDashboard(QMainWindow):
         )
 
         self.setWindowTitle(
-            f"ClinicCare - Bác sĩ: {self.doctor_name} (CCHN: {self.license_number})"
+            f"ClinicCare - Bác sĩ: {self.doctor_name} (Giấy phép: {self.license_number})"
         )
         self.resize(1240, 780)
         self.setMinimumSize(1080, 660)
@@ -1250,13 +1393,23 @@ class DoctorDashboard(QMainWindow):
         self.stack.setCurrentWidget(self.exam_view)
         self.sidebar.set_active("exam")
 
-    def go_to_schedule(self):
+    def go_to_schedule(self) -> bool:
+        if (
+            self.stack.currentWidget() is self.exam_view
+            and self.exam_view.has_unsaved_changes()
+        ):
+            if not self.exam_view.confirm_discard_changes():
+                self.sidebar.set_active("exam")
+                return False
+            self.exam_view.discard_changes()
         self.stack.setCurrentIndex(0)
         self.sidebar.set_active("schedule")
         self.schedule_view.load_schedule()
+        return True
 
     def finish_examination(self) -> None:
         self.exam_view.current_appt = None
+        self.exam_view._baseline_state = None
         self.sidebar.set_exam_patient(None)
         self.go_to_schedule()
 
@@ -1270,6 +1423,15 @@ class DoctorDashboard(QMainWindow):
     def handle_logout(self):
         if self._logout_in_progress:
             return
+        if not self.exam_view.confirm_discard_changes():
+            self.sidebar.set_active("exam")
+            return
         self._logout_in_progress = True
         self.logout_requested.emit()
         self.close()
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        if self._logout_in_progress or self.exam_view.confirm_discard_changes():
+            event.accept()
+            return
+        event.ignore()

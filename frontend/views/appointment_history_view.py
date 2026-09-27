@@ -5,7 +5,6 @@ from __future__ import annotations
 from PySide6.QtCore import QModelIndex, Qt, Signal
 from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
-    QComboBox,
     QFrame,
     QGridLayout,
     QLabel,
@@ -23,9 +22,11 @@ from frontend.views.common import (
     configure_table,
     format_date,
     format_time,
+    format_time_range,
     require_page,
     table_item,
 )
+from frontend.widgets.combo_box import ChevronComboBox
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.pagination import PaginationWidget
 from frontend.widgets.state_host import StateHost
@@ -67,7 +68,7 @@ class AppointmentHistoryView(BaseApiView):
 
         self.status_label = QLabel(t("field_status", default="Trạng thái"))
         self.status_label.setObjectName("fieldLabel")
-        self.status = QComboBox()
+        self.status = ChevronComboBox()
         self.status.setMinimumWidth(170)
         self.status.setAccessibleName(t("field_status"))
         self._populate_status_combo()
@@ -244,7 +245,7 @@ class AppointmentHistoryView(BaseApiView):
                         format_date(appointment.get("appointment_date")),
                         user_data=appointment_id,
                     ),
-                    table_item(f"{start} - {end}"),
+                    table_item(format_time_range(start, end)),
                     table_item(doctor.get("full_name")),
                     table_item(doctor.get("specialty")),
                     table_item(clinic.get("clinic_name")),

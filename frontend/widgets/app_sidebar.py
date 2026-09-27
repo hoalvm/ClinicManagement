@@ -198,11 +198,13 @@ class AppSidebar(QFrame):
         user_text_layout.setSpacing(1)
         self._user_name_label = QLabel("Người dùng")
         self._user_name_label.setObjectName("sidebarUserName")
+        self._user_name_label.setWordWrap(True)
         self._user_name_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
         )
         self._user_role_label = QLabel("Tài khoản")
         self._user_role_label.setObjectName("sidebarUserRole")
+        self._user_role_label.setWordWrap(True)
         user_text_layout.addWidget(self._user_name_label)
         user_text_layout.addWidget(self._user_role_label)
         user_layout.addWidget(self._user_text, 1)
@@ -229,6 +231,8 @@ class AppSidebar(QFrame):
         role = role_label or str(data.get("role_label") or data.get("role") or "Tài khoản")
         self._user_name_label.setText(name)
         self._user_role_label.setText(role)
+        self._user_name_label.setToolTip(name)
+        self._user_role_label.setToolTip(role)
         self._avatar_text.setText(self._initials(name))
         context = f"Đăng nhập với {name}, {role}"
         self._user_row.setAccessibleName(context)
