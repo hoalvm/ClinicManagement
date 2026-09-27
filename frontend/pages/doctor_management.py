@@ -6,23 +6,27 @@ from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
     QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
-    QWidget,
 )
 
 from frontend.api_client import api_client
+from frontend.pages.admin_ui import (
+    AdminApiPage,
+    action_cell,
+    configure_admin_table,
+    require_success,
+    table_item,
+)
 from frontend.widgets.page_header import PageHeader
-from frontend.widgets.status_badge import StatusBadgeDelegate
+from frontend.widgets.status_badge import STATUS_LABELS_VN, StatusBadgeDelegate
 
 
-class DoctorManagementPage(QWidget):
+class DoctorManagementPage(AdminApiPage):
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
@@ -35,6 +39,7 @@ class DoctorManagementPage(QWidget):
             "Danh sách và hồ sơ bác sĩ",
         )
         layout.addWidget(self.header)
+        self.add_request_feedback(layout)
 
         # ------------------- Create Form Card -------------------
         form_card = QFrame()
@@ -111,13 +116,14 @@ class DoctorManagementPage(QWidget):
         # Button row
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
-        add_btn = QPushButton("Thêm mới")
-        add_btn.setObjectName("primaryButton")
-        add_btn.setCursor(Qt.PointingHandCursor)
-        add_btn.setMinimumHeight(36)
-        add_btn.setMinimumWidth(120)
-        add_btn.clicked.connect(self.add_doctor)
-        btn_layout.addWidget(add_btn)
+        self.add_btn = QPushButton("Thêm mới")
+        self.add_btn.setObjectName("primaryButton")
+        self.add_btn.setCursor(Qt.PointingHandCursor)
+        self.add_btn.setMinimumHeight(36)
+        self.add_btn.setMinimumWidth(120)
+        self.add_btn.setAccessibleName("Thêm bác sĩ mới")
+        self.add_btn.clicked.connect(self.add_doctor)
+        btn_layout.addWidget(self.add_btn)
 
         form_card_layout.addLayout(grid)
         form_card_layout.addLayout(btn_layout)
@@ -126,6 +132,7 @@ class DoctorManagementPage(QWidget):
         # ------------------- Table Card -------------------
         table_card = QFrame()
         table_card.setObjectName("contentCard")
+        table_card.setAccessibleName("Nội dung danh sách bác sĩ")
         table_card_layout = QVBoxLayout(table_card)
         table_card_layout.setContentsMargins(20, 18, 20, 18)
         table_card_layout.setSpacing(12)
@@ -145,91 +152,127 @@ class DoctorManagementPage(QWidget):
             "Trạng thái",
             "Thao tác",
         ])
-        self.table.setAlternatingRowColors(True)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setShowGrid(False)
-
-        header = self.table.horizontalHeader()
-        header.setFixedHeight(38)
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.Stretch)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.Fixed)
-        header.setSectionResizeMode(6, QHeaderView.Fixed)
-        self.table.setColumnWidth(5, 135)
-        self.table.setColumnWidth(6, 120)
+        configure_admin_table(
+            self.table,
+            accessible_name="Danh sách bác sĩ",
+            stretch_column=1,
+            fixed_widths={0: 52, 2: 132, 3: 170, 4: 126, 5: 116, 6: 98},
+        )
         self.table.setItemDelegateForColumn(5, StatusBadgeDelegate(self.table))
 
         table_card_layout.addWidget(self.table)
-        layout.addWidget(table_card, 1)
+        self.table_state = self.bind_state_host(
+            table_card,
+            self.load_data,
+            empty_title="Chưa có bác sĩ",
+            empty_description="Thêm hồ sơ bác sĩ đầu tiên để phân chuyên khoa và lịch trực.",
+            empty_action_text="Thêm bác sĩ",
+            on_empty_action=self.username_input.setFocus,
+        )
+        layout.addWidget(self.table_state, 1)
 
         self.load_lookups()
         self.load_data()
 
     def load_lookups(self):
+        return self.run_admin_task(
+            "load-doctor-lookups",
+            self._fetch_lookups,
+            self._populate_lookups,
+            controls=(self.specialty_combo, self.clinic_combo, self.add_btn),
+            loading_text="Đang tải chuyên khoa và phòng khám…",
+        )
+
+    @staticmethod
+    def _fetch_lookups():
+        specialties = require_success(
+            api_client.get("/specialties/"),
+            "Không thể tải danh sách chuyên khoa.",
+        ).json()
+        clinics = require_success(
+            api_client.get("/clinics/"),
+            "Không thể tải danh sách phòng khám.",
+        ).json()
+        return specialties, clinics
+
+    def _populate_lookups(self, result):
+        specialties, clinics = result
         self.specialty_combo.clear()
         self.specialty_map = {}
-        r = api_client.get("/specialties/")
-        if r.status_code == 200:
-            for s in r.json():
-                if s["IsActive"]:
-                    self.specialty_combo.addItem(s["SpecialtyName"])
-                    self.specialty_map[s["SpecialtyName"]] = s["SpecialtyID"]
+        for specialty in specialties:
+            if specialty["IsActive"]:
+                name = specialty["SpecialtyName"]
+                self.specialty_combo.addItem(name)
+                self.specialty_map[name] = specialty["SpecialtyID"]
 
         self.clinic_combo.clear()
         self.clinic_map = {}
-        r = api_client.get("/clinics/")
-        if r.status_code == 200:
-            for c in r.json():
-                if c["IsActive"]:
-                    self.clinic_combo.addItem(c["ClinicName"])
-                    self.clinic_map[c["ClinicName"]] = c["ClinicID"]
+        for clinic in clinics:
+            if clinic["IsActive"]:
+                name = clinic["ClinicName"]
+                self.clinic_combo.addItem(name)
+                self.clinic_map[name] = clinic["ClinicID"]
 
-    def load_data(self):
-        r = api_client.get("/doctors/")
-        if r.status_code != 200:
-            return
-        items = r.json()
+    def load_data(self, *, clear_feedback: bool = True):
+        return self.run_admin_task(
+            "load-doctors",
+            lambda: require_success(
+                api_client.get("/doctors/"),
+                "Không thể tải danh sách bác sĩ.",
+            ).json(),
+            self._populate_doctors,
+            loading_text="Đang tải danh sách bác sĩ…",
+            clear_feedback=clear_feedback,
+            stateful=True,
+            empty_when=lambda doctors: not doctors,
+        )
+
+    def _populate_doctors(self, items):
         self.table.clearContents()
         self.table.setRowCount(len(items))
         for row, d in enumerate(items):
-            item_id = QTableWidgetItem(str(d["DoctorID"]))
-            item_id.setTextAlignment(Qt.AlignCenter)
+            item_id = table_item(d["DoctorID"], alignment=Qt.AlignCenter)
             self.table.setItem(row, 0, item_id)
 
-            self.table.setItem(row, 1, QTableWidgetItem(d["FullName"]))
-            self.table.setItem(row, 2, QTableWidgetItem(d.get("SpecialtyName") or "—"))
-            self.table.setItem(row, 3, QTableWidgetItem(d.get("ClinicName") or "—"))
-            self.table.setItem(row, 4, QTableWidgetItem(d.get("LicenseNumber") or "—"))
+            self.table.setItem(row, 1, table_item(d["FullName"]))
+            self.table.setItem(row, 2, table_item(d.get("SpecialtyName")))
+            self.table.setItem(row, 3, table_item(d.get("ClinicName")))
+            self.table.setItem(row, 4, table_item(d.get("LicenseNumber")))
 
             # Status pill (rendered via delegate)
             is_active = d["IsActive"]
             status_text = "ACTIVE" if is_active else "INACTIVE"
-            item_status = QTableWidgetItem(status_text)
-            item_status.setTextAlignment(Qt.AlignCenter)
+            status_label = STATUS_LABELS_VN[status_text]
+            item_status = table_item(
+                status_text,
+                alignment=Qt.AlignCenter,
+                tooltip=status_label,
+                accessible_text=status_label,
+            )
             self.table.setItem(row, 5, item_status)
 
             # Action button
             del_btn = QPushButton("Khóa" if is_active else "Mở khóa")
             del_btn.setObjectName("actionDeleteBtn")
             del_btn.setCursor(Qt.PointingHandCursor)
-            del_btn.setFixedSize(76, 28)
-            del_btn.clicked.connect(lambda _, did=d["DoctorID"]: self.delete_item(did))
+            del_btn.setFixedSize(76, 34)
+            del_btn.setAccessibleName(
+                f"{'Khóa' if is_active else 'Mở khóa'} bác sĩ {d['FullName']}"
+            )
+            del_btn.setToolTip(del_btn.accessibleName())
+            del_btn.clicked.connect(
+                lambda _, did=d["DoctorID"], button=del_btn: self.delete_item(did, button)
+            )
 
-            actions_widget = QWidget()
-            actions_layout = QHBoxLayout(actions_widget)
-            actions_layout.setContentsMargins(4, 0, 4, 0)
-            actions_layout.setAlignment(Qt.AlignCenter)
-            actions_layout.addWidget(del_btn)
+            actions_widget = action_cell(
+                del_btn,
+                accessible_name=f"Thao tác cho bác sĩ {d['FullName']}",
+            )
 
             self.table.setCellWidget(row, 6, actions_widget)
             self.table.setRowHeight(row, 48)
 
     def add_doctor(self):
-        self.load_lookups()
         specialty_name = self.specialty_combo.currentText()
         clinic_name = self.clinic_combo.currentText()
 
@@ -248,17 +291,47 @@ class DoctorManagementPage(QWidget):
             "ClinicID": self.clinic_map.get(clinic_name) if clinic_name else None,
             "LicenseNumber": self.license_input.text().strip(),
         }
-        r = api_client.post("/doctors/", json=payload)
-        if r.status_code == 200:
-            self.load_data()
-            self.username_input.clear()
-            self.password_input.clear()
-            self.fullname_input.clear()
-            self.license_input.clear()
-        else:
-            QMessageBox.warning(self, "Lỗi", r.json().get("detail", "Có lỗi xảy ra"))
+        self.run_admin_task(
+            "create-doctor",
+            lambda: require_success(
+                api_client.post("/doctors/", json=payload),
+                "Không thể thêm bác sĩ.",
+            ),
+            self._doctor_created,
+            controls=(self.add_btn,),
+            loading_text="Đang thêm bác sĩ…",
+        )
 
-    def delete_item(self, doctor_id):
+    def _doctor_created(self, _response) -> None:
+        self.username_input.clear()
+        self.password_input.clear()
+        self.fullname_input.clear()
+        self.license_input.clear()
+        self.feedback.show_message(
+            "Đã thêm bác sĩ",
+            "Hồ sơ bác sĩ đã được lưu.",
+            severity="success",
+        )
+        self.load_data(clear_feedback=False)
+
+    def delete_item(self, doctor_id, button: QPushButton | None = None):
         if QMessageBox.question(self, "Xác nhận", "Bạn có chắc chắn muốn thay đổi trạng thái bác sĩ này?") == QMessageBox.Yes:
-            api_client.delete(f"/doctors/{doctor_id}")
-            self.load_data()
+            controls = (button,) if button is not None else ()
+            self.run_admin_task(
+                f"toggle-doctor:{doctor_id}",
+                lambda: require_success(
+                    api_client.delete(f"/doctors/{doctor_id}"),
+                    "Không thể thay đổi trạng thái bác sĩ.",
+                ),
+                self._doctor_toggled,
+                controls=controls,
+                loading_text="Đang cập nhật trạng thái bác sĩ…",
+            )
+
+    def _doctor_toggled(self, _response) -> None:
+        self.feedback.show_message(
+            "Đã cập nhật",
+            "Trạng thái bác sĩ đã được thay đổi.",
+            severity="success",
+        )
+        self.load_data(clear_feedback=False)

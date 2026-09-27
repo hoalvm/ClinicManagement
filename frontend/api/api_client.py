@@ -7,6 +7,8 @@ from typing import Any
 
 import httpx
 
+from frontend.core.i18n import t
+
 
 def decode_jwt_payload(token: str) -> dict[str, Any]:
     """Decode JWT payload without verifying signature."""
@@ -146,11 +148,9 @@ class ApiClient:
                 headers=headers,
             )
         except httpx.TimeoutException as exc:
-            raise ApiError("The server took too long to respond. Please try again.") from exc
+            raise ApiError(t("api_timeout")) from exc
         except httpx.RequestError as exc:
-            raise ApiError(
-                "Cannot connect to the clinic server. Check that the backend is running."
-            ) from exc
+            raise ApiError(t("api_connection")) from exc
 
         if response.status_code == 204:
             return None
@@ -162,7 +162,7 @@ class ApiClient:
             except ValueError as exc:
                 if response.is_success:
                     raise ApiError(
-                        "The server returned an invalid response.",
+                        t("api_invalid_response"),
                         status_code=response.status_code,
                     ) from exc
 
@@ -176,14 +176,14 @@ class ApiClient:
         message = ApiClient._detail_message(details)
         if not message:
             message = {
-                400: "The request could not be completed.",
-                401: "Your session is invalid or has expired.",
-                403: "You do not have permission to perform this action.",
-                404: "The requested information was not found.",
-                409: "This information already exists.",
-                422: "Please check the information you entered.",
-                500: "The server encountered an unexpected error.",
-            }.get(status_code, f"Request failed (HTTP {status_code}).")
+                400: t("api_http_400"),
+                401: t("api_http_401"),
+                403: t("api_http_403"),
+                404: t("api_http_404"),
+                409: t("api_http_409"),
+                422: t("api_http_422"),
+                500: t("api_http_500"),
+            }.get(status_code, t("api_http_fallback", status_code=status_code))
         return ApiError(message, status_code=status_code, details=details)
 
     @staticmethod
@@ -196,7 +196,7 @@ class ApiClient:
                 if not isinstance(item, dict):
                     continue
                 location = item.get("loc", [])
-                field = str(location[-1]).replace("_", " ") if location else "Field"
+                field = str(location[-1]).replace("_", " ") if location else t("api_field")
                 text = item.get("msg")
                 if text:
                     messages.append(f"{field.title()}: {text}")

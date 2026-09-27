@@ -4,17 +4,17 @@ Prioritizes clean typography, subtle borders, comfortable whitespace,
 and minimalist aesthetics without unnecessary icons.
 """
 
+from frontend.ui.design_system import UI_TOKENS
+
 APP_STYLE = """
 /* =========================================================================
    1. GLOBAL RESET & BASE STYLES
    ========================================================================= */
 * {
     font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
-    outline: none;
 }
 
 QWidget {
-    background-color: #F4F7FB;
     color: #0f172a;
     font-size: 14px;
     selection-background-color: #0f766e;
@@ -22,6 +22,11 @@ QWidget {
 }
 
 QMainWindow {
+    background-color: #F4F7FB;
+}
+
+QWidget#pageRoot,
+QWidget[uiSurface="page"] {
     background-color: #F4F7FB;
 }
 
@@ -157,9 +162,9 @@ QFrame#authCard QTextEdit {
     color: #0f172a;
     border: 1.5px solid #CBD5E1;
     border-radius: 8px;
-    padding: 6px 12px;
+    padding: 7px 12px;
     font-size: 13px;
-    min-height: 20px;
+    min-height: 24px;
 }
 
 QFrame#authCard QLineEdit:focus,
@@ -219,6 +224,17 @@ QLabel#authMainTitle {
     font-size: 24px;
     font-weight: 700;
     letter-spacing: -0.5px;
+}
+
+QLabel#loginErrorBanner {
+    background-color: #FEF2F2;
+    color: #991B1B;
+    border: 1px solid #FECACA;
+    border-left: 4px solid #DC2626;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
 }
 
 QLabel#authBrandMark {
@@ -345,14 +361,22 @@ QLineEdit,
 QComboBox,
 QSpinBox,
 QTimeEdit,
-QDateEdit,
+QDateEdit {
+    background-color: #ffffff;
+    color: #0f172a;
+    border: 1px solid #D7E0EA;
+    border-radius: 8px;
+    padding: 7px 12px;
+    min-height: 24px;
+    font-size: 14px;
+}
+
 QTextEdit {
     background-color: #ffffff;
     color: #0f172a;
     border: 1px solid #D7E0EA;
     border-radius: 8px;
-    padding: 10px 14px;
-    min-height: 28px;
+    padding: 8px 12px;
     font-size: 14px;
 }
 
@@ -386,11 +410,11 @@ QTextEdit:disabled {
     border-color: #e2e8f0;
 }
 
-/* ComboBox dropdown styling */
+/* ComboBox dropdown styling. The native Qt arrow is painter-based and DPI safe. */
 QComboBox::drop-down {
     subcontrol-origin: padding;
     subcontrol-position: center right;
-    width: 30px;
+    width: 34px;
     border-left: 1px solid #E6EDF3;
     border-top-right-radius: 7px;
     border-bottom-right-radius: 7px;
@@ -401,22 +425,12 @@ QComboBox::drop-down:hover {
     background-color: #f1f5f9;
 }
 
-QComboBox::down-arrow {
-    width: 0;
-    height: 0;
-    border-left: 4px solid transparent;
-    border-right: 4px solid transparent;
-    border-top: 5px solid #64748b;
-    margin: 0;
-}
-
 QComboBox QAbstractItemView {
     background-color: #ffffff;
     color: #0f172a;
     border: 1px solid #D7E0EA;
     border-radius: 8px;
     padding: 4px;
-    outline: none;
     selection-background-color: #f0fdfa;
     selection-color: #0f766e;
 }
@@ -485,10 +499,10 @@ QPushButton {
     color: #ffffff;
     border: 1px solid #0f766e;
     border-radius: 8px;
-    padding: 9px 18px;
+    padding: 8px 18px;
     font-size: 14px;
     font-weight: 600;
-    min-height: 36px;
+    min-height: 22px;
     text-align: center;
 }
 
@@ -600,10 +614,10 @@ QPushButton#tableActionInfo,
 QPushButton#tableActionSecondary,
 QPushButton#tableActionDanger {
     border-radius: 6px;
-    padding: 3px 10px;
+    padding: 0 10px;
     font-size: 13px;
     font-weight: 600;
-    min-height: 26px;
+    min-height: 30px;
     max-height: 30px;
     text-align: center;
 }
@@ -697,8 +711,18 @@ QTableView {
     gridline-color: #E6EDF3;
     selection-background-color: #f0fdfa;
     selection-color: #0f766e;
-    outline: none;
     font-size: 14px;
+}
+
+/* The enclosing card already owns the visible surface boundary. */
+QFrame#tableCard QTableWidget,
+QFrame#tableCard QTableView,
+QFrame#contentCard QTableWidget,
+QFrame#contentCard QTableView,
+QFrame#card QTableWidget,
+QFrame#card QTableView {
+    border: none;
+    border-radius: 8px;
 }
 
 QTableWidget::item,
@@ -741,7 +765,6 @@ QListWidget#adminSidebar {
     background-color: #0f172a;
     border: none;
     padding: 12px 8px;
-    outline: none;
 }
 
 QListWidget#adminSidebar::item {
@@ -1075,5 +1098,597 @@ QFrame#feedbackBanner[severity="error"] QLabel#feedbackTitle {
 QLabel#feedbackText {
     font-size: 13px;
     color: #334155;
+}
+"""
+
+
+# Typed-token overrides are intentionally appended so they also normalize
+# legacy selectors while screens are migrated incrementally.
+APP_STYLE += f"""
+/* =========================================================================
+   14. DESIGN-SYSTEM FOUNDATION OVERRIDES
+   ========================================================================= */
+QWidget[uiSurface="transparent"],
+QWidget#responsivePageContent,
+QWidget#stateHost,
+QWidget#stateContent,
+QWidget#pagination {{
+    background: transparent;
+    border: none;
+}}
+
+QFrame[uiSurface="card"] {{
+    background-color: {UI_TOKENS.surface};
+    border: 1px solid {UI_TOKENS.border};
+    border-radius: {UI_TOKENS.card_radius}px;
+}}
+
+QWidget[uiSurface="dialog"] {{
+    background-color: {UI_TOKENS.surface};
+}}
+
+QTableView QWidget,
+QTableWidget QWidget {{
+    background-color: transparent;
+}}
+
+QTableView QWidget#tableCellWidget,
+QTableWidget QWidget#tableCellWidget,
+QWidget[uiRole="tableActionCell"] {{
+    background-color: transparent;
+    border: none;
+}}
+
+QLineEdit[hasError="true"],
+QComboBox[hasError="true"],
+QSpinBox[hasError="true"],
+QTimeEdit[hasError="true"],
+QDateEdit[hasError="true"],
+QTextEdit[hasError="true"],
+QLineEdit[error="true"],
+QComboBox[error="true"],
+QSpinBox[error="true"],
+QTimeEdit[error="true"],
+QDateEdit[error="true"],
+QTextEdit[error="true"] {{
+    border: 2px solid {UI_TOKENS.error};
+    background-color: #FFF7F7;
+}}
+
+QLineEdit[hasError="true"]:focus,
+QComboBox[hasError="true"]:focus,
+QSpinBox[hasError="true"]:focus,
+QTimeEdit[hasError="true"]:focus,
+QDateEdit[hasError="true"]:focus,
+QTextEdit[hasError="true"]:focus {{
+    border-color: #B91C1C;
+}}
+
+QLineEdit:read-only,
+QTextEdit:read-only,
+QLineEdit[readOnly="true"],
+QTextEdit[readOnly="true"] {{
+    background-color: {UI_TOKENS.surface_muted};
+    color: {UI_TOKENS.text_muted};
+    border-color: {UI_TOKENS.border};
+}}
+
+QPushButton:focus {{
+    border: 2px solid {UI_TOKENS.focus};
+}}
+
+QLineEdit:focus,
+QComboBox:focus,
+QSpinBox:focus,
+QTimeEdit:focus,
+QDateEdit:focus,
+QTextEdit:focus {{
+    border: 2px solid {UI_TOKENS.brand};
+}}
+
+QTableView:focus,
+QTableWidget:focus,
+QListWidget:focus {{
+    border: 2px solid {UI_TOKENS.focus};
+}}
+
+QPushButton[compact="true"] {{
+    min-height: 22px;
+    padding: 5px 12px;
+}}
+
+QToolButton#tableMoreButton {{
+    background-color: {UI_TOKENS.surface};
+    color: {UI_TOKENS.text_muted};
+    border: 1px solid {UI_TOKENS.border};
+    border-radius: 7px;
+    min-width: 34px;
+    max-width: 34px;
+    min-height: 32px;
+    max-height: 32px;
+    padding: 0;
+    font-size: 18px;
+    font-weight: 700;
+}}
+
+QToolButton#tableMoreButton:hover {{
+    background-color: #F0FDFA;
+    color: {UI_TOKENS.brand};
+    border-color: #99F6E4;
+}}
+
+QToolButton#tableMoreButton:pressed {{
+    background-color: #CCFBF1;
+    border-color: {UI_TOKENS.brand};
+}}
+
+QToolButton#tableMoreButton:focus {{
+    border: 2px solid {UI_TOKENS.focus};
+}}
+
+QToolButton#tableMoreButton:disabled {{
+    background-color: {UI_TOKENS.disabled_background};
+    color: {UI_TOKENS.disabled_text};
+    border-color: {UI_TOKENS.border};
+}}
+
+QLabel#fieldValueStrong {{
+    color: {UI_TOKENS.text};
+    font-weight: 600;
+}}
+
+QLabel#amountDue {{
+    color: #B91C1C;
+    font-size: 18px;
+    font-weight: 800;
+}}
+
+QLabel#changeAmount {{
+    color: {UI_TOKENS.success};
+    font-size: 16px;
+    font-weight: 700;
+}}
+
+QLabel#receiptText {{
+    color: #14532D;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 13px;
+}}
+
+QLabel#paidLabel {{
+    color: #166534;
+    font-size: 11px;
+    font-weight: 600;
+}}
+
+QComboBox[paintedChevron="true"]::down-arrow {{
+    image: none;
+    width: 12px;
+    height: 8px;
+}}
+
+QFrame#feedbackBanner[severity="warning"] {{
+    background-color: #FFFBEB;
+    border: 1px solid #FDE68A;
+    border-left: 4px solid #D97706;
+}}
+
+QFrame#feedbackBanner[severity="warning"] QLabel#feedbackTitle {{
+    color: #92400E;
+}}
+
+QFrame#emptyState[stateRole="error"] {{
+    background-color: #FFF7F7;
+    border-color: #FECACA;
+}}
+
+QFrame#statCard:focus {{
+    border: 2px solid {UI_TOKENS.focus};
+}}
+
+QFrame#sidebar[compact="true"] QPushButton#navButton,
+QFrame#sidebar[compact="true"] QPushButton#logoutButton {{
+    padding-left: 8px;
+    padding-right: 8px;
+    text-align: center;
+}}
+"""
+
+
+# Booking-flow selectors live here rather than on individual widgets.  The
+# object names describe stable component roles; dynamic properties represent
+# state and are repolished by the views whenever that state changes.
+APP_STYLE += """
+/* =========================================================================
+   15. PATIENT & RECEPTION BOOKING FLOWS
+   ========================================================================= */
+QLabel#bookingStepIndicator {
+    color: #0f766e;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+QLabel#bookingSupportingText {
+    color: #64748b;
+    font-size: 13px;
+}
+
+QPushButton#primaryButton[bookingRole="continueAction"] {
+    padding: 0 18px;
+    font-weight: 600;
+}
+
+QLabel#bookingSectionLead {
+    color: #475569;
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 4px;
+}
+
+QLabel#bookingSpecialtyName {
+    color: #0f172a;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+QLabel#bookingAccentMeta {
+    color: #0f766e;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QLabel#bookingModeLabel {
+    color: #334155;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+QPushButton#bookingModeOption {
+    background-color: #ffffff;
+    color: #475569;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-weight: 600;
+}
+
+QPushButton#bookingModeOption:hover {
+    background-color: #f8fafc;
+    border-color: #94a3b8;
+}
+
+QPushButton#bookingModeOption[selected="true"] {
+    background-color: #0f766e;
+    color: #ffffff;
+    border-color: #0f766e;
+    font-weight: 700;
+}
+
+QPushButton#bookingModeOption:focus {
+    border: 2px solid #14b8a6;
+}
+
+QPushButton#bookingDateChip {
+    background-color: #f1f5f9;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+    border-radius: 14px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+QPushButton#bookingDateChip:hover {
+    background-color: #e2e8f0;
+    border-color: #94a3b8;
+}
+
+QPushButton#bookingDateChip[active="true"] {
+    background-color: #0f766e;
+    color: #ffffff;
+    border-color: #0f766e;
+    font-weight: 700;
+}
+
+QPushButton#bookingDateChip:focus {
+    border: 2px solid #14b8a6;
+}
+
+QLabel#bookingAccentLabel {
+    color: #0f766e;
+    font-weight: 600;
+}
+
+QLabel#bookingDoctorAvatar {
+    background-color: #e6f4f2;
+    color: #0d5c56;
+    border-radius: 20px;
+    min-width: 40px;
+    max-width: 40px;
+    min-height: 40px;
+    max-height: 40px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+QLabel#bookingDoctorName {
+    color: #0f172a;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+QLabel#bookingDoctorSpecialty {
+    color: #0f766e;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QLabel#bookingCompactText {
+    color: #64748b;
+    font-size: 12px;
+}
+
+QFrame#card[bookingRole="doctorBanner"] {
+    background-color: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+QLabel#bookingScheduleText {
+    color: #0f766e;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+QFrame#bookingWarningBanner {
+    background-color: #fffbeb;
+    border: 1.5px solid #fde68a;
+    border-radius: 8px;
+    padding: 10px;
+}
+
+QLabel#bookingWarningText {
+    color: #b45309;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QLabel#bookingSelectionText {
+    color: #334155;
+    font-weight: 600;
+}
+
+QPushButton#bookingSlotButton {
+    background-color: #ffffff;
+    color: #0f766e;
+    border: 1.5px solid #0f766e;
+    border-radius: 8px;
+    font-weight: 700;
+}
+
+QPushButton#bookingSlotButton:hover {
+    background-color: #0f766e;
+    color: #ffffff;
+}
+
+QPushButton#bookingSlotButton[selected="true"],
+QPushButton#bookingSlotButton[selected="true"]:hover {
+    background-color: #0f766e;
+    color: #ffffff;
+    border: 2px solid #0d5f58;
+}
+
+QPushButton#bookingSlotButton:disabled {
+    background-color: #f1f5f9;
+    color: #94a3b8;
+    border: 1px solid #e2e8f0;
+}
+
+QPushButton#bookingSlotButton:focus {
+    border: 2px solid #14b8a6;
+}
+
+QFrame#card[bookingRole="confirmation"] {
+    background-color: #ffffff;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 18px;
+}
+
+QLabel#bookingSummaryDetails {
+    color: #1e293b;
+    font-size: 14px;
+}
+
+QPushButton#primaryButton[bookingRole="submitAction"] {
+    min-width: 220px;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+QLabel#patientTypeBadge {
+    background-color: #f1f5f9;
+    color: #475569;
+    border-radius: 10px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+QLabel#patientTypeBadge[patientState="existing"] {
+    background-color: #e0f2fe;
+    color: #0369a1;
+    font-weight: 700;
+}
+
+QPushButton#ghostButton[bookingRole="unselectPatient"] {
+    color: #0369a1;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+QLabel#bookingInlineFieldLabel {
+    color: #475569;
+    margin-left: 12px;
+    font-weight: 500;
+}
+
+QLabel#patientProfileStatusBadge {
+    background-color: #f1f5f9;
+    color: #64748b;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+QLabel#patientProfileStatusBadge[patientState="existing"] {
+    background-color: #e0f2fe;
+    color: #0284c7;
+    font-weight: 700;
+}
+
+QLabel#patientProfileStatusBadge[patientState="draft"] {
+    background-color: #fef3c7;
+    color: #b45309;
+    font-weight: 700;
+}
+
+QFrame#patientProfileEmptyState {
+    background-color: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+QLabel#patientProfileEmptyTitle {
+    color: #475569;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+QLabel#patientProfileEmptyDescription {
+    color: #94a3b8;
+    font-size: 12px;
+}
+
+QLabel#patientProfileMetaLabel {
+    color: #64748b;
+    font-size: 12px;
+}
+
+QLabel#patientProfileName {
+    color: #0f172a;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+QLabel#patientProfileStrongValue {
+    color: #1e293b;
+    font-weight: 600;
+}
+
+QLabel#patientProfileValue {
+    color: #1e293b;
+    font-weight: 500;
+}
+
+QLabel#patientHistoryEmptyText {
+    color: #94a3b8;
+    padding: 12px;
+    font-size: 12px;
+}
+
+QLabel#sectionTitle[bookingRole="previewTitle"] {
+    color: #166534;
+}
+
+QLabel#bookingPreviewStrongValue {
+    color: #14532d;
+    font-weight: 600;
+}
+
+QLabel#bookingPreviewReason {
+    color: #166534;
+    font-size: 12px;
+}
+
+/* =========================================================================
+   16. DIALOGS & SMALL SHARED CONTROLS
+   ========================================================================= */
+QPushButton#destructiveSecondaryButton {
+    background-color: #ffffff;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+}
+
+QPushButton#destructiveSecondaryButton:hover {
+    background-color: #fef2f2;
+    border-color: #fca5a5;
+}
+
+QFrame#destructiveSummaryCard {
+    background-color: #fff7f7;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+}
+
+QFrame#successSummaryCard {
+    background-color: #f0fdf4;
+    border: 1px solid #86efac;
+    border-radius: 8px;
+}
+
+QLabel#successSummaryText {
+    color: #065f46;
+    font-size: 13px;
+}
+
+QLabel#successSummaryStrongText {
+    color: #047857;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QLabel#calendarDialogTitle {
+    color: #0f766e;
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+QLabel#languageLabel,
+QLabel#quickActionsLabel {
+    color: #475569;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+QComboBox#languageCombo {
+    border-radius: 6px;
+    padding: 4px 10px;
+    min-height: 22px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QComboBox#languageCombo::drop-down {
+    width: 24px;
+}
+
+QComboBox#languageCombo QAbstractItemView::item {
+    min-height: 28px;
+    padding: 5px 8px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QLabel#dashboardSectionTitle {
+    color: #0f172a;
+    font-size: 16px;
+    font-weight: 700;
+    margin-top: 8px;
 }
 """

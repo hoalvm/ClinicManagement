@@ -5,23 +5,27 @@ from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
     QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
-    QWidget,
 )
 
 from frontend.api_client import api_client
+from frontend.pages.admin_ui import (
+    AdminApiPage,
+    action_cell,
+    configure_admin_table,
+    require_success,
+    table_item,
+)
 from frontend.widgets.page_header import PageHeader
-from frontend.widgets.status_badge import StatusBadgeDelegate
+from frontend.widgets.status_badge import STATUS_LABELS_VN, StatusBadgeDelegate
 
 
-class ClinicManagementPage(QWidget):
+class ClinicManagementPage(AdminApiPage):
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
@@ -34,6 +38,7 @@ class ClinicManagementPage(QWidget):
             "Danh mục cơ sở y tế",
         )
         layout.addWidget(self.header)
+        self.add_request_feedback(layout)
 
         # ------------------- Create Form Card -------------------
         form_card = QFrame()
@@ -83,13 +88,14 @@ class ClinicManagementPage(QWidget):
         # Button row
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
-        add_btn = QPushButton("Thêm mới")
-        add_btn.setObjectName("primaryButton")
-        add_btn.setCursor(Qt.PointingHandCursor)
-        add_btn.setMinimumHeight(36)
-        add_btn.setMinimumWidth(120)
-        add_btn.clicked.connect(self.add_clinic)
-        btn_layout.addWidget(add_btn)
+        self.add_btn = QPushButton("Thêm mới")
+        self.add_btn.setObjectName("primaryButton")
+        self.add_btn.setCursor(Qt.PointingHandCursor)
+        self.add_btn.setMinimumHeight(36)
+        self.add_btn.setMinimumWidth(120)
+        self.add_btn.setAccessibleName("Thêm phòng khám mới")
+        self.add_btn.clicked.connect(self.add_clinic)
+        btn_layout.addWidget(self.add_btn)
 
         form_card_layout.addLayout(grid)
         form_card_layout.addLayout(btn_layout)
@@ -98,6 +104,7 @@ class ClinicManagementPage(QWidget):
         # ------------------- Table Card -------------------
         table_card = QFrame()
         table_card.setObjectName("contentCard")
+        table_card.setAccessibleName("Nội dung danh sách phòng khám")
         table_card_layout = QVBoxLayout(table_card)
         table_card_layout.setContentsMargins(20, 18, 20, 18)
         table_card_layout.setSpacing(12)
@@ -116,63 +123,81 @@ class ClinicManagementPage(QWidget):
             "Trạng thái",
             "Thao tác",
         ])
-        self.table.setAlternatingRowColors(True)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setShowGrid(False)
-
-        header = self.table.horizontalHeader()
-        header.setFixedHeight(38)
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.Fixed)
-        header.setSectionResizeMode(5, QHeaderView.Fixed)
-        self.table.setColumnWidth(4, 135)
-        self.table.setColumnWidth(5, 120)
+        configure_admin_table(
+            self.table,
+            accessible_name="Danh sách phòng khám",
+            stretch_column=2,
+            fixed_widths={0: 52, 1: 190, 3: 128, 4: 116, 5: 98},
+        )
         self.table.setItemDelegateForColumn(4, StatusBadgeDelegate(self.table))
 
         table_card_layout.addWidget(self.table)
-        layout.addWidget(table_card, 1)
+        self.table_state = self.bind_state_host(
+            table_card,
+            self.load_data,
+            empty_title="Chưa có phòng khám",
+            empty_description="Thêm cơ sở khám đầu tiên để gán bác sĩ và lịch làm việc.",
+            empty_action_text="Thêm phòng khám",
+            on_empty_action=self.name_input.setFocus,
+        )
+        layout.addWidget(self.table_state, 1)
 
         self.load_data()
 
-    def load_data(self):
-        r = api_client.get("/clinics/")
-        if r.status_code != 200:
-            return
-        items = r.json()
+    def load_data(self, *, clear_feedback: bool = True):
+        return self.run_admin_task(
+            "load-clinics",
+            lambda: require_success(
+                api_client.get("/clinics/"),
+                "Không thể tải danh sách phòng khám.",
+            ).json(),
+            self._populate_clinics,
+            loading_text="Đang tải danh sách phòng khám…",
+            clear_feedback=clear_feedback,
+            stateful=True,
+            empty_when=lambda clinics: not clinics,
+        )
+
+    def _populate_clinics(self, items):
         self.table.clearContents()
         self.table.setRowCount(len(items))
         for row, c in enumerate(items):
-            item_id = QTableWidgetItem(str(c["ClinicID"]))
-            item_id.setTextAlignment(Qt.AlignCenter)
+            item_id = table_item(c["ClinicID"], alignment=Qt.AlignCenter)
             self.table.setItem(row, 0, item_id)
 
-            self.table.setItem(row, 1, QTableWidgetItem(c["ClinicName"]))
-            self.table.setItem(row, 2, QTableWidgetItem(c.get("Address") or "—"))
-            self.table.setItem(row, 3, QTableWidgetItem(c.get("Phone") or "—"))
+            self.table.setItem(row, 1, table_item(c["ClinicName"]))
+            self.table.setItem(row, 2, table_item(c.get("Address")))
+            self.table.setItem(row, 3, table_item(c.get("Phone")))
 
             # Status pill (rendered via delegate)
             is_active = c["IsActive"]
             status_text = "ACTIVE" if is_active else "INACTIVE"
-            item_status = QTableWidgetItem(status_text)
-            item_status.setTextAlignment(Qt.AlignCenter)
+            status_label = STATUS_LABELS_VN[status_text]
+            item_status = table_item(
+                status_text,
+                alignment=Qt.AlignCenter,
+                tooltip=status_label,
+                accessible_text=status_label,
+            )
             self.table.setItem(row, 4, item_status)
 
             # Action button
             del_btn = QPushButton("Khóa" if is_active else "Mở khóa")
             del_btn.setObjectName("actionDeleteBtn")
             del_btn.setCursor(Qt.PointingHandCursor)
-            del_btn.setFixedSize(76, 28)
-            del_btn.clicked.connect(lambda _, cid=c["ClinicID"]: self.delete_item(cid))
+            del_btn.setFixedSize(76, 34)
+            del_btn.setAccessibleName(
+                f"{'Khóa' if is_active else 'Mở khóa'} phòng khám {c['ClinicName']}"
+            )
+            del_btn.setToolTip(del_btn.accessibleName())
+            del_btn.clicked.connect(
+                lambda _, cid=c["ClinicID"], button=del_btn: self.delete_item(cid, button)
+            )
 
-            actions_widget = QWidget()
-            actions_layout = QHBoxLayout(actions_widget)
-            actions_layout.setContentsMargins(4, 0, 4, 0)
-            actions_layout.setAlignment(Qt.AlignCenter)
-            actions_layout.addWidget(del_btn)
+            actions_widget = action_cell(
+                del_btn,
+                accessible_name=f"Thao tác cho phòng khám {c['ClinicName']}",
+            )
 
             self.table.setCellWidget(row, 5, actions_widget)
             self.table.setRowHeight(row, 48)
@@ -188,16 +213,46 @@ class ClinicManagementPage(QWidget):
             "Address": self.address_input.text().strip(),
             "Phone": self.phone_input.text().strip(),
         }
-        r = api_client.post("/clinics/", json=payload)
-        if r.status_code == 200:
-            self.load_data()
-            self.name_input.clear()
-            self.address_input.clear()
-            self.phone_input.clear()
-        else:
-            QMessageBox.warning(self, "Lỗi", r.json().get("detail", "Không thể thêm phòng khám."))
+        self.run_admin_task(
+            "create-clinic",
+            lambda: require_success(
+                api_client.post("/clinics/", json=payload),
+                "Không thể thêm phòng khám.",
+            ),
+            self._clinic_created,
+            controls=(self.add_btn,),
+            loading_text="Đang thêm phòng khám…",
+        )
 
-    def delete_item(self, clinic_id):
+    def _clinic_created(self, _response) -> None:
+        self.name_input.clear()
+        self.address_input.clear()
+        self.phone_input.clear()
+        self.feedback.show_message(
+            "Đã thêm phòng khám",
+            "Thông tin phòng khám đã được lưu.",
+            severity="success",
+        )
+        self.load_data(clear_feedback=False)
+
+    def delete_item(self, clinic_id, button: QPushButton | None = None):
         if QMessageBox.question(self, "Xác nhận", "Bạn có chắc chắn muốn thay đổi trạng thái phòng khám này?") == QMessageBox.Yes:
-            api_client.delete(f"/clinics/{clinic_id}")
-            self.load_data()
+            controls = (button,) if button is not None else ()
+            self.run_admin_task(
+                f"toggle-clinic:{clinic_id}",
+                lambda: require_success(
+                    api_client.delete(f"/clinics/{clinic_id}"),
+                    "Không thể thay đổi trạng thái phòng khám.",
+                ),
+                self._clinic_toggled,
+                controls=controls,
+                loading_text="Đang cập nhật trạng thái phòng khám…",
+            )
+
+    def _clinic_toggled(self, _response) -> None:
+        self.feedback.show_message(
+            "Đã cập nhật",
+            "Trạng thái phòng khám đã được thay đổi.",
+            severity="success",
+        )
+        self.load_data(clear_feedback=False)

@@ -58,8 +58,7 @@ class AppointmentDetailView(BaseApiView):
         self.reschedule_button = QPushButton(t("btn_reschedule"))
         self.reschedule_button.setObjectName("secondaryButton")
         self.cancel_button = QPushButton(t("btn_cancel"))
-        self.cancel_button.setObjectName("secondaryButton")
-        self.cancel_button.setStyleSheet("color: #dc2626; border-color: #fecaca;")
+        self.cancel_button.setObjectName("destructiveSecondaryButton")
 
         self.header.add_action(self.reschedule_button)
         self.header.add_action(self.cancel_button)
@@ -69,11 +68,11 @@ class AppointmentDetailView(BaseApiView):
         root.addWidget(self.feedback)
         root.addWidget(self.loading)
 
-        scroll = QScrollArea()
-        scroll.setObjectName("pageScroll")
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setAccessibleName("Appointment information")
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setObjectName("pageScroll")
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll_area.setAccessibleName(t("a11y_appointment_information"))
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 2, 8, 4)
@@ -117,8 +116,8 @@ class AppointmentDetailView(BaseApiView):
             )
         )
         content_layout.addStretch()
-        scroll.setWidget(content)
-        root.addWidget(scroll, 1)
+        self.scroll_area.setWidget(content)
+        root.addWidget(self.scroll_area, 1)
 
         self.header.back_requested.connect(self.back_requested.emit)
         self.medical_button.clicked.connect(self._open_medical)
@@ -141,6 +140,7 @@ class AppointmentDetailView(BaseApiView):
         self.cancel_button.setText(t("btn_cancel"))
         self.medical_button.setText(t("btn_medical_result"))
         self.invoice_button.setText(t("btn_invoice"))
+        self.scroll_area.setAccessibleName(t("a11y_appointment_information"))
 
         for sec_key, lbl in self._section_title_labels.items():
             lbl.setText(t(sec_key))
@@ -283,6 +283,7 @@ class AppointmentDetailView(BaseApiView):
 
         dialog = RescheduleAppointmentDialog(self.api_client, self._current_appointment_data, self)
         dialog.appointment_rescheduled.connect(lambda _: self.load())
+        dialog.session_expired.connect(self.session_expired.emit)
         dialog.exec()
 
     def _open_cancel(self) -> None:
@@ -292,6 +293,7 @@ class AppointmentDetailView(BaseApiView):
 
         dialog = CancelAppointmentDialog(self.api_client, self._current_appointment_data, self)
         dialog.appointment_canceled.connect(lambda _: self.load())
+        dialog.session_expired.connect(self.session_expired.emit)
         dialog.exec()
 
     def clear_data(self) -> None:

@@ -6,7 +6,15 @@ from typing import Any
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QResizeEvent
-from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
 from frontend.api.api_client import ApiClient
 from frontend.core.i18n import get_i18n, t
@@ -33,34 +41,42 @@ class DashboardView(BaseApiView):
         self._stat_columns = 0
         self._patient_name = ""
 
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea(self)
+        scroll.setObjectName("pageScroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        content = QWidget()
+        content.setObjectName("pageContent")
+        root = QVBoxLayout(content)
         root.setContentsMargins(28, 24, 28, 24)
         root.setSpacing(16)
 
         self.header = PageHeader(
-            "Hello",
-            "Here is an overview of your care and your next visit.",
+            t("dashboard_greeting_default"),
+            t("dashboard_subtitle"),
         )
         self.greeting = self.header.title_label
-        self.refresh_button = QPushButton("Refresh")
+        self.refresh_button = QPushButton(t("btn_refresh"))
         self.refresh_button.setObjectName("secondaryButton")
-        self.refresh_button.setAccessibleName("Refresh dashboard")
+        self.refresh_button.setAccessibleName(t("btn_refresh"))
         self.header.add_action(self.refresh_button)
         root.addWidget(self.header)
         root.addWidget(self.feedback)
         root.addWidget(self.loading)
 
-        self.overview_title = QLabel("Care overview")
+        self.overview_title = QLabel(t("care_overview"))
         self.overview_title.setObjectName("sectionTitle")
         root.addWidget(self.overview_title)
 
         self.cards = QGridLayout()
         self.cards.setHorizontalSpacing(14)
         self.cards.setVerticalSpacing(14)
-        self.appointments_card = StatCard("Appointments", tone="blue")
-        self.records_card = StatCard("Medical Records", tone="violet")
-        self.invoices_card = StatCard("Invoices")
-        self.unpaid_card = StatCard("Unpaid Invoices", tone="amber")
+        self.appointments_card = StatCard(t("stat_appointments"), tone="blue")
+        self.records_card = StatCard(t("stat_medical_records"), tone="violet")
+        self.invoices_card = StatCard(t("stat_invoices"))
+        self.unpaid_card = StatCard(t("stat_unpaid_invoices"), tone="amber")
         self._stat_cards = (
             self.appointments_card,
             self.records_card,
@@ -69,7 +85,7 @@ class DashboardView(BaseApiView):
         )
         root.addLayout(self.cards)
 
-        self.upcoming_title = QLabel("Upcoming appointment")
+        self.upcoming_title = QLabel(t("upcoming_appointment"))
         self.upcoming_title.setObjectName("sectionTitle")
         root.addWidget(self.upcoming_title)
 
@@ -82,7 +98,7 @@ class DashboardView(BaseApiView):
         upcoming_layout.setColumnStretch(1, 1)
         upcoming_layout.setColumnStretch(3, 1)
 
-        self.card_title = QLabel("Your next visit")
+        self.card_title = QLabel(t("next_visit"))
         self.card_title.setObjectName("sectionTitle")
         upcoming_layout.addWidget(self.card_title, 0, 0, 1, 3)
         self.status_badge = StatusBadge()
@@ -118,9 +134,9 @@ class DashboardView(BaseApiView):
             upcoming_layout.addWidget(value, row + 1, column + 1)
             self.upcoming_values[key] = value
 
-        self.details_button = QPushButton("View details")
+        self.details_button = QPushButton(t("btn_view_details"))
         self.details_button.setObjectName("primaryButton")
-        self.details_button.setAccessibleName("View upcoming appointment details")
+        self.details_button.setAccessibleName(t("btn_view_details"))
         upcoming_layout.addWidget(
             self.details_button,
             5,
@@ -129,14 +145,16 @@ class DashboardView(BaseApiView):
         )
 
         self.no_upcoming = EmptyState(
-            "No upcoming appointments",
-            "Your next confirmed visit will appear here when one is scheduled.",
-            action_text="Refresh",
+            t("no_upcoming_title"),
+            t("no_upcoming_desc"),
+            action_text=t("btn_refresh"),
         )
         self.no_upcoming.setMinimumHeight(178)
         root.addWidget(self.upcoming_card)
         root.addWidget(self.no_upcoming)
         root.addStretch()
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
 
         self.refresh_button.clicked.connect(self.load)
         self.details_button.clicked.connect(self._open_appointment)
@@ -167,6 +185,8 @@ class DashboardView(BaseApiView):
         self.upcoming_title.setText(t("upcoming_appointment"))
         self.card_title.setText(t("next_visit"))
         self.details_button.setText(t("btn_view_details"))
+        self.refresh_button.setAccessibleName(t("btn_refresh"))
+        self.details_button.setAccessibleName(t("btn_view_details"))
         self.no_upcoming.set_title(t("no_upcoming_title"))
         self.no_upcoming.set_description(t("no_upcoming_desc"))
         self.no_upcoming.set_action(t("btn_refresh"))

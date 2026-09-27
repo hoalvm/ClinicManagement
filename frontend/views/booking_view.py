@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import QDate, Qt, Signal
+from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QDateEdit,
@@ -27,6 +28,17 @@ from frontend.views.common import BaseApiView
 from frontend.widgets.calendar_dialog import CalendarDialog
 from frontend.widgets.empty_state import EmptyState
 from frontend.widgets.page_header import PageHeader
+
+
+def _set_style_state(widget: QWidget, name: str, value: object) -> None:
+    """Update a QSS state property and immediately refresh the widget."""
+    if widget.property(name) == value:
+        return
+    widget.setProperty(name, value)
+    style = widget.style()
+    style.unpolish(widget)
+    style.polish(widget)
+    widget.update()
 
 
 class BookingView(BaseApiView):
@@ -56,6 +68,20 @@ class BookingView(BaseApiView):
         self.selected_slot: tuple[str, str] | None = None
         self.specialties_data: list[dict[str, Any]] = []
         self.doctors_data: list[dict[str, Any]] = []
+        self._specialty_cards: list[QWidget] = []
+        self._specialty_columns = 0
+        self._slot_buttons: list[tuple[QPushButton, str, str]] = []
+        self._slot_widgets: list[QPushButton] = []
+        self._slot_columns = 0
+        # Each replaceable catalog read gets its own monotonic version.  A
+        # slower response is ignored as soon as the patient changes the
+        # specialty, doctor, mode, or date that produced it.
+        self._request_versions: dict[str, int] = {
+            "doctors_by_date": 0,
+            "doctors_by_specialty": 0,
+            "doctor_schedule": 0,
+            "slots": 0,
+        }
 
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(28, 24, 28, 24)
@@ -74,8 +100,7 @@ class BookingView(BaseApiView):
 
         # Step indicator
         self.step_indicator = QLabel()
-        self.step_indicator.setObjectName("sectionEyebrow")
-        self.step_indicator.setStyleSheet("color: #0f766e; font-size: 13px; font-weight: 700;")
+        self.step_indicator.setObjectName("bookingStepIndicator")
         root_layout.addWidget(self.step_indicator)
 
         root_layout.addWidget(self.feedback)
@@ -118,10 +143,12 @@ class BookingView(BaseApiView):
 
         self.step1_title = QLabel(t("step_1_title"))
         self.step1_title.setObjectName("sectionTitle")
+        self.step1_title.setWordWrap(True)
         layout.addWidget(self.step1_title)
 
         self.step1_subtitle = QLabel(t("step_1_subtitle"))
-        self.step1_subtitle.setStyleSheet("color: #64748b; font-size: 13px;")
+        self.step1_subtitle.setObjectName("bookingSupportingText")
+        self.step1_subtitle.setWordWrap(True)
         layout.addWidget(self.step1_subtitle)
 
         # Combined Searchable Dropdown bar
@@ -133,66 +160,7 @@ class BookingView(BaseApiView):
         self.spec_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.spec_combo.setMinimumHeight(42)
         self.spec_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.spec_combo.setStyleSheet("""
-            QComboBox {
-                background-color: #ffffff;
-                border: 1.5px solid #cbd5e1;
-                border-radius: 8px;
-                padding-left: 10px;
-                padding-right: 36px;
-                min-height: 40px;
-                font-size: 13px;
-                color: #0f172a;
-            }
-            QComboBox:focus {
-                border-color: #0f766e;
-            }
-            QComboBox::drop-down {
-                subcontrol-origin: padding;
-                subcontrol-position: top right;
-                width: 36px;
-                border-left: 1.5px solid #cbd5e1;
-                border-top-right-radius: 7px;
-                border-bottom-right-radius: 7px;
-                background: #f8fafc;
-            }
-            QComboBox::drop-down:hover {
-                background: #e6fffa;
-                border-left-color: #0f766e;
-            }
-            QComboBox::down-arrow {
-                width: 0;
-                height: 0;
-                border-left: 6px solid transparent;
-                border-right: 6px solid transparent;
-                border-top: 7px solid #0f766e;
-                margin-right: 2px;
-            }
-            QComboBox::down-arrow:hover {
-                border-top: 7px solid #0d5f58;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #ffffff;
-                color: #0f172a;
-                border: 1.5px solid #0f766e;
-                border-radius: 8px;
-                selection-background-color: #ccfbf1;
-                selection-color: #0f766e;
-                padding: 4px;
-            }
-            QComboBox QAbstractItemView::item {
-                background-color: #ffffff;
-                color: #0f172a;
-                padding: 8px 12px;
-                min-height: 30px;
-            }
-            QComboBox QAbstractItemView::item:hover,
-            QComboBox QAbstractItemView::item:selected {
-                background-color: #e6fffa;
-                color: #0f766e;
-                font-weight: 700;
-            }
-        """)
+        self.spec_combo.setAccessibleName(t("step_1_title"))
 
         self.spec_search_edit = self.spec_combo.lineEdit()
         if self.spec_search_edit:
@@ -211,17 +179,15 @@ class BookingView(BaseApiView):
 
         self.spec_continue_btn = QPushButton(t("spec_continue_btn"))
         self.spec_continue_btn.setObjectName("primaryButton")
+        self.spec_continue_btn.setProperty("bookingRole", "continueAction")
         self.spec_continue_btn.setMinimumHeight(40)
-        self.spec_continue_btn.setStyleSheet("font-weight: 600; padding: 0 18px;")
         self.spec_continue_btn.clicked.connect(self._on_combo_continue_clicked)
         search_row.addWidget(self.spec_continue_btn)
 
         layout.addLayout(search_row)
 
         self.step1_divider = QLabel(t("spec_divider_lbl"))
-        self.step1_divider.setStyleSheet(
-            "color: #475569; font-weight: 600; font-size: 13px; margin-top: 4px;"
-        )
+        self.step1_divider.setObjectName("bookingSectionLead")
         layout.addWidget(self.step1_divider)
 
         # Scroll area for specialties grid
@@ -288,39 +254,34 @@ class BookingView(BaseApiView):
             item = self.spec_grid_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+        self._specialty_cards = []
 
         if not specialties:
             empty = EmptyState(t("no_specialty_found"), t("no_specialty_found_desc"))
             self.spec_grid_layout.addWidget(empty, 0, 0)
             return
 
-        row, col = 0, 0
-        cols_count = 2
         for spec in specialties:
             card = QFrame()
             card.setObjectName("card")
-            card.setStyleSheet(
-                "QFrame#card { background: #ffffff; border: 1px solid #e2e8f0; "
-                "border-radius: 10px; padding: 14px; }"
-                "QFrame#card:hover { border-color: #0f766e; background: #f0fdfa; }"
-            )
             card.setCursor(Qt.CursorShape.PointingHandCursor)
             card_layout = QVBoxLayout(card)
             card_layout.setSpacing(6)
 
             name_lbl = QLabel(spec.get("specialty_name", ""))
-            name_lbl.setStyleSheet("font-size: 16px; font-weight: 700; color: #0f172a;")
+            name_lbl.setObjectName("bookingSpecialtyName")
+            name_lbl.setWordWrap(True)
             card_layout.addWidget(name_lbl)
 
             desc = spec.get("description") or "Chăm sóc và điều trị chuyên sâu theo tiêu chuẩn."
             desc_lbl = QLabel(desc)
-            desc_lbl.setStyleSheet("color: #64748b; font-size: 13px;")
+            desc_lbl.setObjectName("bookingSupportingText")
             desc_lbl.setWordWrap(True)
             card_layout.addWidget(desc_lbl)
 
             doc_count = spec.get("doctor_count", 0)
             count_lbl = QLabel(t("affiliated_doctors", count=doc_count))
-            count_lbl.setStyleSheet("color: #0f766e; font-weight: 600; font-size: 12px;")
+            count_lbl.setObjectName("bookingAccentMeta")
             card_layout.addWidget(count_lbl)
 
             # Button to select
@@ -329,11 +290,23 @@ class BookingView(BaseApiView):
             btn.clicked.connect(lambda _, s=spec: self._select_specialty(s))
             card_layout.addWidget(btn)
 
-            self.spec_grid_layout.addWidget(card, row, col)
-            col += 1
-            if col >= cols_count:
-                col = 0
-                row += 1
+            self._specialty_cards.append(card)
+
+        self._layout_specialty_cards(force=True)
+
+    def _layout_specialty_cards(self, *, force: bool = False) -> None:
+        if not self._specialty_cards:
+            return
+        columns = 2 if self.width() >= 980 else 1
+        if not force and columns == self._specialty_columns:
+            return
+        self._specialty_columns = columns
+        while self.spec_grid_layout.count():
+            self.spec_grid_layout.takeAt(0)
+        for index, card in enumerate(self._specialty_cards):
+            self.spec_grid_layout.addWidget(card, index // columns, index % columns)
+        for column in range(columns):
+            self.spec_grid_layout.setColumnStretch(column, 1)
 
     def _filter_specialties(self, query: str) -> None:
         q = query.strip().lower()
@@ -355,6 +328,13 @@ class BookingView(BaseApiView):
         else:
             self._load_doctors_for_specialty(spec.get("specialty_id"))
 
+    def _next_request_version(self, scope: str) -> int:
+        """Invalidate older reads in a UI scope and return the new version."""
+
+        next_version = self._request_versions[scope] + 1
+        self._request_versions[scope] = next_version
+        return next_version
+
     # --------------------------------------------------------------------------
     # Step 2: DoctorList (with 2 Booking Modes: By Date vs By Doctor)
     # --------------------------------------------------------------------------
@@ -373,26 +353,31 @@ class BookingView(BaseApiView):
 
         self.step2_title = QLabel("Bước 2: Chọn lịch khám")
         self.step2_title.setObjectName("sectionTitle")
+        self.step2_title.setWordWrap(True)
         top_nav.addWidget(self.step2_title, 1)
         layout.addLayout(top_nav)
 
         # Mode selection bar
-        mode_row = QHBoxLayout()
-        mode_row.setSpacing(10)
+        mode_row = QGridLayout()
+        mode_row.setHorizontalSpacing(10)
+        mode_row.setVerticalSpacing(8)
         self.mode_label = QLabel(t("lbl_booking_mode"))
-        self.mode_label.setStyleSheet("font-weight: 700; color: #334155; font-size: 13px;")
-        mode_row.addWidget(self.mode_label)
+        self.mode_label.setObjectName("bookingModeLabel")
+        mode_row.addWidget(self.mode_label, 0, 0, 1, 2)
 
         self.mode_by_date_btn = QPushButton(t("mode_by_date"))
+        self.mode_by_date_btn.setObjectName("bookingModeOption")
         self.mode_by_date_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.mode_by_date_btn.clicked.connect(lambda: self._set_booking_mode("by_date"))
-        mode_row.addWidget(self.mode_by_date_btn)
+        mode_row.addWidget(self.mode_by_date_btn, 1, 0)
 
         self.mode_by_doctor_btn = QPushButton(t("mode_by_doctor"))
+        self.mode_by_doctor_btn.setObjectName("bookingModeOption")
         self.mode_by_doctor_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.mode_by_doctor_btn.clicked.connect(lambda: self._set_booking_mode("by_doctor"))
-        mode_row.addWidget(self.mode_by_doctor_btn)
-        mode_row.addStretch(1)
+        mode_row.addWidget(self.mode_by_doctor_btn, 1, 1)
+        mode_row.setColumnStretch(0, 1)
+        mode_row.setColumnStretch(1, 1)
         layout.addLayout(mode_row)
 
         # Stacked layout for the 2 modes
@@ -407,28 +392,26 @@ class BookingView(BaseApiView):
         by_date_layout.setSpacing(10)
 
         # Quick date chips
-        s2_quick_row = QHBoxLayout()
-        s2_quick_row.setSpacing(6)
+        s2_quick_row = QGridLayout()
+        s2_quick_row.setHorizontalSpacing(6)
+        s2_quick_row.setVerticalSpacing(6)
         self.s2_quick_date_lbl = QLabel(t("quick_select_date", default="Chọn nhanh ngày:"))
         self.s2_quick_date_lbl.setObjectName("fieldLabel")
-        s2_quick_row.addWidget(self.s2_quick_date_lbl)
+        s2_quick_row.addWidget(self.s2_quick_date_lbl, 0, 0, 1, 3)
 
         self._s2_quick_chip_buttons: list[tuple[QPushButton, QDate]] = []
         today = QDate.currentDate()
         for offset in range(6):
             target_d = today.addDays(offset)
             chip_btn = QPushButton()
+            chip_btn.setObjectName("bookingDateChip")
             chip_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            chip_btn.setStyleSheet(
-                "QPushButton { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; "
-                "border-radius: 14px; padding: 4px 10px; font-size: 12px; font-weight: 500; }"
-                "QPushButton:hover { background: #e2e8f0; border-color: #94a3b8; }"
-                'QPushButton[active="true"] { background: #0f766e; color: #ffffff; border-color: #0f766e; font-weight: 700; }'
-            )
+            chip_btn.setProperty("active", False)
             chip_btn.clicked.connect(lambda _, d=target_d: self._select_s2_quick_date(d))
             self._s2_quick_chip_buttons.append((chip_btn, target_d))
-            s2_quick_row.addWidget(chip_btn)
-        s2_quick_row.addStretch(1)
+            s2_quick_row.addWidget(chip_btn, 1 + offset // 3, offset % 3)
+        for column in range(3):
+            s2_quick_row.setColumnStretch(column, 1)
         by_date_layout.addLayout(s2_quick_row)
         self._update_s2_quick_chip_labels()
 
@@ -453,15 +436,14 @@ class BookingView(BaseApiView):
         s2_date_row.addWidget(self.s2_open_cal_btn)
 
         self.step2_day_of_week_lbl = QLabel()
-        self.step2_day_of_week_lbl.setStyleSheet("font-weight: 600; color: #0f766e;")
+        self.step2_day_of_week_lbl.setObjectName("bookingAccentLabel")
         s2_date_row.addWidget(self.step2_day_of_week_lbl)
         s2_date_row.addStretch(1)
         by_date_layout.addLayout(s2_date_row)
 
         self.by_date_doc_header = QLabel(t("lbl_choose_doctor_on_date"))
-        self.by_date_doc_header.setStyleSheet(
-            "color: #475569; font-weight: 600; font-size: 13px; margin-top: 4px;"
-        )
+        self.by_date_doc_header.setObjectName("bookingSectionLead")
+        self.by_date_doc_header.setWordWrap(True)
         by_date_layout.addWidget(self.by_date_doc_header)
 
         # Scroll area for doctors on date
@@ -483,9 +465,7 @@ class BookingView(BaseApiView):
         by_doc_layout.setSpacing(10)
 
         self.by_doctor_header = QLabel(t("lbl_all_doctors_in_spec"))
-        self.by_doctor_header.setStyleSheet(
-            "color: #475569; font-weight: 600; font-size: 13px; margin-top: 4px;"
-        )
+        self.by_doctor_header.setObjectName("bookingSectionLead")
         by_doc_layout.addWidget(self.by_doctor_header)
 
         doc_scroll = QScrollArea()
@@ -519,21 +499,9 @@ class BookingView(BaseApiView):
         self._update_step_indicator()
 
     def _update_mode_buttons(self) -> None:
-        active_style = (
-            "QPushButton { background: #0f766e; color: #ffffff; border: 1.5px solid #0f766e; "
-            "border-radius: 8px; padding: 6px 14px; font-weight: 700; }"
-        )
-        inactive_style = (
-            "QPushButton { background: #ffffff; color: #475569; border: 1.5px solid #cbd5e1; "
-            "border-radius: 8px; padding: 6px 14px; font-weight: 600; }"
-            "QPushButton:hover { background: #f8fafc; border-color: #94a3b8; }"
-        )
-        if getattr(self, "_booking_mode", "by_date") == "by_date":
-            self.mode_by_date_btn.setStyleSheet(active_style)
-            self.mode_by_doctor_btn.setStyleSheet(inactive_style)
-        else:
-            self.mode_by_date_btn.setStyleSheet(inactive_style)
-            self.mode_by_doctor_btn.setStyleSheet(active_style)
+        by_date = getattr(self, "_booking_mode", "by_date") == "by_date"
+        _set_style_state(self.mode_by_date_btn, "selected", by_date)
+        _set_style_state(self.mode_by_doctor_btn, "selected", not by_date)
 
     def _open_s2_calendar_dialog(self) -> None:
         dlg = CalendarDialog(
@@ -555,10 +523,7 @@ class BookingView(BaseApiView):
         if not hasattr(self, "_s2_quick_chip_buttons"):
             return
         for btn, d in self._s2_quick_chip_buttons:
-            is_active = d == current_date
-            btn.setProperty("active", is_active)
-            btn.style().unpolish(btn)
-            btn.style().polish(btn)
+            _set_style_state(btn, "active", d == current_date)
 
     def _update_s2_quick_chip_labels(self) -> None:
         if not hasattr(self, "_s2_quick_chip_buttons"):
@@ -593,17 +558,32 @@ class BookingView(BaseApiView):
             f"{t('lbl_choose_doctor_on_date')} ({qdate.toString('dd/MM/yyyy')} - {t(f'day_{day_num}')})"
         )
 
+        request_version = self._next_request_version("doctors_by_date")
         self.run_api_task(
-            "load_doctors_by_date",
-            lambda: self.api_client.get(
+            f"load_doctors_by_date:{request_version}",
+            lambda specialty_id=spec_id, requested_date=date_str: self.api_client.get(
                 "/api/v1/catalog/doctors",
-                params={"specialty_id": spec_id, "appointment_date": date_str},
+                params={
+                    "specialty_id": specialty_id,
+                    "appointment_date": requested_date,
+                },
             ),
-            self._on_doctors_by_date_loaded,
+            lambda result, requested_date=date_str: self._on_doctors_by_date_loaded(
+                result,
+                requested_date,
+            ),
             loading_text="Đang tìm bác sĩ có lịch trực vào ngày này…",
+            is_current=lambda: (
+                self._request_versions["doctors_by_date"] == request_version
+                and getattr(self, "_booking_mode", "by_date") == "by_date"
+                and bool(self.selected_specialty)
+                and self.selected_specialty.get("specialty_id") == spec_id
+                and self.step2_date_edit.date().toString(Qt.DateFormat.ISODate)
+                == date_str
+            ),
         )
 
-    def _on_doctors_by_date_loaded(self, result: Any) -> None:
+    def _on_doctors_by_date_loaded(self, result: Any, requested_date: str | None = None) -> None:
         doctors = result if isinstance(result, list) else []
         while self.by_date_doc_layout.count():
             item = self.by_date_doc_layout.takeAt(0)
@@ -618,40 +598,34 @@ class BookingView(BaseApiView):
             self.by_date_doc_layout.addWidget(empty)
             return
 
-        date_str = self.step2_date_edit.date().toString(Qt.DateFormat.ISODate)
+        date_str = requested_date or self.step2_date_edit.date().toString(Qt.DateFormat.ISODate)
         for doc in doctors:
             card = QFrame()
             card.setObjectName("card")
-            card.setStyleSheet(
-                "QFrame#card { background: #ffffff; border: 1px solid #e2e8f0; "
-                "border-radius: 10px; padding: 14px; }"
-                "QFrame#card:hover { border-color: #0f766e; background: #f0fdfa; }"
-            )
             card_layout = QHBoxLayout(card)
             card_layout.setSpacing(14)
 
             avatar = QLabel("BS")
-            avatar.setStyleSheet(
-                "background-color: #e6f4f2; color: #0d5c56; font-size: 13px; font-weight: 700; "
-                "border-radius: 20px; min-width: 40px; max-width: 40px; min-height: 40px; max-height: 40px;"
-            )
+            avatar.setObjectName("bookingDoctorAvatar")
             avatar.setAlignment(Qt.AlignCenter)
             card_layout.addWidget(avatar)
 
             info_layout = QVBoxLayout()
             info_layout.setSpacing(4)
             name_lbl = QLabel(f"Bác sĩ: {doc.get('full_name', '')}")
-            name_lbl.setStyleSheet("font-size: 15px; font-weight: 700; color: #0f172a;")
+            name_lbl.setObjectName("bookingDoctorName")
+            name_lbl.setWordWrap(True)
             info_layout.addWidget(name_lbl)
 
             spec_lbl = QLabel(f"Chuyên khoa: {doc.get('specialty_name', '')}")
-            spec_lbl.setStyleSheet("color: #0f766e; font-weight: 600; font-size: 13px;")
+            spec_lbl.setObjectName("bookingDoctorSpecialty")
             info_layout.addWidget(spec_lbl)
 
             clinic_info = doc.get("clinic_name") or "Phòng khám chính"
             clinic_addr = doc.get("clinic_address") or ""
             clinic_lbl = QLabel(f"Cơ sở: {clinic_info} - {clinic_addr}")
-            clinic_lbl.setStyleSheet("color: #64748b; font-size: 12px;")
+            clinic_lbl.setObjectName("bookingCompactText")
+            clinic_lbl.setWordWrap(True)
             info_layout.addWidget(clinic_lbl)
 
             card_layout.addLayout(info_layout, 1)
@@ -670,7 +644,11 @@ class BookingView(BaseApiView):
         self.selected_date = date_str
         self.selected_slot = None
         qdate = QDate.fromString(date_str, Qt.DateFormat.ISODate)
-        self.slot_date_edit.setDate(qdate)
+        signals_were_blocked = self.slot_date_edit.blockSignals(True)
+        try:
+            self.slot_date_edit.setDate(qdate)
+        finally:
+            self.slot_date_edit.blockSignals(signals_were_blocked)
         self._go_to_step(2)
         self._load_doctor_schedules_info(doc.get("doctor_id"))
         self._load_available_slots()
@@ -680,13 +658,21 @@ class BookingView(BaseApiView):
         self.step2_title.setText(
             f"{t('step_2_title_by_doctor')} ({spec_name})" if spec_name else t("step_2_title_by_doctor")
         )
+        request_version = self._next_request_version("doctors_by_specialty")
         self.run_api_task(
-            "load_doctors",
-            lambda: self.api_client.get(
-                "/api/v1/catalog/doctors", params={"specialty_id": specialty_id}
+            f"load_doctors:{request_version}",
+            lambda requested_specialty_id=specialty_id: self.api_client.get(
+                "/api/v1/catalog/doctors",
+                params={"specialty_id": requested_specialty_id},
             ),
             self._on_doctors_loaded,
             loading_text="Đang tải danh sách bác sĩ…",
+            is_current=lambda: (
+                self._request_versions["doctors_by_specialty"] == request_version
+                and getattr(self, "_booking_mode", "by_date") == "by_doctor"
+                and bool(self.selected_specialty)
+                and self.selected_specialty.get("specialty_id") == specialty_id
+            ),
         )
 
     def _on_doctors_loaded(self, result: Any) -> None:
@@ -704,36 +690,30 @@ class BookingView(BaseApiView):
         for doc in self.doctors_data:
             card = QFrame()
             card.setObjectName("card")
-            card.setStyleSheet(
-                "QFrame#card { background: #ffffff; border: 1px solid #e2e8f0; "
-                "border-radius: 10px; padding: 14px; }"
-                "QFrame#card:hover { border-color: #0f766e; background: #f0fdfa; }"
-            )
             card_layout = QHBoxLayout(card)
             card_layout.setSpacing(14)
 
             avatar = QLabel("BS")
-            avatar.setStyleSheet(
-                "background-color: #e6f4f2; color: #0d5c56; font-size: 13px; font-weight: 700; "
-                "border-radius: 20px; min-width: 40px; max-width: 40px; min-height: 40px; max-height: 40px;"
-            )
+            avatar.setObjectName("bookingDoctorAvatar")
             avatar.setAlignment(Qt.AlignCenter)
             card_layout.addWidget(avatar)
 
             info_layout = QVBoxLayout()
             info_layout.setSpacing(4)
             name_lbl = QLabel(f"Bác sĩ: {doc.get('full_name', '')}")
-            name_lbl.setStyleSheet("font-size: 15px; font-weight: 700; color: #0f172a;")
+            name_lbl.setObjectName("bookingDoctorName")
+            name_lbl.setWordWrap(True)
             info_layout.addWidget(name_lbl)
 
             spec_lbl = QLabel(f"Chuyên khoa: {doc.get('specialty_name', '')}")
-            spec_lbl.setStyleSheet("color: #0f766e; font-weight: 600; font-size: 13px;")
+            spec_lbl.setObjectName("bookingDoctorSpecialty")
             info_layout.addWidget(spec_lbl)
 
             clinic_info = doc.get("clinic_name") or "Phòng khám chính"
             clinic_addr = doc.get("clinic_address") or ""
             clinic_lbl = QLabel(f"Cơ sở: {clinic_info} - {clinic_addr}")
-            clinic_lbl.setStyleSheet("color: #64748b; font-size: 12px;")
+            clinic_lbl.setObjectName("bookingCompactText")
+            clinic_lbl.setWordWrap(True)
             info_layout.addWidget(clinic_lbl)
 
             card_layout.addLayout(info_layout, 1)
@@ -753,7 +733,11 @@ class BookingView(BaseApiView):
         self._go_to_step(2)
         self._load_doctor_schedules_info(doc.get("doctor_id"))
         if not self.slot_date_edit.date().isValid() or self.slot_date_edit.date() < QDate.currentDate():
-            self.slot_date_edit.setDate(QDate.currentDate().addDays(1))
+            signals_were_blocked = self.slot_date_edit.blockSignals(True)
+            try:
+                self.slot_date_edit.setDate(QDate.currentDate().addDays(1))
+            finally:
+                self.slot_date_edit.blockSignals(signals_were_blocked)
         self._load_available_slots()
 
     def _load_doctor_schedules_info(self, doctor_id: int | None) -> None:
@@ -781,11 +765,17 @@ class BookingView(BaseApiView):
                 if hasattr(self, "doc_schedule_lbl"):
                     self.doc_schedule_lbl.hide()
 
+        request_version = self._next_request_version("doctor_schedule")
         self.run_api_task(
-            "load_doctor_schedules",
+            f"load_doctor_schedules:{request_version}",
             _fetch,
             _on_done,
             loading_text="",
+            is_current=lambda: (
+                self._request_versions["doctor_schedule"] == request_version
+                and bool(self.selected_doctor)
+                and self.selected_doctor.get("doctor_id") == doctor_id
+            ),
         )
 
     # --------------------------------------------------------------------------
@@ -805,24 +795,22 @@ class BookingView(BaseApiView):
 
         self.step3_title = QLabel("Bước 3: Chọn ngày và khung giờ khám")
         self.step3_title.setObjectName("sectionTitle")
+        self.step3_title.setWordWrap(True)
         top_nav.addWidget(self.step3_title, 1)
         layout.addLayout(top_nav)
 
         # Doctor banner
         self.doc_banner = QFrame()
         self.doc_banner.setObjectName("card")
-        self.doc_banner.setStyleSheet(
-            "QFrame#card { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; }"
-        )
+        self.doc_banner.setProperty("bookingRole", "doctorBanner")
         banner_layout = QVBoxLayout(self.doc_banner)
         banner_layout.setSpacing(4)
         self.doc_banner_lbl = QLabel()
+        self.doc_banner_lbl.setWordWrap(True)
         banner_layout.addWidget(self.doc_banner_lbl)
 
         self.doc_schedule_lbl = QLabel()
-        self.doc_schedule_lbl.setStyleSheet(
-            "color: #0f766e; font-size: 12px; font-weight: 500;"
-        )
+        self.doc_schedule_lbl.setObjectName("bookingScheduleText")
         self.doc_schedule_lbl.setWordWrap(True)
         banner_layout.addWidget(self.doc_schedule_lbl)
         self.doc_schedule_lbl.hide()
@@ -830,43 +818,37 @@ class BookingView(BaseApiView):
 
         # Warning banner for anti-spam/active specialty
         self.specialty_warning_frame = QFrame()
-        self.specialty_warning_frame.setStyleSheet(
-            "background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 8px; padding: 10px;"
-        )
+        self.specialty_warning_frame.setObjectName("bookingWarningBanner")
         warn_layout = QHBoxLayout(self.specialty_warning_frame)
         warn_layout.setContentsMargins(10, 8, 10, 8)
         self.specialty_warning_lbl = QLabel()
-        self.specialty_warning_lbl.setStyleSheet(
-            "color: #b45309; font-size: 13px; font-weight: 600;"
-        )
+        self.specialty_warning_lbl.setObjectName("bookingWarningText")
         self.specialty_warning_lbl.setWordWrap(True)
         warn_layout.addWidget(self.specialty_warning_lbl)
         self.specialty_warning_frame.hide()
         layout.addWidget(self.specialty_warning_frame)
 
         # Quick date chips row
-        quick_row = QHBoxLayout()
-        quick_row.setSpacing(6)
+        quick_row = QGridLayout()
+        quick_row.setHorizontalSpacing(6)
+        quick_row.setVerticalSpacing(6)
         self.quick_date_lbl = QLabel(t("quick_select_date", default="Chọn nhanh ngày:"))
         self.quick_date_lbl.setObjectName("fieldLabel")
-        quick_row.addWidget(self.quick_date_lbl)
+        quick_row.addWidget(self.quick_date_lbl, 0, 0, 1, 3)
 
         self._quick_chip_buttons: list[tuple[QPushButton, QDate]] = []
         today = QDate.currentDate()
         for offset in range(6):
             target_d = today.addDays(offset)
             chip_btn = QPushButton()
+            chip_btn.setObjectName("bookingDateChip")
             chip_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            chip_btn.setStyleSheet(
-                "QPushButton { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; "
-                "border-radius: 14px; padding: 4px 10px; font-size: 12px; font-weight: 500; }"
-                "QPushButton:hover { background: #e2e8f0; border-color: #94a3b8; }"
-                'QPushButton[active="true"] { background: #0f766e; color: #ffffff; border-color: #0f766e; font-weight: 700; }'
-            )
+            chip_btn.setProperty("active", False)
             chip_btn.clicked.connect(lambda _, d=target_d: self._select_quick_date(d))
             self._quick_chip_buttons.append((chip_btn, target_d))
-            quick_row.addWidget(chip_btn)
-        quick_row.addStretch(1)
+            quick_row.addWidget(chip_btn, 1 + offset // 3, offset % 3)
+        for column in range(3):
+            quick_row.setColumnStretch(column, 1)
         layout.addLayout(quick_row)
         self._update_quick_chip_labels()
 
@@ -892,7 +874,7 @@ class BookingView(BaseApiView):
         date_row.addWidget(self.open_cal_btn)
 
         self.day_of_week_lbl = QLabel()
-        self.day_of_week_lbl.setStyleSheet("font-weight: 600; color: #0f766e;")
+        self.day_of_week_lbl.setObjectName("bookingAccentLabel")
         date_row.addWidget(self.day_of_week_lbl)
         date_row.addStretch(1)
         layout.addLayout(date_row)
@@ -910,7 +892,7 @@ class BookingView(BaseApiView):
         # Bottom nav to step 4
         bottom_row = QHBoxLayout()
         self.slot_selected_lbl = QLabel("Chưa chọn khung giờ khám")
-        self.slot_selected_lbl.setStyleSheet("font-weight: 600; color: #334155;")
+        self.slot_selected_lbl.setObjectName("bookingSelectionText")
         bottom_row.addWidget(self.slot_selected_lbl, 1)
 
         self.to_confirm_btn = QPushButton("Tiếp tục")
@@ -957,10 +939,7 @@ class BookingView(BaseApiView):
         if not hasattr(self, "_quick_chip_buttons"):
             return
         for btn, d in self._quick_chip_buttons:
-            is_active = d == current_date
-            btn.setProperty("active", is_active)
-            btn.style().unpolish(btn)
-            btn.style().polish(btn)
+            _set_style_state(btn, "active", d == current_date)
 
     def _load_available_slots(self) -> None:
         if not self.selected_doctor:
@@ -985,14 +964,22 @@ class BookingView(BaseApiView):
         self.to_confirm_btn.setEnabled(False)
 
         doctor_id = self.selected_doctor.get("doctor_id")
+        request_version = self._next_request_version("slots")
         self.run_api_task(
-            "load_slots",
-            lambda: self.api_client.get(
-                f"/api/v1/catalog/doctors/{doctor_id}/available-slots",
-                params={"appointment_date": date_str},
+            f"load_slots:{request_version}",
+            lambda requested_doctor_id=doctor_id, requested_date=date_str: self.api_client.get(
+                f"/api/v1/catalog/doctors/{requested_doctor_id}/available-slots",
+                params={"appointment_date": requested_date},
             ),
             self._on_slots_loaded,
             loading_text="Đang kiểm tra lịch làm việc & giờ còn trống…",
+            is_current=lambda: (
+                self._request_versions["slots"] == request_version
+                and bool(self.selected_doctor)
+                and self.selected_doctor.get("doctor_id") == doctor_id
+                and self.slot_date_edit.date().toString(Qt.DateFormat.ISODate)
+                == date_str
+            ),
         )
 
     def _on_slots_loaded(self, result: Any) -> None:
@@ -1040,9 +1027,8 @@ class BookingView(BaseApiView):
             self.slots_layout.addWidget(empty, 0, 0)
             return
 
-        row, col = 0, 0
-        cols_count = 4
-        self._slot_buttons: list[tuple[QPushButton, str, str]] = []
+        self._slot_buttons = []
+        self._slot_widgets = []
 
         for s in slots:
             start_t = s["start_time"]
@@ -1051,14 +1037,11 @@ class BookingView(BaseApiView):
             reason = s.get("reason") or "Không khả dụng"
 
             btn = QPushButton(f"{start_t} - {end_t}")
+            btn.setObjectName("bookingSlotButton")
+            btn.setProperty("selected", False)
             btn.setMinimumHeight(44)
             if is_avail:
-                btn.setObjectName("secondaryButton")
                 btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn.setStyleSheet(
-                    "QPushButton { background: #ffffff; border: 1.5px solid #0f766e; color: #0f766e; font-weight: 700; border-radius: 8px; }"
-                    "QPushButton:hover { background: #0f766e; color: #ffffff; }"
-                )
                 btn.clicked.connect(
                     lambda _, st=start_t, et=end_t, b=btn: self._select_slot(st, et, b)
                 )
@@ -1066,15 +1049,28 @@ class BookingView(BaseApiView):
             else:
                 btn.setEnabled(False)
                 btn.setToolTip(reason)
-                btn.setStyleSheet(
-                    "QPushButton:disabled { background: #f1f5f9; border: 1px solid #e2e8f0; color: #94a3b8; border-radius: 8px; }"
-                )
 
-            self.slots_layout.addWidget(btn, row, col)
-            col += 1
-            if col >= cols_count:
-                col = 0
-                row += 1
+            self._slot_widgets.append(btn)
+        self._layout_slot_buttons(force=True)
+
+    def _layout_slot_buttons(self, *, force: bool = False) -> None:
+        if not self._slot_widgets:
+            return
+        columns = 4 if self.width() >= 980 else 2
+        if not force and columns == self._slot_columns:
+            return
+        self._slot_columns = columns
+        while self.slots_layout.count():
+            self.slots_layout.takeAt(0)
+        for index, button in enumerate(self._slot_widgets):
+            self.slots_layout.addWidget(button, index // columns, index % columns)
+        for column in range(columns):
+            self.slots_layout.setColumnStretch(column, 1)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._layout_specialty_cards()
+        self._layout_slot_buttons()
 
     def _select_slot(self, start_t: str, end_t: str, active_btn: QPushButton) -> None:
         self.selected_slot = (start_t, end_t)
@@ -1082,19 +1078,17 @@ class BookingView(BaseApiView):
         self.to_confirm_btn.setEnabled(True)
 
         for btn, _, _ in self._slot_buttons:
-            btn.setStyleSheet(
-                "QPushButton { background: #ffffff; border: 1.5px solid #0f766e; color: #0f766e; font-weight: 700; border-radius: 8px; }"
-                "QPushButton:hover { background: #0f766e; color: #ffffff; }"
-            )
-        active_btn.setStyleSheet(
-            "QPushButton { background: #0f766e; border: 2px solid #0d5f58; color: #ffffff; font-weight: 700; border-radius: 8px; }"
-        )
+            _set_style_state(btn, "selected", btn is active_btn)
 
     # --------------------------------------------------------------------------
     # Step 4: AppointmentBooking Confirmation
     # --------------------------------------------------------------------------
     def _build_step4_confirm(self) -> QWidget:
         container = QWidget()
+        container.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Preferred,
+        )
         layout = QVBoxLayout(container)
         layout.setContentsMargins(24, 20, 24, 20)
         layout.setSpacing(14)
@@ -1107,26 +1101,32 @@ class BookingView(BaseApiView):
 
         self.step4_title = QLabel("Bước 4: Xác nhận thông tin đặt lịch")
         self.step4_title.setObjectName("sectionTitle")
+        self.step4_title.setWordWrap(True)
         top_nav.addWidget(self.step4_title, 1)
         layout.addLayout(top_nav)
 
         # Summary review card
         self.confirm_card = QFrame()
         self.confirm_card.setObjectName("card")
-        self.confirm_card.setStyleSheet(
-            "QFrame#card { background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 18px; }"
-        )
+        self.confirm_card.setProperty("bookingRole", "confirmation")
         self.confirm_card_layout = QVBoxLayout(self.confirm_card)
         self.confirm_card_layout.setSpacing(8)
         self.summary_details_lbl = QLabel()
-        self.summary_details_lbl.setStyleSheet("font-size: 14px; line-height: 1.6; color: #1e293b;")
+        self.summary_details_lbl.setWordWrap(True)
+        self.summary_details_lbl.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        self.summary_details_lbl.setObjectName("bookingSummaryDetails")
         self.confirm_card_layout.addWidget(self.summary_details_lbl)
         layout.addWidget(self.confirm_card)
 
         # Reason text edit
-        lbl_reason = QLabel("Lý do khám bệnh / Triệu chứng lâm sàng:")
-        lbl_reason.setObjectName("fieldLabel")
-        layout.addWidget(lbl_reason)
+        self.step4_reason_label = QLabel(
+            "Lý do khám bệnh / Triệu chứng lâm sàng:"
+        )
+        self.step4_reason_label.setObjectName("fieldLabel")
+        self.step4_reason_label.setWordWrap(True)
+        layout.addWidget(self.step4_reason_label)
 
         self.booking_reason_edit = QTextEdit()
         self.booking_reason_edit.setPlaceholderText(
@@ -1141,17 +1141,21 @@ class BookingView(BaseApiView):
 
         self.submit_booking_btn = QPushButton("Xác nhận đặt lịch")
         self.submit_booking_btn.setObjectName("primaryButton")
+        self.submit_booking_btn.setProperty("bookingRole", "submitAction")
         self.submit_booking_btn.setMinimumHeight(44)
-        self.submit_booking_btn.setStyleSheet(
-            "min-width: 220px; font-size: 15px; font-weight: 700;"
-        )
         self.submit_booking_btn.clicked.connect(self._submit_booking)
         actions_row.addWidget(self.submit_booking_btn)
 
         layout.addLayout(actions_row)
         layout.addStretch(1)
 
-        return container
+        scroll = QScrollArea()
+        scroll.setObjectName("bookingConfirmScroll")
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(container)
+        return scroll
 
     def _render_confirmation_summary(self) -> None:
         if not self.selected_doctor or not self.selected_slot:
@@ -1164,13 +1168,13 @@ class BookingView(BaseApiView):
         start_t, end_t = self.selected_slot
 
         html = f"""
-        <h3 style="margin-top:0; color:#0f766e;">{t("summary_title")}</h3>
+        <h3>{t("summary_title")}</h3>
         <p><b>{t("summary_specialty")}:</b> {spec_name}</p>
         <p><b>{t("summary_doctor")}:</b> {doc_name}</p>
         <p><b>{t("summary_location")}:</b> {clinic_name} ({clinic_addr})</p>
-        <p><b>{t("summary_date")}:</b> <span style="color:#0f766e; font-weight:bold;">{self.selected_date}</span></p>
-        <p><b>{t("summary_time")}:</b> <span style="color:#0f766e; font-weight:bold;">{start_t} - {end_t}</span></p>
-        <p style="color:#64748b; font-size:12px;"><i>{t("summary_note")}</i></p>
+        <p><b>{t("summary_date")}:</b> <b>{self.selected_date}</b></p>
+        <p><b>{t("summary_time")}:</b> <b>{start_t} - {end_t}</b></p>
+        <p><i>{t("summary_note")}</i></p>
         """
         self.summary_details_lbl.setText(html)
 
@@ -1334,6 +1338,8 @@ class BookingView(BaseApiView):
 
     def reset_flow(self) -> None:
         """Reset wizard state to start fresh."""
+        for scope in self._request_versions:
+            self._request_versions[scope] += 1
         self.selected_specialty = None
         self.selected_doctor = None
         self.selected_date = ""

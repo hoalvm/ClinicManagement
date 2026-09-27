@@ -76,6 +76,14 @@ class ApiClient:
         except Exception:
             return False, "Lỗi đăng nhập không xác định"
 
+    def clear_session(self) -> None:
+        """Drop central-login credentials before another role signs in."""
+
+        self.token = None
+        self.role = None
+        self.username = None
+        session_state.clear()
+
     def _headers(self) -> dict[str, str]:
         headers: dict[str, str] = {"Accept": "application/json"}
         if self.token:

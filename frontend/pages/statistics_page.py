@@ -5,20 +5,24 @@ from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from frontend.api_client import api_client
+from frontend.pages.admin_ui import (
+    AdminApiPage,
+    configure_admin_table,
+    require_success,
+    table_item,
+)
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.stat_card import ModernStatCard
 
 
-class StatisticsPage(QWidget):
+class StatisticsPage(AdminApiPage):
     def __init__(self):
         super().__init__()
         self.main_layout = QVBoxLayout(self)
@@ -31,12 +35,22 @@ class StatisticsPage(QWidget):
             "Tổng quan số liệu hoạt động",
         )
         self.main_layout.addWidget(self.header)
+        self.add_request_feedback(self.main_layout)
+
+        self.statistics_content = QWidget()
+        self.statistics_content.setObjectName("statisticsContent")
+        self.statistics_content.setProperty("uiSurface", "transparent")
+        self.statistics_content.setAccessibleName("Nội dung thống kê quản trị")
+        content_layout = QVBoxLayout(self.statistics_content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(20)
 
         # ------------------- Stat Cards Grid -------------------
         self.cards_layout = QGridLayout()
         self.cards_layout.setHorizontalSpacing(14)
         self.cards_layout.setVerticalSpacing(14)
-        self.main_layout.addLayout(self.cards_layout)
+        content_layout.addLayout(self.cards_layout)
+        self._stat_cards: list[ModernStatCard] = []
 
         # ------------------- 2 Sub Tables -------------------
         sub_layout = QHBoxLayout()
@@ -56,14 +70,12 @@ class StatisticsPage(QWidget):
         self.specialty_table = QTableWidget()
         self.specialty_table.setColumnCount(2)
         self.specialty_table.setHorizontalHeaderLabels(["Chuyên khoa", "Số lượng bác sĩ"])
-        self.specialty_table.setAlternatingRowColors(True)
-        self.specialty_table.verticalHeader().setVisible(False)
-        self.specialty_table.setShowGrid(False)
-
-        h1 = self.specialty_table.horizontalHeader()
-        h1.setFixedHeight(36)
-        h1.setSectionResizeMode(0, QHeaderView.Stretch)
-        h1.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        configure_admin_table(
+            self.specialty_table,
+            accessible_name="Phân bổ bác sĩ theo chuyên khoa",
+            stretch_column=0,
+            fixed_widths={1: 148},
+        )
         layout_sp.addWidget(self.specialty_table)
         sub_layout.addWidget(card_sp)
 
@@ -81,33 +93,57 @@ class StatisticsPage(QWidget):
         self.clinic_table = QTableWidget()
         self.clinic_table.setColumnCount(2)
         self.clinic_table.setHorizontalHeaderLabels(["Phòng khám", "Số lượng bác sĩ"])
-        self.clinic_table.setAlternatingRowColors(True)
-        self.clinic_table.verticalHeader().setVisible(False)
-        self.clinic_table.setShowGrid(False)
-
-        h2 = self.clinic_table.horizontalHeader()
-        h2.setFixedHeight(36)
-        h2.setSectionResizeMode(0, QHeaderView.Stretch)
-        h2.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        configure_admin_table(
+            self.clinic_table,
+            accessible_name="Phân bổ bác sĩ theo phòng khám",
+            stretch_column=0,
+            fixed_widths={1: 148},
+        )
         layout_cl.addWidget(self.clinic_table)
         sub_layout.addWidget(card_cl)
 
-        self.main_layout.addLayout(sub_layout, 1)
+        content_layout.addLayout(sub_layout, 1)
+
+        self.statistics_state = self.bind_state_host(
+            self.statistics_content,
+            self.load_data,
+            empty_title="Chưa có dữ liệu thống kê",
+            empty_description="Số liệu tổng quan sẽ xuất hiện sau khi hệ thống có dữ liệu hoạt động.",
+            empty_action_text="Tải lại",
+            on_empty_action=self.load_data,
+        )
+        self.main_layout.addWidget(self.statistics_state, 1)
 
         self.load_data()
 
-    def load_data(self):
-        r = api_client.get("/statistics/overview")
-        if r.status_code != 200:
-            return
-        d = r.json()
+    def load_data(self, *, clear_feedback: bool = True):
+        return self.run_admin_task(
+            "load-statistics",
+            lambda: require_success(
+                api_client.get("/statistics/overview"),
+                "Không thể tải số liệu thống kê.",
+            ).json(),
+            self._populate_statistics,
+            loading_text="Đang tải số liệu thống kê…",
+            clear_feedback=clear_feedback,
+            stateful=True,
+            empty_when=self._statistics_are_empty,
+        )
 
-        # Clear old cards
-        while self.cards_layout.count():
-            item = self.cards_layout.takeAt(0)
-            w = item.widget()
-            if w:
-                w.deleteLater()
+    @staticmethod
+    def _statistics_are_empty(data) -> bool:
+        total_keys = (
+            "total_users",
+            "total_doctors",
+            "total_clinics",
+            "total_specialties",
+            "total_schedules",
+        )
+        return not any(data.get(key, 0) for key in total_keys) and not any(
+            data.get(key) for key in ("doctors_by_specialty", "doctors_by_clinic")
+        )
+
+    def _populate_statistics(self, d):
 
         cards_data = [
             ("TỔNG TÀI KHOẢN", d.get("total_users", 0), "#0284c7"),
@@ -117,17 +153,35 @@ class StatisticsPage(QWidget):
             ("CA LỊCH TRỰC", d.get("total_schedules", 0), "#059669"),
         ]
 
-        for i, (title, value, color) in enumerate(cards_data):
-            card = ModernStatCard(title, value, color)
-            self.cards_layout.addWidget(card, 0, i)
+        if not self._stat_cards:
+            for title, value, color in cards_data:
+                card = ModernStatCard(title, value, color)
+                card.setMinimumWidth(0)
+                # ModernStatCard intentionally keeps a compact default.  Admin
+                # can display longer Vietnamese labels, so allow those labels
+                # to wrap instead of painting beneath the neighbouring card.
+                card._title_label.setWordWrap(True)
+                card._title_label.setMinimumWidth(0)
+                self._stat_cards.append(card)
+        else:
+            for card, (title, value, _color) in zip(
+                self._stat_cards, cards_data, strict=True
+            ):
+                card.set_title(title)
+                card.set_value(value)
+
+        for card, (title, value, _color) in zip(
+            self._stat_cards, cards_data, strict=True
+        ):
+            card.setToolTip(f"{title}: {value}")
+        self._relayout_cards()
 
         # Populate specialty table
         doc_sp = d.get("doctors_by_specialty", [])
         self.specialty_table.setRowCount(len(doc_sp))
         for row, item in enumerate(doc_sp):
-            self.specialty_table.setItem(row, 0, QTableWidgetItem(item.get("name", "—")))
-            count_item = QTableWidgetItem(str(item.get("count", 0)))
-            count_item.setTextAlignment(Qt.AlignCenter)
+            self.specialty_table.setItem(row, 0, table_item(item.get("name")))
+            count_item = table_item(item.get("count", 0), alignment=Qt.AlignCenter)
             self.specialty_table.setItem(row, 1, count_item)
             self.specialty_table.setRowHeight(row, 40)
 
@@ -135,8 +189,34 @@ class StatisticsPage(QWidget):
         doc_cl = d.get("doctors_by_clinic", [])
         self.clinic_table.setRowCount(len(doc_cl))
         for row, item in enumerate(doc_cl):
-            self.clinic_table.setItem(row, 0, QTableWidgetItem(item.get("name", "—")))
-            count_item = QTableWidgetItem(str(item.get("count", 0)))
-            count_item.setTextAlignment(Qt.AlignCenter)
+            self.clinic_table.setItem(row, 0, table_item(item.get("name")))
+            count_item = table_item(item.get("count", 0), alignment=Qt.AlignCenter)
             self.clinic_table.setItem(row, 1, count_item)
             self.clinic_table.setRowHeight(row, 40)
+
+    def _card_column_count(self) -> int:
+        width = self.width()
+        if width >= 1320:
+            return 5
+        if width >= 1040:
+            return 3
+        return 2
+
+    def _relayout_cards(self) -> None:
+        if not self._stat_cards:
+            return
+
+        columns = self._card_column_count()
+        # QGridLayout retains a layout item when the same widget is added at a
+        # new position.  Remove the items first so repeated resize events never
+        # leave blank cells or duplicate cards behind.
+        while self.cards_layout.count():
+            self.cards_layout.takeAt(0)
+        for column in range(5):
+            self.cards_layout.setColumnStretch(column, 1 if column < columns else 0)
+        for index, card in enumerate(self._stat_cards):
+            self.cards_layout.addWidget(card, index // columns, index % columns)
+
+    def resizeEvent(self, event):  # noqa: N802
+        super().resizeEvent(event)
+        self._relayout_cards()

@@ -46,9 +46,7 @@ class CalendarDialog(QDialog):
 
         # Header title
         self.header_lbl = QLabel(t("calendar_dialog_title", default="Chọn ngày khám bệnh"))
-        self.header_lbl.setStyleSheet(
-            "font-size: 15px; font-weight: 700; color: #0f766e; margin-bottom: 4px;"
-        )
+        self.header_lbl.setObjectName("calendarDialogTitle")
         layout.addWidget(self.header_lbl)
 
         # Calendar Widget

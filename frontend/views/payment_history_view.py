@@ -9,21 +9,20 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
     QHBoxLayout,
-    QHeaderView,
     QLineEdit,
     QPushButton,
     QScrollArea,
-    QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from frontend.api.api_client import ApiClient
-from frontend.views.common import BaseApiView
-from frontend.widgets.empty_state import EmptyState
+from frontend.ui.design_system import ColumnPriority, ColumnSpec
+from frontend.views.common import BaseApiView, format_datetime, format_money
+from frontend.widgets.adaptive_data_table import AdaptiveDataTable
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.pagination import Pagination
+from frontend.widgets.state_host import StateHost
 
 
 class PaymentHistoryView(BaseApiView):
@@ -63,6 +62,7 @@ class PaymentHistoryView(BaseApiView):
 
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Tìm kiếm theo tên bệnh nhân, SĐT hoặc mã HĐ...")
+        self.search_input.setAccessibleName("Tìm kiếm lịch sử thu phí")
         self.search_input.returnPressed.connect(self._apply_filter)
         filter_bar.addWidget(self.search_input, 2)
 
@@ -81,32 +81,83 @@ class PaymentHistoryView(BaseApiView):
         layout.addWidget(filter_card)
 
         # Payments Table
-        self.table = QTableWidget()
-        self.table.setColumnCount(7)
-        self.table.setHorizontalHeaderLabels([
-            "Mã GD", "Mã HĐ", "Bệnh nhân", "Bác sĩ", "Số tiền", "Phương thức", "Thời gian"
-        ])
-        hdr = self.table.horizontalHeader()
-        hdr.setStretchLastSection(False)
-        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.table.setAlternatingRowColors(True)
-        layout.addWidget(self.table)
-
-        self.empty_state = EmptyState(
-            "Chưa có dữ liệu thanh toán",
-            "Các giao dịch thanh toán đã hoàn tất sẽ hiển thị tại đây.",
-            parent=self,
+        self.table = AdaptiveDataTable(
+            [
+                ColumnSpec(
+                    "Mã GD",
+                    "payment_id",
+                    minimum_width=82,
+                    preferred_width=92,
+                    priority=ColumnPriority.CRITICAL,
+                    formatter=lambda value: f"TXN-{int(value or 0):04d}",
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+                ColumnSpec(
+                    "Mã HĐ",
+                    "invoice_id",
+                    minimum_width=78,
+                    preferred_width=88,
+                    priority=ColumnPriority.HIGH,
+                    formatter=lambda value: f"INV-{int(value or 0):04d}",
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+                ColumnSpec(
+                    "Bệnh nhân",
+                    "patient_name",
+                    minimum_width=130,
+                    stretch=True,
+                    priority=ColumnPriority.CRITICAL,
+                ),
+                ColumnSpec(
+                    "Bác sĩ",
+                    "doctor_name",
+                    minimum_width=112,
+                    preferred_width=140,
+                    priority=ColumnPriority.NORMAL,
+                ),
+                ColumnSpec(
+                    "Số tiền",
+                    "amount",
+                    minimum_width=104,
+                    preferred_width=116,
+                    priority=ColumnPriority.CRITICAL,
+                    formatter=format_money,
+                    alignment=Qt.AlignmentFlag.AlignRight
+                    | Qt.AlignmentFlag.AlignVCenter,
+                ),
+                ColumnSpec(
+                    "Phương thức",
+                    "payment_method",
+                    minimum_width=96,
+                    preferred_width=110,
+                    formatter=lambda value: {
+                        "CASH": "Tiền mặt",
+                        "CARD": "Thẻ",
+                    }.get(str(value), str(value or "—")),
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+                ColumnSpec(
+                    "Thời gian",
+                    "payment_date",
+                    minimum_width=126,
+                    preferred_width=148,
+                    formatter=format_datetime,
+                ),
+            ],
+            accessible_name="Lịch sử giao dịch thu phí",
         )
-        layout.addWidget(self.empty_state)
-        self.empty_state.hide()
+        self.table.setMinimumHeight(260)
+        self.state_host = StateHost(self.table)
+        self.bind_state_host(self.state_host)
+        self.empty_state = self.state_host.empty
+        self.empty_state.set_title("Chưa có dữ liệu thanh toán")
+        self.empty_state.set_description(
+            "Các giao dịch thanh toán đã hoàn tất sẽ hiển thị tại đây."
+        )
+        self.empty_state.set_action("Làm mới")
+        self.state_host.empty_action_requested.connect(self._retry)
+        self.state_host.retry_requested.connect(self._retry)
+        layout.addWidget(self.state_host, 1)
 
         self.pagination = Pagination(parent=self)
         self.pagination.page_requested.connect(self._go_to_page)
@@ -146,6 +197,12 @@ class PaymentHistoryView(BaseApiView):
             "load_payments",
             lambda: self.api_client.get("/api/v1/reception/payments", params=params),
             self._on_payments_loaded,
+            controls=(
+                self.search_input,
+                self.method_combo,
+                self.btn_filter,
+                self.pagination,
+            ),
             loading_text="Đang tải dữ liệu thu phí...",
         )
 
@@ -155,43 +212,15 @@ class PaymentHistoryView(BaseApiView):
         total_pages = data.get("total_pages", 1)
         self.pagination.update_state(self._current_page, total_pages, total)
 
-        if not items:
-            self.table.hide()
-            self.empty_state.show()
-            return
+        self.table.set_rows(items)
+        if items:
+            self.state_host.show_content()
+        else:
+            self.state_host.show_empty(
+                "Chưa có dữ liệu thanh toán",
+                "Các giao dịch thanh toán đã hoàn tất sẽ hiển thị tại đây.",
+                action_text="Làm mới",
+            )
 
-        self.empty_state.hide()
-        self.table.show()
-        self.table.setRowCount(len(items))
-
-        for row, item in enumerate(items):
-            p_id = item.get("payment_id", 0)
-            inv_id = item.get("invoice_id", 0)
-            patient_name = item.get("patient_name", "")
-            doctor_name = item.get("doctor_name", "")
-            amount = float(item.get("amount", 0))
-            method = item.get("payment_method", "CASH")
-            dt = str(item.get("payment_date", ""))[:19].replace("T", " ")
-
-            id_item = QTableWidgetItem(f"TXN-{p_id:04d}")
-            id_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 0, id_item)
-
-            inv_item = QTableWidgetItem(f"INV-{inv_id:04d}")
-            inv_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 1, inv_item)
-
-            self.table.setItem(row, 2, QTableWidgetItem(patient_name))
-            self.table.setItem(row, 3, QTableWidgetItem(doctor_name))
-
-            amount_item = QTableWidgetItem(f"{amount:,.0f} ₫")
-            amount_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            self.table.setItem(row, 4, amount_item)
-
-            method_label = "Tiền mặt" if method == "CASH" else ("Thẻ" if method == "CARD" else method)
-            method_item = QTableWidgetItem(method_label)
-            method_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 5, method_item)
-
-            self.table.setItem(row, 6, QTableWidgetItem(dt))
-            self.table.setRowHeight(row, 50)
+    def _retry(self) -> None:
+        self.load_payments()

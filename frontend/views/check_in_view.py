@@ -8,21 +8,20 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
     QScrollArea,
-    QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from frontend.api.api_client import ApiClient
+from frontend.ui.design_system import ColumnPriority, ColumnSpec
 from frontend.views.common import BaseApiView
-from frontend.widgets.empty_state import EmptyState
+from frontend.widgets.adaptive_data_table import AdaptiveDataTable
 from frontend.widgets.page_header import PageHeader
+from frontend.widgets.state_host import StateHost
 
 
 class CheckInView(BaseApiView):
@@ -68,11 +67,13 @@ class CheckInView(BaseApiView):
         search_row.setSpacing(10)
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("SĐT, họ tên hoặc mã hẹn...")
+        self.search_input.setAccessibleName("Tìm kiếm lịch hẹn chờ tiếp nhận")
         self.search_input.returnPressed.connect(self.search_and_load)
         search_row.addWidget(self.search_input, 3)
 
         self.queue_num_input = QLineEdit()
         self.queue_num_input.setPlaceholderText("Số thứ tự")
+        self.queue_num_input.setAccessibleName("Số thứ tự khám")
         self.queue_num_input.setMaximumWidth(140)
         search_row.addWidget(self.queue_num_input, 1)
 
@@ -89,34 +90,89 @@ class CheckInView(BaseApiView):
         results_label.setObjectName("sectionTitle")
         layout.addWidget(results_label)
 
-        self.results_table = QTableWidget()
-        self.results_table.setColumnCount(7)
-        self.results_table.setHorizontalHeaderLabels([
-            "Mã hẹn", "Ngày khám", "Giờ khám", "Bệnh nhân", "Số điện thoại", "Bác sĩ", "Thao tác"
-        ])
-        hdr = self.results_table.horizontalHeader()
-        hdr.setStretchLastSection(False)
-        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
-        self.results_table.setColumnWidth(6, 140)
-        self.results_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.results_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.results_table.setAlternatingRowColors(True)
-        self.results_table.setMinimumHeight(220)
-        layout.addWidget(self.results_table)
-
-        self.empty_results = EmptyState(
-            "Không có lịch hẹn chờ tiếp nhận",
-            "Tìm kiếm theo SĐT, họ tên hoặc mã hẹn.",
-            parent=self,
+        self.results_table = AdaptiveDataTable(
+            [
+                ColumnSpec(
+                    "Mã hẹn",
+                    "appointment_id",
+                    minimum_width=64,
+                    preferred_width=72,
+                    priority=ColumnPriority.HIGH,
+                    formatter=lambda value: f"#{int(value or 0)}",
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+                ColumnSpec(
+                    "Ngày khám",
+                    "appointment_date",
+                    minimum_width=88,
+                    preferred_width=96,
+                    priority=ColumnPriority.HIGH,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+                ColumnSpec(
+                    "Giờ khám",
+                    "start_time",
+                    minimum_width=66,
+                    preferred_width=74,
+                    priority=ColumnPriority.HIGH,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+                ColumnSpec(
+                    "Bệnh nhân",
+                    "patient_name",
+                    minimum_width=116,
+                    priority=ColumnPriority.CRITICAL,
+                    stretch=True,
+                ),
+                ColumnSpec(
+                    "Số điện thoại",
+                    "patient_phone",
+                    minimum_width=96,
+                    preferred_width=108,
+                    priority=ColumnPriority.HIGH,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+                ColumnSpec(
+                    "Bác sĩ",
+                    "doctor_name",
+                    minimum_width=104,
+                    preferred_width=126,
+                    priority=ColumnPriority.NORMAL,
+                ),
+                ColumnSpec(
+                    "Trạng thái",
+                    "status",
+                    minimum_width=100,
+                    preferred_width=112,
+                    priority=ColumnPriority.CRITICAL,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                    status=True,
+                ),
+                ColumnSpec(
+                    "Thao tác",
+                    "_actions",
+                    minimum_width=112,
+                    preferred_width=122,
+                    priority=ColumnPriority.CRITICAL,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+            ],
+            accessible_name="Lịch hẹn chờ tiếp nhận",
         )
-        layout.addWidget(self.empty_results)
-        self.empty_results.hide()
+        self.results_table.setAccessibleDescription(
+            "Bảng chỉ đọc; trạng thái và nút tiếp nhận luôn hiển thị."
+        )
+        self.results_table.setMinimumHeight(240)
+
+        self.state_host = StateHost(self.results_table)
+        self.bind_state_host(self.state_host)
+        self.empty_results = self.state_host.empty
+        self.empty_results.set_title("Không có lịch hẹn chờ tiếp nhận")
+        self.empty_results.set_description("Tìm kiếm theo SĐT, họ tên hoặc mã hẹn.")
+        self.empty_results.set_action("Làm mới")
+        self.state_host.empty_action_requested.connect(self.refresh)
+        self.state_host.retry_requested.connect(self.refresh)
+        layout.addWidget(self.state_host, 1)
 
         layout.addStretch(1)
         scroll.setWidget(container)
@@ -143,6 +199,11 @@ class CheckInView(BaseApiView):
             "load_checkin_candidates",
             lambda: self.api_client.get("/api/v1/reception/appointments", params=params),
             self._on_candidates_loaded,
+            controls=(
+                self.search_input,
+                self.queue_num_input,
+                self.btn_search,
+            ),
             loading_text="Đang tìm lịch hẹn...",
         )
 
@@ -151,9 +212,30 @@ class CheckInView(BaseApiView):
         # Filter for check-in candidates (PENDING or CONFIRMED)
         items = [i for i in all_items if i.get("status") in ("CONFIRMED", "PENDING")]
 
+        rows = []
+        for appt in items:
+            patient = appt.get("patient", {})
+            doctor = appt.get("doctor", {})
+            rows.append(
+                {
+                    "appointment_id": appt.get("appointment_id", 0),
+                    "appointment_date": str(appt.get("appointment_date", "")),
+                    "start_time": str(appt.get("start_time", ""))[:5],
+                    "patient_name": patient.get("full_name", ""),
+                    "patient_phone": patient.get("phone", "") or "—",
+                    "doctor_name": doctor.get("full_name", ""),
+                    "status": appt.get("status", "PENDING"),
+                    "_actions": "",
+                }
+            )
+        self.results_table.set_rows(rows)
+
         if not items:
-            self.results_table.hide()
-            self.empty_results.show()
+            self.state_host.show_empty(
+                "Không có lịch hẹn chờ tiếp nhận",
+                "Tìm kiếm theo SĐT, họ tên hoặc mã hẹn.",
+                action_text="Làm mới",
+            )
             checked_in = [i for i in all_items if i.get("status") == "CHECKED_IN"]
             if checked_in:
                 self.feedback.show_message(
@@ -163,38 +245,13 @@ class CheckInView(BaseApiView):
                 )
             return
 
-        self.empty_results.hide()
-        self.results_table.show()
-        self.results_table.setRowCount(len(items))
+        self.state_host.show_content()
 
         for row, appt in enumerate(items):
             appt_id = appt.get("appointment_id", 0)
-            appt_date = str(appt.get("appointment_date", ""))
-            start_time = str(appt.get("start_time", ""))[:5]
-            patient = appt.get("patient", {})
-            doctor = appt.get("doctor", {})
-
-            item_id = QTableWidgetItem(f"#{appt_id}")
-            item_id.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.results_table.setItem(row, 0, item_id)
-
-            item_date = QTableWidgetItem(appt_date)
-            item_date.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.results_table.setItem(row, 1, item_date)
-
-            item_time = QTableWidgetItem(start_time)
-            item_time.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.results_table.setItem(row, 2, item_time)
-
-            self.results_table.setItem(row, 3, QTableWidgetItem(patient.get("full_name", "")))
-
-            item_phone = QTableWidgetItem(patient.get("phone", "") or "—")
-            item_phone.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.results_table.setItem(row, 4, item_phone)
-
-            self.results_table.setItem(row, 5, QTableWidgetItem(doctor.get("full_name", "")))
 
             action_widget = QWidget()
+            action_widget.setObjectName("tableCellWidget")
             act_layout = QHBoxLayout(action_widget)
             act_layout.setContentsMargins(4, 0, 4, 0)
             act_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -202,11 +259,15 @@ class CheckInView(BaseApiView):
             btn = QPushButton("Tiếp nhận")
             btn.setObjectName("tableActionPrimary")
             btn.setCursor(Qt.PointingHandCursor)
+            btn.setAccessibleName(f"Tiếp nhận lịch hẹn #{appt_id}")
             btn.clicked.connect(lambda _, a_id=appt_id: self._execute_check_in(a_id))
             act_layout.addWidget(btn)
 
-            self.results_table.setCellWidget(row, 6, action_widget)
-            self.results_table.setRowHeight(row, 50)
+            self.results_table.setIndexWidget(
+                self.results_table.model().index(row, 7),
+                action_widget,
+            )
+            self.results_table.verticalHeader().resizeSection(row, 50)
 
     def _execute_check_in(self, appt_id: int) -> None:
         queue_no = self.queue_num_input.text().strip() or None
@@ -219,6 +280,12 @@ class CheckInView(BaseApiView):
                 json=payload,
             ),
             lambda res: self._on_check_in_success(appt_id, queue_no),
+            controls=(
+                self.results_table,
+                self.search_input,
+                self.queue_num_input,
+                self.btn_search,
+            ),
             loading_text="Đang xác nhận tiếp nhận...",
         )
 

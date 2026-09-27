@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Final
 
-from PySide6.QtCore import QModelIndex, QRectF, QSize, Qt
+from PySide6.QtCore import QModelIndex, QRectF, QSize, Qt, Slot
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter
 from PySide6.QtWidgets import (
     QApplication,
@@ -52,25 +52,26 @@ STATUS_COLORS = MappingProxyType(
         "ACTIVE": _SUCCESS,
         "INACTIVE": _DANGER,
         "HOAT_DONG": _SUCCESS,
-        "HOẠT ĐỘNG": _SUCCESS,
+        "HOẠT_ĐỘNG": _SUCCESS,
         "DA_KHOA": _DANGER,
-        "ĐÃ KHÓA": _DANGER,
+        "ĐÃ_KHÓA": _DANGER,
         "DANG_KHAM": _VIOLET,
-        "ĐANG KHÁM": _VIOLET,
+        "ĐANG_KHÁM": _VIOLET,
         "HOAN_TAT": _SUCCESS,
-        "HOÀN TẤT": _SUCCESS,
+        "HOÀN_TẤT": _SUCCESS,
         "CHO_KHAM": _WARNING,
-        "CHỜ KHÁM": _WARNING,
+        "CHỜ_KHÁM": _WARNING,
         "DA_THANH_TOAN": _SUCCESS,
-        "ĐÃ THANH TOÁN": _SUCCESS,
+        "ĐÃ_THANH_TOÁN": _SUCCESS,
         "CHUA_THANH_TOAN": _WARNING,
-        "CHƯA THANH TOÁN": _WARNING,
+        "CHƯA_THANH_TOÁN": _WARNING,
         "PATIENT": _INFO,
         "DOCTOR": _VIOLET,
         "STAFF": _SUCCESS,
         "ADMIN": _WARNING,
         "CASH": _INFO,
         "CARD": _VIOLET,
+        "TRANSFER": _SUCCESS,
     }
 )
 
@@ -90,19 +91,19 @@ STATUS_LABELS_VN: Final[dict[str, str]] = {
     "ACTIVE": "Hoạt động",
     "INACTIVE": "Đã khóa",
     "HOAT_DONG": "Hoạt động",
-    "HOẠT ĐỘNG": "Hoạt động",
+    "HOẠT_ĐỘNG": "Hoạt động",
     "DA_KHOA": "Đã khóa",
-    "ĐÃ KHÓA": "Đã khóa",
+    "ĐÃ_KHÓA": "Đã khóa",
     "DANG_KHAM": "Đang khám",
-    "ĐANG KHÁM": "Đang khám",
+    "ĐANG_KHÁM": "Đang khám",
     "HOAN_TAT": "Hoàn thành",
-    "HOÀN TẤT": "Hoàn thành",
+    "HOÀN_TẤT": "Hoàn thành",
     "CHO_KHAM": "Chờ khám",
-    "CHỜ KHÁM": "Chờ khám",
+    "CHỜ_KHÁM": "Chờ khám",
     "DA_THANH_TOAN": "Đã thanh toán",
-    "ĐÃ THANH TOÁN": "Đã thanh toán",
+    "ĐÃ_THANH_TOÁN": "Đã thanh toán",
     "CHUA_THANH_TOAN": "Chưa thanh toán",
-    "CHƯA THANH TOÁN": "Chưa thanh toán",
+    "CHƯA_THANH_TOÁN": "Chưa thanh toán",
     "PATIENT": "Bệnh nhân",
     "DOCTOR": "Bác sĩ",
     "STAFF": "Nhân viên",
@@ -128,19 +129,19 @@ STATUS_LABELS_EN: Final[dict[str, str]] = {
     "ACTIVE": "Active",
     "INACTIVE": "Locked",
     "HOAT_DONG": "Active",
-    "HOẠT ĐỘNG": "Active",
+    "HOẠT_ĐỘNG": "Active",
     "DA_KHOA": "Locked",
-    "ĐÃ KHÓA": "Locked",
+    "ĐÃ_KHÓA": "Locked",
     "DANG_KHAM": "In Progress",
-    "ĐANG KHÁM": "In Progress",
+    "ĐANG_KHÁM": "In Progress",
     "HOAN_TAT": "Completed",
-    "HOÀN TẤT": "Completed",
+    "HOÀN_TẤT": "Completed",
     "CHO_KHAM": "Checked In",
-    "CHỜ KHÁM": "Checked In",
+    "CHỜ_KHÁM": "Checked In",
     "DA_THANH_TOAN": "Paid",
-    "ĐÃ THANH TOÁN": "Paid",
+    "ĐÃ_THANH_TOÁN": "Paid",
     "CHUA_THANH_TOAN": "Unpaid",
-    "CHƯA THANH TOÁN": "Unpaid",
+    "CHƯA_THANH_TOÁN": "Unpaid",
     "PATIENT": "Patient",
     "DOCTOR": "Doctor",
     "STAFF": "Staff",
@@ -247,8 +248,20 @@ class StatusBadge(QLabel):
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         self._status = ""
+        self._source_status: object = None
         self._colors = _NEUTRAL
         self.set_status(status)
+        # Keep the visible and accessible labels in sync with a live language
+        # change.  The raw status remains untouched so its semantic colour can
+        # never depend on a translated label.
+        try:
+            from frontend.core.i18n import get_i18n
+
+            get_i18n().language_changed.connect(self._retranslate)
+        except Exception:
+            # StatusBadge is also safe to use in small standalone previews
+            # where the application's i18n service may not be initialised.
+            pass
 
     @property
     def status(self) -> str:
@@ -257,12 +270,23 @@ class StatusBadge(QLabel):
     def set_status(self, status: object) -> None:
         """Set the value, accessible label, palette, and styling property."""
 
+        self._source_status = status
         self._status = normalize_status(status)
         self._colors = status_colors(status)
-        text = display_status(status)
-        super().setText(text)
-        self.setAccessibleName(f"Status: {text}")
+        self._retranslate()
         self.setProperty("status", self._status.lower())
+        self.updateGeometry()
+        self.update()
+
+    @Slot()
+    @Slot(str)
+    def _retranslate(self, _lang: str | None = None) -> None:
+        """Refresh presentation text without changing the semantic status."""
+
+        text = display_status(self._source_status)
+        super().setText(text)
+        prefix = "Status" if _current_lang() == "en" else "Trạng thái"
+        self.setAccessibleName(f"{prefix}: {text}")
         self.updateGeometry()
         self.update()
 

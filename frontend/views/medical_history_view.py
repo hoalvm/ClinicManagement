@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QLineEdit,
     QPushButton,
-    QStackedWidget,
     QTableView,
     QVBoxLayout,
     QWidget,
@@ -24,9 +23,9 @@ from frontend.views.common import (
     require_page,
     table_item,
 )
-from frontend.widgets.empty_state import EmptyState
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.pagination import PaginationWidget
+from frontend.widgets.state_host import StateHost
 
 
 class MedicalHistoryView(BaseApiView):
@@ -54,15 +53,15 @@ class MedicalHistoryView(BaseApiView):
         self.search = QLineEdit()
         self.search.setPlaceholderText(t("medical_search_placeholder"))
         self.search.setClearButtonEnabled(True)
-        self.search.setAccessibleName("Search medical history")
+        self.search.setAccessibleName(t("a11y_search_medical_history"))
         filters.addWidget(self.search, 0, 0, 1, 3)
 
         self.refresh_button = QPushButton(t("btn_refresh"))
         self.refresh_button.setObjectName("secondaryButton")
-        self.refresh_button.setAccessibleName("Refresh medical history")
+        self.refresh_button.setAccessibleName(t("btn_refresh"))
         self.details_button = QPushButton(t("btn_view_details"))
         self.details_button.setObjectName("primaryButton")
-        self.details_button.setAccessibleName("View selected medical record details")
+        self.details_button.setAccessibleName(t("btn_view_details"))
         self.details_button.setEnabled(False)
 
         filters.setColumnStretch(0, 1)
@@ -73,32 +72,27 @@ class MedicalHistoryView(BaseApiView):
         root.addWidget(self.loading)
 
         self.table = QTableView()
-        self.table.setAccessibleName("Medical history results")
-        self.table.setAccessibleDescription(
-            "Select a medical record and press Enter to open its details."
-        )
+        self.table.setAccessibleName(t("a11y_medical_history_results"))
+        self.table.setAccessibleDescription(t("a11y_open_selected_row"))
         self.model: QStandardItemModel = configure_table(
             self.table,
             [t("th_exam_date"), t("field_doctor"), t("field_specialty"), t("th_diagnosis")],
             stretch_column=3,
-            column_widths={0: 190, 1: 190, 2: 170},
+            column_widths={0: 152, 1: 152, 2: 124},
+            wrap_columns={3},
         )
 
-        self.empty_state = EmptyState(
-            t("no_records_found"),
-            t("no_records_desc"),
-            action_text=t("btn_refresh"),
-        )
-        self.empty_state.setAccessibleName("No medical history results")
-
-        self.content_stack = QStackedWidget()
-        self.content_stack.addWidget(self.table)
-        self.content_stack.addWidget(self.empty_state)
-        self.content_stack.setCurrentWidget(self.table)
-        root.addWidget(self.content_stack, 1)
+        self.state_host = StateHost(self.table)
+        self.bind_state_host(self.state_host)
+        self.empty_state = self.state_host.empty
+        self.empty_state.set_title(t("no_records_found"))
+        self.empty_state.set_description(t("no_records_desc"))
+        self.empty_state.set_action(t("btn_refresh"))
+        self.empty_state.setAccessibleName(t("no_records_found"))
+        root.addWidget(self.state_host, 1)
 
         self.pagination = PaginationWidget()
-        self.pagination.setAccessibleName("Medical history pagination")
+        self.pagination.setAccessibleName(t("medical_history_title"))
         root.addWidget(self.pagination)
 
         self.search.returnPressed.connect(self._search)
@@ -108,7 +102,8 @@ class MedicalHistoryView(BaseApiView):
         self.table.selectionModel().selectionChanged.connect(
             lambda *_args: self._sync_details_button()
         )
-        self.empty_state.action_requested.connect(self._retry)
+        self.state_host.empty_action_requested.connect(self._retry)
+        self.state_host.retry_requested.connect(self._retry)
         self.pagination.page_changed.connect(self._change_page)
         self.pagination.page_size_changed.connect(self._page_size_changed)
 
@@ -124,6 +119,13 @@ class MedicalHistoryView(BaseApiView):
         self.search.setPlaceholderText(t("medical_search_placeholder"))
         self.refresh_button.setText(t("btn_refresh"))
         self.details_button.setText(t("btn_view_details"))
+        self.search.setAccessibleName(t("a11y_search_medical_history"))
+        self.refresh_button.setAccessibleName(t("btn_refresh"))
+        self.details_button.setAccessibleName(t("btn_view_details"))
+        self.table.setAccessibleName(t("a11y_medical_history_results"))
+        self.table.setAccessibleDescription(t("a11y_open_selected_row"))
+        self.empty_state.setAccessibleName(t("no_records_found"))
+        self.pagination.setAccessibleName(t("medical_history_title"))
         self.empty_state.set_title(t("no_records_found"))
         self.empty_state.set_description(t("no_records_desc"))
         self.empty_state.set_action(t("btn_refresh"))
@@ -143,7 +145,6 @@ class MedicalHistoryView(BaseApiView):
         if keyword:
             params["keyword"] = keyword
 
-        self.content_stack.setCurrentWidget(self.table)
         self.details_button.setEnabled(False)
         self.run_api_task(
             "medical-history",
@@ -191,7 +192,14 @@ class MedicalHistoryView(BaseApiView):
         self.header.set_subtitle(t("records_count", count=total))
         self.table.clearSelection()
         self.details_button.setEnabled(False)
-        self.content_stack.setCurrentWidget(self.table if items else self.empty_state)
+        if items:
+            self.state_host.show_content()
+        else:
+            self.state_host.show_empty(
+                t("no_records_found"),
+                t("no_records_desc"),
+                action_text=t("btn_refresh"),
+            )
 
     def _selected_id(self) -> int | None:
         indexes = self.table.selectionModel().selectedRows(0)
@@ -238,5 +246,5 @@ class MedicalHistoryView(BaseApiView):
         self.table.clearSelection()
         self.pagination.reset()
         self.header.set_subtitle(t("medical_history_subtitle"))
-        self.content_stack.setCurrentWidget(self.table)
+        self.state_host.show_content()
         self.details_button.setEnabled(False)

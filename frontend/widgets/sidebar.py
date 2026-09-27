@@ -51,11 +51,12 @@ class Sidebar(QFrame):
         super().__init__(parent)
         self.setObjectName("sidebar")
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
-        self.setAccessibleName("Patient portal navigation")
+        self.setAccessibleName(t("a11y_patient_navigation"))
         self._compact = False
         self._active_route = ""
         self._user_name = "Patient"
-        self._user_role = "Patient account"
+        self._role_value = "PATIENT"
+        self._user_role = t("nav_patient_account")
 
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(14, 20, 14, 16)
@@ -111,6 +112,7 @@ class Sidebar(QFrame):
 
     def retranslate_ui(self) -> None:
         """Update navigation labels based on active language."""
+        self.setAccessibleName(t("a11y_patient_navigation"))
         self._overview_label.setText(t("nav_overview"))
         self._care_label.setText(t("nav_my_care"))
         for route, key in self._ROUTE_TO_KEY.items():
@@ -125,6 +127,10 @@ class Sidebar(QFrame):
         self.logout_button.setAccessibleName(
             "Log out" if get_i18n().current_language == "en" else t("nav_logout")
         )
+        if self._role_value == "PATIENT":
+            self._user_role = t("nav_patient_account")
+            self._user_role_label.setText(self._user_role)
+        self._update_user_context()
 
     @property
     def is_compact(self) -> bool:
@@ -184,7 +190,7 @@ class Sidebar(QFrame):
     def _build_user_context(self) -> None:
         self._user_row = QFrame()
         self._user_row.setObjectName("sidebarUser")
-        self._user_row.setAccessibleName("Signed-in patient")
+        self._user_row.setAccessibleName(t("nav_patient_account"))
         user_layout = QHBoxLayout(self._user_row)
         user_layout.setContentsMargins(5, 8, 3, 7)
         user_layout.setSpacing(10)
@@ -227,15 +233,28 @@ class Sidebar(QFrame):
         """Show the authenticated patient's identity in the sidebar footer."""
 
         data = user or {}
-        name = str(data.get("full_name") or data.get("username") or "Patient").strip()
-        role_value = str(data.get("role") or "PATIENT").strip()
-        role = role_value.replace("_", " ").title()
-        self._user_name = name or "Patient"
-        self._user_role = f"{role} account" if role else "Patient account"
+        name = str(
+            data.get("full_name") or data.get("username") or t("patient_default_name")
+        ).strip()
+        self._role_value = str(data.get("role") or "PATIENT").strip().upper()
+        role = self._role_value.replace("_", " ").title()
+        self._user_name = name or t("patient_default_name")
+        self._user_role = (
+            t("nav_patient_account")
+            if self._role_value == "PATIENT"
+            else (f"{role} account" if role else t("nav_patient_account"))
+        )
         self._user_name_label.setText(self._user_name)
         self._user_role_label.setText(self._user_role)
         self._avatar_text.setText(self._initials(self._user_name))
-        context = f"Signed in as {self._user_name}, {self._user_role}"
+        self._update_user_context()
+
+    def _update_user_context(self) -> None:
+        context = t(
+            "a11y_signed_in_as",
+            name=self._user_name,
+            role=self._user_role,
+        )
         self._user_row.setAccessibleName(context)
         self._user_row.setToolTip(context)
 

@@ -6,6 +6,7 @@ from datetime import date
 from typing import Any
 
 from PySide6.QtCore import QDate, Qt, Signal
+from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
@@ -32,10 +34,22 @@ from frontend.widgets.page_header import PageHeader
 from frontend.widgets.status_badge import StatusBadge
 
 
+def _set_style_state(widget: QWidget, name: str, value: object) -> None:
+    """Update a QSS state property and immediately refresh the widget."""
+    if widget.property(name) == value:
+        return
+    widget.setProperty(name, value)
+    style = widget.style()
+    style.unpolish(widget)
+    style.polish(widget)
+    widget.update()
+
+
 class BookForPatientView(BaseApiView):
     """View allowing clinic receptionist to book an appointment with live patient profile sidebar."""
 
     appointment_booked = Signal(dict)
+    TWO_COLUMN_BREAKPOINT = 1050
 
     def __init__(self, api_client: ApiClient, parent: QWidget | None = None) -> None:
         super().__init__(api_client, parent)
@@ -44,11 +58,21 @@ class BookForPatientView(BaseApiView):
         self._selected_patient_id: int | None = None
         self._doctors_cache: list[dict[str, Any]] = []
 
-        scroll = QScrollArea(self)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll_area = QScrollArea(self)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll_area.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
 
         container = QWidget()
+        # The page body must follow the viewport width. Long combo-box items and
+        # form labels otherwise leak their size hint into QScrollArea and create
+        # a hidden/clipped horizontal overflow at the supported minimum size.
+        container.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Preferred,
+        )
         main_vbox = QVBoxLayout(container)
         main_vbox.setContentsMargins(24, 24, 24, 24)
         main_vbox.setSpacing(16)
@@ -65,15 +89,22 @@ class BookForPatientView(BaseApiView):
         main_vbox.addWidget(self.loading)
 
         # 2-Column Layout: Left Column (Form) & Right Column (Patient Profile & Live Preview)
-        content_row = QHBoxLayout()
-        content_row.setSpacing(20)
-        content_row.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.content_grid = QGridLayout()
+        self.content_grid.setHorizontalSpacing(20)
+        self.content_grid.setVerticalSpacing(16)
+        self.content_grid.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         # =========================================================================
         # LEFT COLUMN: Booking Form & Patient Intake (Stretch: 3)
         # =========================================================================
-        left_col = QWidget()
-        left_layout = QVBoxLayout(left_col)
+        self.left_col = QWidget()
+        self.left_col.setObjectName("layoutWrapper")
+        self.left_col.setMinimumWidth(0)
+        self.left_col.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
+        left_layout = QVBoxLayout(self.left_col)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(16)
 
@@ -87,20 +118,19 @@ class BookForPatientView(BaseApiView):
         pt_sec_header = QHBoxLayout()
         pt_sec_title = QLabel("1. Thông tin bệnh nhân")
         pt_sec_title.setObjectName("sectionTitle")
+        pt_sec_title.setWordWrap(True)
         pt_sec_header.addWidget(pt_sec_title)
 
         self.pt_type_badge = QLabel("Bệnh nhân mới")
-        self.pt_type_badge.setStyleSheet(
-            "background-color: #f1f5f9; color: #475569; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 10px;"
-        )
+        self.pt_type_badge.setObjectName("patientTypeBadge")
+        self.pt_type_badge.setProperty("patientState", "new")
+        self.pt_type_badge.setWordWrap(True)
         pt_sec_header.addWidget(self.pt_type_badge)
         pt_sec_header.addStretch(1)
 
         self.btn_unselect_pt = QPushButton("Bỏ chọn (Tạo mới)")
         self.btn_unselect_pt.setObjectName("ghostButton")
-        self.btn_unselect_pt.setStyleSheet(
-            "color: #0369a1; font-size: 12px; font-weight: 600; text-decoration: underline;"
-        )
+        self.btn_unselect_pt.setProperty("bookingRole", "unselectPatient")
         self.btn_unselect_pt.setCursor(Qt.PointingHandCursor)
         self.btn_unselect_pt.clicked.connect(self._reset_patient_selection)
         self.btn_unselect_pt.hide()
@@ -121,6 +151,7 @@ class BookForPatientView(BaseApiView):
         lookup_input_row.addWidget(lookup_lbl)
 
         self.pt_search_input = QLineEdit()
+        self.pt_search_input.setAccessibleName("Tra cứu hồ sơ bệnh nhân")
         self.pt_search_input.setPlaceholderText(
             "Nhập số điện thoại hoặc họ tên bệnh nhân..."
         )
@@ -136,6 +167,7 @@ class BookForPatientView(BaseApiView):
 
         # Quick Results Picker (hidden by default)
         self.search_results_table = QTableWidget()
+        self.search_results_table.setAccessibleName("Kết quả tra cứu bệnh nhân")
         self.search_results_table.setColumnCount(4)
         self.search_results_table.setHorizontalHeaderLabels(
             ["Họ tên", "Số điện thoại", "Ngày sinh", "Thao tác"]
@@ -158,6 +190,7 @@ class BookForPatientView(BaseApiView):
         # Patient Demographics Form
         pt_form = QFormLayout()
         pt_form.setSpacing(12)
+        pt_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         pt_form.setLabelAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
@@ -175,6 +208,10 @@ class BookForPatientView(BaseApiView):
 
         gender_dob_row = QHBoxLayout()
         self.gender_combo = QComboBox()
+        self.gender_combo.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Fixed,
+        )
         self.gender_combo.addItem("Nam", "MALE")
         self.gender_combo.addItem("Nữ", "FEMALE")
         self.gender_combo.addItem("Khác", "OTHER")
@@ -182,7 +219,7 @@ class BookForPatientView(BaseApiView):
         gender_dob_row.addWidget(self.gender_combo, 1)
 
         dob_lbl = QLabel("Ngày sinh:")
-        dob_lbl.setStyleSheet("font-weight: 500; color: #475569; margin-left: 12px;")
+        dob_lbl.setObjectName("bookingInlineFieldLabel")
         gender_dob_row.addWidget(dob_lbl)
 
         self.dob_edit = QDateEdit()
@@ -215,12 +252,17 @@ class BookForPatientView(BaseApiView):
 
         appt_form = QFormLayout()
         appt_form.setSpacing(12)
+        appt_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         appt_form.setLabelAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
         appt_form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
 
         self.doctor_combo = QComboBox()
+        self.doctor_combo.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Fixed,
+        )
         self.doctor_combo.currentIndexChanged.connect(self._update_booking_preview)
         appt_form.addRow("Bác sĩ phụ trách (*):", self.doctor_combo)
 
@@ -233,10 +275,14 @@ class BookForPatientView(BaseApiView):
         date_time_row.addWidget(self.date_edit, 1)
 
         time_lbl = QLabel("Khung giờ:")
-        time_lbl.setStyleSheet("font-weight: 500; color: #475569; margin-left: 12px;")
+        time_lbl.setObjectName("bookingInlineFieldLabel")
         date_time_row.addWidget(time_lbl)
 
         self.time_combo = QComboBox()
+        self.time_combo.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Fixed,
+        )
         self.time_combo.addItems(
             [
                 "08:00 - 08:30",
@@ -292,13 +338,19 @@ class BookForPatientView(BaseApiView):
         appt_card_layout.addLayout(btn_row)
         left_layout.addWidget(appt_card)
 
-        content_row.addWidget(left_col, 3)
+        self.content_grid.addWidget(self.left_col, 0, 0)
 
         # =========================================================================
         # RIGHT COLUMN: "Thanh bên phải" - Patient Profile, History & Booking Preview (Stretch: 2)
         # =========================================================================
-        right_col = QWidget()
-        right_layout = QVBoxLayout(right_col)
+        self.right_col = QWidget()
+        self.right_col.setObjectName("layoutWrapper")
+        self.right_col.setMinimumWidth(0)
+        self.right_col.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
+        right_layout = QVBoxLayout(self.right_col)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(16)
 
@@ -315,28 +367,23 @@ class BookForPatientView(BaseApiView):
         card1_top.addWidget(card1_title)
 
         self.badge_profile_status = QLabel("Chưa chọn")
-        self.badge_profile_status.setStyleSheet(
-            "background-color: #f1f5f9; color: #64748b; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px;"
-        )
+        self.badge_profile_status.setObjectName("patientProfileStatusBadge")
+        self.badge_profile_status.setProperty("patientState", "empty")
         card1_top.addWidget(self.badge_profile_status)
         card1_top.addStretch(1)
         profile_layout.addLayout(card1_top)
 
         # Empty state inside profile card
         self.profile_empty_box = QFrame()
-        self.profile_empty_box.setStyleSheet(
-            "background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 16px;"
-        )
+        self.profile_empty_box.setObjectName("patientProfileEmptyState")
         empty_box_layout = QVBoxLayout(self.profile_empty_box)
         empty_box_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_profile_empty_title = QLabel("Chưa có thông tin bệnh nhân")
         self.lbl_profile_empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_profile_empty_title.setStyleSheet(
-            "font-weight: 700; color: #475569; font-size: 13px;"
-        )
+        self.lbl_profile_empty_title.setObjectName("patientProfileEmptyTitle")
         self.lbl_profile_empty_sub = QLabel("N/A")
         self.lbl_profile_empty_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_profile_empty_sub.setStyleSheet("color: #94a3b8; font-size: 12px;")
+        self.lbl_profile_empty_sub.setObjectName("patientProfileEmptyDescription")
         self.lbl_profile_empty_sub.setWordWrap(True)
         empty_box_layout.addWidget(self.lbl_profile_empty_title)
         empty_box_layout.addWidget(self.lbl_profile_empty_sub)
@@ -344,45 +391,45 @@ class BookForPatientView(BaseApiView):
 
         # Populated info grid
         self.profile_info_box = QWidget()
+        self.profile_info_box.setObjectName("layoutWrapper")
         info_grid = QGridLayout(self.profile_info_box)
         info_grid.setContentsMargins(0, 0, 0, 0)
         info_grid.setHorizontalSpacing(12)
         info_grid.setVerticalSpacing(8)
 
         lbl_c_name = QLabel("Họ và tên:")
-        lbl_c_name.setStyleSheet("color: #64748b; font-size: 12px;")
+        lbl_c_name.setObjectName("patientProfileMetaLabel")
         self.val_p_name = QLabel("—")
-        self.val_p_name.setStyleSheet(
-            "font-size: 14px; font-weight: 700; color: #0f172a;"
-        )
+        self.val_p_name.setWordWrap(True)
+        self.val_p_name.setObjectName("patientProfileName")
         info_grid.addWidget(lbl_c_name, 0, 0)
         info_grid.addWidget(self.val_p_name, 0, 1)
 
         lbl_c_phone = QLabel("Số điện thoại:")
-        lbl_c_phone.setStyleSheet("color: #64748b; font-size: 12px;")
+        lbl_c_phone.setObjectName("patientProfileMetaLabel")
         self.val_p_phone = QLabel("—")
-        self.val_p_phone.setStyleSheet("font-weight: 600; color: #1e293b;")
+        self.val_p_phone.setObjectName("patientProfileStrongValue")
         info_grid.addWidget(lbl_c_phone, 1, 0)
         info_grid.addWidget(self.val_p_phone, 1, 1)
 
         lbl_c_dob = QLabel("Ngày sinh / Tuổi:")
-        lbl_c_dob.setStyleSheet("color: #64748b; font-size: 12px;")
+        lbl_c_dob.setObjectName("patientProfileMetaLabel")
         self.val_p_dob = QLabel("—")
-        self.val_p_dob.setStyleSheet("font-weight: 500; color: #1e293b;")
+        self.val_p_dob.setObjectName("patientProfileValue")
         info_grid.addWidget(lbl_c_dob, 2, 0)
         info_grid.addWidget(self.val_p_dob, 2, 1)
 
         lbl_c_gender = QLabel("Giới tính:")
-        lbl_c_gender.setStyleSheet("color: #64748b; font-size: 12px;")
+        lbl_c_gender.setObjectName("patientProfileMetaLabel")
         self.val_p_gender = QLabel("—")
-        self.val_p_gender.setStyleSheet("font-weight: 500; color: #1e293b;")
+        self.val_p_gender.setObjectName("patientProfileValue")
         info_grid.addWidget(lbl_c_gender, 3, 0)
         info_grid.addWidget(self.val_p_gender, 3, 1)
 
         lbl_c_addr = QLabel("Địa chỉ:")
-        lbl_c_addr.setStyleSheet("color: #64748b; font-size: 12px;")
+        lbl_c_addr.setObjectName("patientProfileMetaLabel")
         self.val_p_address = QLabel("—")
-        self.val_p_address.setStyleSheet("font-weight: 500; color: #1e293b;")
+        self.val_p_address.setObjectName("patientProfileValue")
         self.val_p_address.setWordWrap(True)
         info_grid.addWidget(lbl_c_addr, 4, 0)
         info_grid.addWidget(self.val_p_address, 4, 1)
@@ -404,6 +451,7 @@ class BookForPatientView(BaseApiView):
         history_layout.addWidget(card2_title)
 
         self.history_table = QTableWidget()
+        self.history_table.setAccessibleName("Lịch sử khám gần đây của bệnh nhân")
         self.history_table.setColumnCount(4)
         self.history_table.setHorizontalHeaderLabels(
             ["Ngày", "Bác sĩ", "Trạng thái", "Lý do"]
@@ -420,9 +468,7 @@ class BookForPatientView(BaseApiView):
 
         self.lbl_no_history = QLabel("Chưa có lịch sử khám bệnh trước đây.")
         self.lbl_no_history.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_no_history.setStyleSheet(
-            "color: #94a3b8; font-size: 12px; padding: 12px;"
-        )
+        self.lbl_no_history.setObjectName("patientHistoryEmptyText")
         history_layout.addWidget(self.lbl_no_history)
         self.lbl_no_history.hide()
 
@@ -438,7 +484,8 @@ class BookForPatientView(BaseApiView):
         prev_header = QHBoxLayout()
         prev_title = QLabel("Tóm tắt lịch khám dự kiến")
         prev_title.setObjectName("sectionTitle")
-        prev_title.setStyleSheet("color: #166534;")
+        prev_title.setProperty("bookingRole", "previewTitle")
+        prev_title.setWordWrap(True)
         prev_header.addWidget(prev_title)
 
         self.prev_status_badge = StatusBadge("CONFIRMED")
@@ -451,35 +498,39 @@ class BookForPatientView(BaseApiView):
 
         prev_grid.addWidget(QLabel("Bác sĩ:"), 0, 0)
         self.lbl_prev_doctor = QLabel("—")
-        self.lbl_prev_doctor.setStyleSheet("font-weight: 600; color: #14532d;")
+        self.lbl_prev_doctor.setWordWrap(True)
+        self.lbl_prev_doctor.setObjectName("bookingPreviewStrongValue")
         prev_grid.addWidget(self.lbl_prev_doctor, 0, 1)
 
         prev_grid.addWidget(QLabel("Thời gian:"), 1, 0)
         self.lbl_prev_time = QLabel("—")
-        self.lbl_prev_time.setStyleSheet("font-weight: 600; color: #14532d;")
+        self.lbl_prev_time.setObjectName("bookingPreviewStrongValue")
         prev_grid.addWidget(self.lbl_prev_time, 1, 1)
 
         prev_grid.addWidget(QLabel("Bệnh nhân:"), 2, 0)
         self.lbl_prev_patient = QLabel("—")
-        self.lbl_prev_patient.setStyleSheet("font-weight: 600; color: #14532d;")
+        self.lbl_prev_patient.setWordWrap(True)
+        self.lbl_prev_patient.setObjectName("bookingPreviewStrongValue")
         prev_grid.addWidget(self.lbl_prev_patient, 2, 1)
 
         prev_grid.addWidget(QLabel("Lý do khám:"), 3, 0)
         self.lbl_prev_reason = QLabel("Khám thông thường")
-        self.lbl_prev_reason.setStyleSheet("color: #166534; font-size: 12px;")
+        self.lbl_prev_reason.setObjectName("bookingPreviewReason")
         self.lbl_prev_reason.setWordWrap(True)
         prev_grid.addWidget(self.lbl_prev_reason, 3, 1)
 
         prev_layout.addLayout(prev_grid)
         right_layout.addWidget(self.preview_card)
 
-        content_row.addWidget(right_col, 2)
-        main_vbox.addLayout(content_row)
+        self.content_grid.addWidget(self.right_col, 0, 1)
+        self._content_columns = 0
+        main_vbox.addLayout(self.content_grid)
+        self._reflow_content(force=True)
 
-        scroll.setWidget(container)
+        self.scroll_area.setWidget(container)
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        root.addWidget(scroll)
+        root.addWidget(self.scroll_area)
 
         # Load initial doctors and refresh UI
         self._load_doctors()
@@ -489,6 +540,29 @@ class BookForPatientView(BaseApiView):
         super().showEvent(event)
         if not self._doctors_cache:
             self._load_doctors()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._reflow_content()
+
+    def _reflow_content(self, *, force: bool = False) -> None:
+        # The shell consumes 78 px in compact mode at the supported 1100 px
+        # viewport.  Base the breakpoint on the page width so that that case
+        # never selects the two-column layout and creates page-level overflow.
+        columns = 2 if self.width() >= self.TWO_COLUMN_BREAKPOINT else 1
+        if not force and columns == self._content_columns:
+            return
+        self._content_columns = columns
+        if columns == 2:
+            self.content_grid.addWidget(self.left_col, 0, 0)
+            self.content_grid.addWidget(self.right_col, 0, 1)
+            self.content_grid.setColumnStretch(0, 3)
+            self.content_grid.setColumnStretch(1, 2)
+        else:
+            self.content_grid.addWidget(self.left_col, 0, 0)
+            self.content_grid.addWidget(self.right_col, 1, 0)
+            self.content_grid.setColumnStretch(0, 1)
+            self.content_grid.setColumnStretch(1, 0)
 
     def refresh(self) -> None:
         self._load_doctors()
@@ -577,6 +651,8 @@ class BookForPatientView(BaseApiView):
                 name_item = QTableWidgetItem(p.get("full_name", ""))
                 phone_item = QTableWidgetItem(p.get("phone", "") or "—")
                 dob_item = QTableWidgetItem(str(p.get("date_of_birth", "")) or "—")
+                for result_item in (name_item, phone_item, dob_item):
+                    result_item.setToolTip(result_item.text())
 
                 self.search_results_table.setItem(row, 0, name_item)
                 self.search_results_table.setItem(row, 1, phone_item)
@@ -585,6 +661,9 @@ class BookForPatientView(BaseApiView):
                 btn_select = QPushButton("Chọn")
                 btn_select.setObjectName("tableActionPrimary")
                 btn_select.setCursor(Qt.PointingHandCursor)
+                btn_select.setAccessibleName(
+                    f"Chọn bệnh nhân {p.get('full_name', '')}"
+                )
                 btn_select.clicked.connect(lambda _, pat=p: self._select_patient(pat))
                 self.search_results_table.setCellWidget(row, 3, btn_select)
                 self.search_results_table.setRowHeight(row, 40)
@@ -621,9 +700,7 @@ class BookForPatientView(BaseApiView):
         self.pt_type_badge.setText(
             f"Hồ sơ bệnh nhân cũ (#PT-{self._selected_patient_id})"
         )
-        self.pt_type_badge.setStyleSheet(
-            "background-color: #e0f2fe; color: #0369a1; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 10px;"
-        )
+        _set_style_state(self.pt_type_badge, "patientState", "existing")
         self.btn_unselect_pt.show()
 
         # Update right panel profile card
@@ -641,9 +718,7 @@ class BookForPatientView(BaseApiView):
         self.btn_unselect_pt.hide()
 
         self.pt_type_badge.setText("Bệnh nhân mới")
-        self.pt_type_badge.setStyleSheet(
-            "background-color: #f1f5f9; color: #475569; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 10px;"
-        )
+        _set_style_state(self.pt_type_badge, "patientState", "new")
 
         if not keep_search_text:
             self.pt_search_input.clear()
@@ -659,9 +734,7 @@ class BookForPatientView(BaseApiView):
             self.profile_empty_box.show()
             self.profile_info_box.hide()
             self.badge_profile_status.setText("Chưa chọn")
-            self.badge_profile_status.setStyleSheet(
-                "background-color: #f1f5f9; color: #64748b; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px;"
-            )
+            _set_style_state(self.badge_profile_status, "patientState", "empty")
             return
 
         self.profile_empty_box.hide()
@@ -669,11 +742,11 @@ class BookForPatientView(BaseApiView):
 
         pt_id = p.get("patient_id", 0)
         self.badge_profile_status.setText(f"#PT-{pt_id:04d} • Bệnh nhân cũ")
-        self.badge_profile_status.setStyleSheet(
-            "background-color: #e0f2fe; color: #0284c7; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px;"
-        )
+        _set_style_state(self.badge_profile_status, "patientState", "existing")
 
         self.val_p_name.setText(p.get("full_name", "—"))
+        self.val_p_name.setToolTip(self.val_p_name.text())
+        self.val_p_name.setAccessibleName(self.val_p_name.text())
         self.val_p_phone.setText(p.get("phone", "—") or "—")
 
         # Calculate age if DOB available
@@ -692,6 +765,8 @@ class BookForPatientView(BaseApiView):
         gender_map = {"MALE": "Nam", "FEMALE": "Nữ", "OTHER": "Khác"}
         self.val_p_gender.setText(gender_map.get(gender_code, gender_code or "—"))
         self.val_p_address.setText(p.get("address", "") or "Chưa cập nhật")
+        self.val_p_address.setToolTip(self.val_p_address.text())
+        self.val_p_address.setAccessibleName(self.val_p_address.text())
 
     def _on_patient_input_changed(self) -> None:
         name = self.name_input.text().strip()
@@ -712,9 +787,7 @@ class BookForPatientView(BaseApiView):
                 self.profile_empty_box.hide()
                 self.profile_info_box.show()
                 self.badge_profile_status.setText("Bệnh nhân mới (Dự thảo)")
-                self.badge_profile_status.setStyleSheet(
-                    "background-color: #fef3c7; color: #b45309; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px;"
-                )
+                _set_style_state(self.badge_profile_status, "patientState", "draft")
                 self.val_p_name.setText(draft["full_name"])
                 self.val_p_phone.setText(draft["phone"])
                 self.val_p_dob.setText(draft["date_of_birth"])
@@ -762,17 +835,21 @@ class BookForPatientView(BaseApiView):
             reason = appt.get("reason", "") or "—"
 
             item_date = QTableWidgetItem(appt_date)
+            item_date.setToolTip(appt_date)
             item_date.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.history_table.setItem(row, 0, item_date)
 
             item_doc = QTableWidgetItem(f"BS. {doc_name}")
+            item_doc.setToolTip(item_doc.text())
             self.history_table.setItem(row, 1, item_doc)
 
             item_status = QTableWidgetItem(status)
+            item_status.setToolTip(status)
             item_status.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.history_table.setItem(row, 2, item_status)
 
             item_reason = QTableWidgetItem(reason)
+            item_reason.setToolTip(reason)
             self.history_table.setItem(row, 3, item_reason)
             self.history_table.setRowHeight(row, 32)
 
@@ -788,6 +865,8 @@ class BookForPatientView(BaseApiView):
         # Doctor
         doc_text = self.doctor_combo.currentText() or "Chưa chọn bác sĩ"
         self.lbl_prev_doctor.setText(doc_text)
+        self.lbl_prev_doctor.setToolTip(doc_text)
+        self.lbl_prev_doctor.setAccessibleName(doc_text)
 
         # Date & Time
         appt_date_str = self.date_edit.date().toString("dd/MM/yyyy")
@@ -804,12 +883,16 @@ class BookForPatientView(BaseApiView):
             self.lbl_prev_patient.setText(f"{pt_name} (BN mới)")
         else:
             self.lbl_prev_patient.setText("Chưa nhập tên bệnh nhân")
+        self.lbl_prev_patient.setToolTip(self.lbl_prev_patient.text())
+        self.lbl_prev_patient.setAccessibleName(self.lbl_prev_patient.text())
 
         # Reason
         reason_text = self.reason_input.toPlainText().strip()
         self.lbl_prev_reason.setText(
             reason_text if reason_text else "Tiếp nhận tại quầy phòng khám"
         )
+        self.lbl_prev_reason.setToolTip(self.lbl_prev_reason.text())
+        self.lbl_prev_reason.setAccessibleName(self.lbl_prev_reason.text())
 
         # Status badge
         is_autoconfirm = self.chk_autoconfirm.isChecked()
@@ -837,7 +920,7 @@ class BookForPatientView(BaseApiView):
             self.feedback.show_message(
                 "Thiếu thông tin bắt buộc",
                 "Vui lòng nhập họ tên và số điện thoại người bệnh trước khi đặt lịch.",
-                severity="danger",
+                severity="error",
             )
             return
 
@@ -846,7 +929,7 @@ class BookForPatientView(BaseApiView):
             self.feedback.show_message(
                 "Chưa chọn bác sĩ",
                 "Vui lòng chọn bác sĩ phụ trách khám.",
-                severity="danger",
+                severity="error",
             )
             return
 
@@ -886,6 +969,7 @@ class BookForPatientView(BaseApiView):
                 "/api/v1/reception/appointments/book", json=payload
             ),
             self._on_booking_success,
+            controls=(self.btn_submit,),
             loading_text="Đang lưu lịch hẹn khám...",
         )
 

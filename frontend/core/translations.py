@@ -540,6 +540,42 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "vi": "Xác nhận đổi lịch",
         "en": "Confirm Reschedule",
     },
+    "reschedule_current_appointment": {
+        "vi": "Lịch hẹn hiện tại",
+        "en": "Current appointment",
+    },
+    "reschedule_loading_doctors": {
+        "vi": "Đang tải danh sách bác sĩ…",
+        "en": "Loading doctors…",
+    },
+    "reschedule_loading_slots": {
+        "vi": "Đang tải danh sách khung giờ trống…",
+        "en": "Loading available time slots…",
+    },
+    "reschedule_no_workday": {
+        "vi": "Bác sĩ không có lịch làm việc trong ngày này.",
+        "en": "The doctor is not scheduled to work on this day.",
+    },
+    "reschedule_only_current_slot": {
+        "vi": "Ngày này chỉ còn khung giờ bạn đang đặt. Vui lòng chọn ngày khác hoặc bác sĩ khác.",
+        "en": "Only your current time slot remains. Choose another date or doctor.",
+    },
+    "reschedule_slots_full": {
+        "vi": "Tất cả khung giờ trong ngày này đã kín lịch.",
+        "en": "All time slots on this day are fully booked.",
+    },
+    "reschedule_slots_available": {
+        "vi": "Có {count} khung giờ mới còn trống.",
+        "en": "{count} new time slots are available.",
+    },
+    "reschedule_load_doctors_error": {
+        "vi": "Không thể tải danh sách bác sĩ. Đang sử dụng bác sĩ hiện tại.",
+        "en": "Could not load the doctor list. The current doctor will be used.",
+    },
+    "reschedule_load_slots_error": {
+        "vi": "Không thể tải khung giờ. Vui lòng thử lại.",
+        "en": "Could not load time slots. Please try again.",
+    },
     # --------------------------------------------------------------------------
     # Days of the Week
     # --------------------------------------------------------------------------
@@ -567,6 +603,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     # Common Actions & Dialogs
     # --------------------------------------------------------------------------
     "btn_refresh": {"vi": "Làm mới", "en": "Refresh"},
+    "btn_retry": {"vi": "Thử lại", "en": "Retry"},
     "btn_view_details": {"vi": "Xem chi tiết", "en": "View Details"},
     "btn_edit": {"vi": "Chỉnh sửa", "en": "Edit"},
     "btn_save": {"vi": "Lưu thay đổi", "en": "Save Changes"},
@@ -574,7 +611,147 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "btn_back": {"vi": "Quay lại", "en": "Back"},
     "btn_filter": {"vi": "Lọc", "en": "Filter"},
     "loading": {"vi": "Đang tải...", "en": "Loading..."},
+    "state_empty_title": {"vi": "Không có dữ liệu", "en": "No data"},
+    "state_error_title": {"vi": "Không thể tải dữ liệu", "en": "Unable to load data"},
+    "state_error_description": {
+        "vi": "Vui lòng kiểm tra kết nối và thử lại.",
+        "en": "Check your connection and try again.",
+    },
     "processing": {"vi": "Đang xử lý...", "en": "Processing..."},
+    "pagination_empty": {"vi": "Không có dữ liệu", "en": "No data"},
+    "pagination_summary": {
+        "vi": "Hiển thị {first}–{last} / {total}  ·  Trang {page}/{total_pages}",
+        "en": "Showing {first}–{last} of {total}  ·  Page {page}/{total_pages}",
+    },
+    "pagination_rows": {"vi": "Số dòng", "en": "Rows"},
+    "pagination_previous": {"vi": "Trước", "en": "Previous"},
+    "pagination_next": {"vi": "Tiếp", "en": "Next"},
+    "pagination_a11y_summary": {
+        "vi": "Tóm tắt phân trang",
+        "en": "Pagination summary",
+    },
+    "pagination_a11y_rows": {
+        "vi": "Số dòng mỗi trang",
+        "en": "Rows per page",
+    },
+    "pagination_a11y_previous": {
+        "vi": "Trang trước",
+        "en": "Previous page",
+    },
+    "pagination_a11y_next": {"vi": "Trang tiếp", "en": "Next page"},
+    "error_response_title": {
+        "vi": "Phản hồi không hợp lệ",
+        "en": "Unexpected response",
+    },
+    "error_response_message": {
+        "vi": "Phản hồi từ máy chủ thiếu thông tin cần thiết.",
+        "en": "The server response did not contain the expected information.",
+    },
+    "error_request_title": {"vi": "Yêu cầu thất bại", "en": "Request failed"},
+    "error_unexpected_title": {"vi": "Đã xảy ra lỗi", "en": "Unexpected error"},
+    "field_error_accessible": {"vi": "Lỗi {label}", "en": "{label} error"},
+    "error_unexpected_message": {
+        "vi": "Đã xảy ra lỗi không mong muốn trong khi xử lý yêu cầu.",
+        "en": "An unexpected error occurred while processing the request.",
+    },
+    "api_timeout": {
+        "vi": "Máy chủ phản hồi quá chậm. Vui lòng thử lại.",
+        "en": "The server took too long to respond. Please try again.",
+    },
+    "api_connection": {
+        "vi": "Không thể kết nối đến máy chủ phòng khám. Vui lòng kiểm tra kết nối.",
+        "en": "Cannot connect to the clinic server. Check that the backend is running.",
+    },
+    "api_invalid_response": {
+        "vi": "Máy chủ trả về phản hồi không hợp lệ.",
+        "en": "The server returned an invalid response.",
+    },
+    "api_http_400": {
+        "vi": "Không thể hoàn tất yêu cầu.",
+        "en": "The request could not be completed.",
+    },
+    "api_http_401": {
+        "vi": "Phiên đăng nhập không hợp lệ hoặc đã hết hạn.",
+        "en": "Your session is invalid or has expired.",
+    },
+    "api_http_403": {
+        "vi": "Bạn không có quyền thực hiện thao tác này.",
+        "en": "You do not have permission to perform this action.",
+    },
+    "api_http_404": {
+        "vi": "Không tìm thấy thông tin được yêu cầu.",
+        "en": "The requested information was not found.",
+    },
+    "api_http_409": {
+        "vi": "Thông tin này đã tồn tại.",
+        "en": "This information already exists.",
+    },
+    "api_http_422": {
+        "vi": "Vui lòng kiểm tra lại thông tin đã nhập.",
+        "en": "Please check the information you entered.",
+    },
+    "api_http_500": {
+        "vi": "Máy chủ gặp lỗi không mong muốn.",
+        "en": "The server encountered an unexpected error.",
+    },
+    "api_http_fallback": {
+        "vi": "Yêu cầu thất bại (HTTP {status_code}).",
+        "en": "Request failed (HTTP {status_code}).",
+    },
+    "api_field": {"vi": "Trường dữ liệu", "en": "Field"},
+    "a11y_open_selected_row": {
+        "vi": "Chọn một dòng và nhấn Enter để mở chi tiết.",
+        "en": "Select a row and press Enter to open its details.",
+    },
+    "a11y_page_title": {"vi": "Tiêu đề trang", "en": "Page title"},
+    "a11y_patient_navigation": {
+        "vi": "Điều hướng cổng bệnh nhân",
+        "en": "Patient portal navigation",
+    },
+    "a11y_signed_in_as": {
+        "vi": "Đăng nhập với {name}, {role}",
+        "en": "Signed in as {name}, {role}",
+    },
+    "a11y_appointment_information": {
+        "vi": "Thông tin lịch hẹn",
+        "en": "Appointment information",
+    },
+    "a11y_prescription_items": {
+        "vi": "Danh sách thuốc trong đơn",
+        "en": "Prescription items",
+    },
+    "a11y_read_only_table": {
+        "vi": "Bảng chỉ đọc. Dùng các phím mũi tên để di chuyển giữa hàng và cột.",
+        "en": "Read-only table. Use the arrow keys to move between rows and columns.",
+    },
+    "a11y_search_appointments": {
+        "vi": "Tìm kiếm lịch hẹn",
+        "en": "Search appointment history",
+    },
+    "a11y_appointment_results": {
+        "vi": "Kết quả lịch hẹn",
+        "en": "Appointment history results",
+    },
+    "a11y_search_medical_history": {
+        "vi": "Tìm kiếm lịch sử bệnh án",
+        "en": "Search medical history",
+    },
+    "a11y_medical_history_results": {
+        "vi": "Kết quả lịch sử bệnh án",
+        "en": "Medical history results",
+    },
+    "a11y_filter_invoices": {
+        "vi": "Lọc hóa đơn theo trạng thái thanh toán",
+        "en": "Filter invoices by payment status",
+    },
+    "a11y_invoice_results": {
+        "vi": "Kết quả lịch sử hóa đơn",
+        "en": "Invoice history results",
+    },
+    "err_patient_only": {
+        "vi": "Cổng thông tin này chỉ dành cho tài khoản bệnh nhân.",
+        "en": "This portal is available to patient accounts only.",
+    },
 
     # --------------------------------------------------------------------------
     # Dashboard
@@ -725,6 +902,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "sec_contact_info": {"vi": "Thông tin liên hệ", "en": "Contact details"},
     "account_notice": {"vi": "Tài khoản bệnh nhân", "en": "Your patient account"},
     "not_set": {"vi": "Chưa thiết lập", "en": "Not set"},
+    "patient_default_name": {"vi": "Bệnh nhân", "en": "Patient"},
+    "profile_updated_title": {"vi": "Đã cập nhật hồ sơ", "en": "Profile updated"},
+    "profile_updated_message": {
+        "vi": "Các thay đổi của bạn đã được lưu thành công.",
+        "en": "Your changes have been saved successfully.",
+    },
 
     # --------------------------------------------------------------------------
     # Date Picker & Calendar

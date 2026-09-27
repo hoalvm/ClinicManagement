@@ -11,7 +11,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
-    QStackedWidget,
     QTableView,
     QVBoxLayout,
     QWidget,
@@ -27,9 +26,9 @@ from frontend.views.common import (
     require_page,
     table_item,
 )
-from frontend.widgets.empty_state import EmptyState
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.pagination import PaginationWidget
+from frontend.widgets.state_host import StateHost
 from frontend.widgets.status_badge import StatusBadgeDelegate
 
 
@@ -63,23 +62,23 @@ class AppointmentHistoryView(BaseApiView):
         self.search = QLineEdit()
         self.search.setPlaceholderText(t("appointment_search_placeholder"))
         self.search.setClearButtonEnabled(True)
-        self.search.setAccessibleName("Search appointment history")
+        self.search.setAccessibleName(t("a11y_search_appointments"))
         filters.addWidget(self.search, 0, 0, 1, 5)
 
         self.status_label = QLabel(t("field_status", default="Trạng thái"))
         self.status_label.setObjectName("fieldLabel")
         self.status = QComboBox()
         self.status.setMinimumWidth(170)
-        self.status.setAccessibleName("Filter appointments by status")
+        self.status.setAccessibleName(t("field_status"))
         self._populate_status_combo()
         self.status_label.setBuddy(self.status)
 
         self.refresh_button = QPushButton(t("btn_refresh"))
         self.refresh_button.setObjectName("secondaryButton")
-        self.refresh_button.setAccessibleName("Refresh appointment history")
+        self.refresh_button.setAccessibleName(t("btn_refresh"))
         self.details_button = QPushButton(t("btn_view_details"))
         self.details_button.setObjectName("primaryButton")
-        self.details_button.setAccessibleName("View selected appointment details")
+        self.details_button.setAccessibleName(t("btn_view_details"))
         self.details_button.setEnabled(False)
 
         filters.addWidget(self.status_label, 1, 0)
@@ -92,10 +91,8 @@ class AppointmentHistoryView(BaseApiView):
         root.addWidget(self.loading)
 
         self.table = QTableView()
-        self.table.setAccessibleName("Appointment history results")
-        self.table.setAccessibleDescription(
-            "Select an appointment and press Enter to open its details."
-        )
+        self.table.setAccessibleName(t("a11y_appointment_results"))
+        self.table.setAccessibleDescription(t("a11y_open_selected_row"))
         self.model: QStandardItemModel = configure_table(
             self.table,
             [
@@ -105,28 +102,25 @@ class AppointmentHistoryView(BaseApiView):
                 t("field_specialty"),
                 t("field_clinic"),
                 t("field_reason"),
-                t("field_payment_status"),
+                t("field_status", default="Trạng thái"),
             ],
             stretch_column=5,
-            column_widths={0: 112, 1: 120, 2: 170, 3: 150, 4: 190, 6: 132},
+            column_widths={0: 92, 1: 82, 2: 132, 3: 116, 4: 132, 6: 118},
+            wrap_columns={5},
         )
         self.table.setItemDelegateForColumn(6, StatusBadgeDelegate(self.table))
 
-        self.empty_state = EmptyState(
-            t("no_appointments_found"),
-            t("no_appointments_desc"),
-            action_text=t("btn_refresh"),
-        )
-        self.empty_state.setAccessibleName("No appointment results")
-
-        self.content_stack = QStackedWidget()
-        self.content_stack.addWidget(self.table)
-        self.content_stack.addWidget(self.empty_state)
-        self.content_stack.setCurrentWidget(self.table)
-        root.addWidget(self.content_stack, 1)
+        self.state_host = StateHost(self.table)
+        self.bind_state_host(self.state_host)
+        self.empty_state = self.state_host.empty
+        self.empty_state.set_title(t("no_appointments_found"))
+        self.empty_state.set_description(t("no_appointments_desc"))
+        self.empty_state.set_action(t("btn_refresh"))
+        self.empty_state.setAccessibleName(t("no_appointments_found"))
+        root.addWidget(self.state_host, 1)
 
         self.pagination = PaginationWidget()
-        self.pagination.setAccessibleName("Appointment history pagination")
+        self.pagination.setAccessibleName(t("appointment_history_title"))
         root.addWidget(self.pagination)
 
         self.search.returnPressed.connect(self._search)
@@ -137,7 +131,8 @@ class AppointmentHistoryView(BaseApiView):
         self.table.selectionModel().selectionChanged.connect(
             lambda *_args: self._sync_details_button()
         )
-        self.empty_state.action_requested.connect(self._retry)
+        self.state_host.empty_action_requested.connect(self._retry)
+        self.state_host.retry_requested.connect(self._retry)
         self.pagination.page_changed.connect(self._change_page)
         self.pagination.page_size_changed.connect(self._page_size_changed)
 
@@ -176,6 +171,14 @@ class AppointmentHistoryView(BaseApiView):
         self._populate_status_combo()
         self.refresh_button.setText(t("btn_refresh", default="Làm mới"))
         self.details_button.setText(t("btn_view_details", default="Chi tiết"))
+        self.search.setAccessibleName(t("a11y_search_appointments"))
+        self.status.setAccessibleName(t("field_status"))
+        self.refresh_button.setAccessibleName(t("btn_refresh"))
+        self.details_button.setAccessibleName(t("btn_view_details"))
+        self.table.setAccessibleName(t("a11y_appointment_results"))
+        self.table.setAccessibleDescription(t("a11y_open_selected_row"))
+        self.empty_state.setAccessibleName(t("no_appointments_found"))
+        self.pagination.setAccessibleName(t("appointment_history_title"))
         self.empty_state.set_title(t("no_appointments_found"))
         self.empty_state.set_description(t("no_appointments_desc"))
         self.empty_state.set_action(t("btn_refresh", default="Làm mới"))
@@ -207,7 +210,6 @@ class AppointmentHistoryView(BaseApiView):
         if status_val != "All":
             params["status"] = status_val
 
-        self.content_stack.setCurrentWidget(self.table)
         self.details_button.setEnabled(False)
         self.run_api_task(
             "appointments",
@@ -262,7 +264,14 @@ class AppointmentHistoryView(BaseApiView):
         self.header.set_subtitle(t("appointments_count", count=total))
         self.table.clearSelection()
         self.details_button.setEnabled(False)
-        self.content_stack.setCurrentWidget(self.table if items else self.empty_state)
+        if items:
+            self.state_host.show_content()
+        else:
+            self.state_host.show_empty(
+                t("no_appointments_found"),
+                t("no_appointments_desc"),
+                action_text=t("btn_refresh"),
+            )
 
     def _selected_id(self) -> int | None:
         indexes = self.table.selectionModel().selectedRows(0)
@@ -318,5 +327,5 @@ class AppointmentHistoryView(BaseApiView):
         self.table.clearSelection()
         self.pagination.reset()
         self.header.set_subtitle(t("appointment_history_subtitle"))
-        self.content_stack.setCurrentWidget(self.table)
+        self.state_host.show_content()
         self.details_button.setEnabled(False)

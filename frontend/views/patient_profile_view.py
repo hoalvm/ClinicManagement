@@ -55,11 +55,11 @@ class PatientProfileView(BaseApiView):
         root.addWidget(self.feedback)
         root.addWidget(self.loading)
 
-        scroll = QScrollArea()
-        scroll.setObjectName("pageScroll")
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setAccessibleName("Patient profile")
+        self.scroll = QScrollArea()
+        self.scroll.setObjectName("pageScroll")
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll.setAccessibleName(t("profile_title"))
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 2, 8, 4)
@@ -79,13 +79,13 @@ class PatientProfileView(BaseApiView):
         self.avatar_text = QLabel("P")
         self.avatar_text.setObjectName("profileAvatarText")
         self.avatar_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.avatar_text.setAccessibleName("Patient initials")
+        self.avatar_text.setAccessibleName(t("profile_title"))
         avatar_layout.addWidget(self.avatar_text)
         hero_layout.addWidget(avatar)
 
         identity = QVBoxLayout()
         identity.setSpacing(3)
-        self.hero_name = QLabel("Patient")
+        self.hero_name = QLabel(t("patient_default_name"))
         self.hero_name.setObjectName("sectionTitle")
         self.hero_name.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.hero_username = QLabel(t("account_notice"))
@@ -97,6 +97,7 @@ class PatientProfileView(BaseApiView):
 
         self.edit_button = QPushButton(t("btn_edit"))
         self.edit_button.setObjectName("secondaryButton")
+        self.edit_button.setAccessibleName(t("btn_edit"))
         hero_layout.addWidget(self.edit_button, 0, Qt.AlignmentFlag.AlignVCenter)
         content_layout.addWidget(hero)
 
@@ -108,29 +109,29 @@ class PatientProfileView(BaseApiView):
 
         self.username = QLineEdit()
         self.username.setReadOnly(True)
-        self.username.setAccessibleName("Username")
+        self.username.setAccessibleName(t("username"))
         self.full_name = QLineEdit()
         self.full_name.setMaxLength(100)
-        self.full_name.setAccessibleName("Full name")
+        self.full_name.setAccessibleName(t("full_name"))
         self.phone = QLineEdit()
         self.phone.setMaxLength(15)
-        self.phone.setAccessibleName("Phone number")
+        self.phone.setAccessibleName(t("phone"))
         self.email = QLineEdit()
         self.email.setMaxLength(100)
-        self.email.setAccessibleName("Email address")
+        self.email.setAccessibleName(t("email"))
         self.date_of_birth = QDateEdit()
         self.date_of_birth.setCalendarPopup(True)
         self.date_of_birth.setDisplayFormat("dd/MM/yyyy")
         self.date_of_birth.setMinimumDate(NULL_DATE)
         self.date_of_birth.setSpecialValueText(t("not_set"))
         self.date_of_birth.setMaximumDate(QDate.currentDate())
-        self.date_of_birth.setAccessibleName("Date of birth")
+        self.date_of_birth.setAccessibleName(t("date_of_birth"))
         self.gender = QComboBox()
         self._populate_gender_combo()
-        self.gender.setAccessibleName("Gender")
+        self.gender.setAccessibleName(t("gender"))
         self.address = QTextEdit()
         self.address.setMaximumHeight(96)
-        self.address.setAccessibleName("Address")
+        self.address.setAccessibleName(t("address"))
         self.address.setTabChangesFocus(True)
 
         self._form_labels: dict[str, QLabel] = {}
@@ -158,16 +159,17 @@ class PatientProfileView(BaseApiView):
         actions.addStretch()
         self.cancel_button = QPushButton(t("btn_cancel_action"))
         self.cancel_button.setObjectName("secondaryButton")
-        self.cancel_button.setAccessibleName("Cancel profile changes")
+        self.cancel_button.setAccessibleName(t("btn_cancel_action"))
         self.save_button = QPushButton(t("btn_save"))
         self.save_button.setObjectName("primaryButton")
+        self.save_button.setAccessibleName(t("btn_save"))
         actions.addWidget(self.cancel_button)
         actions.addWidget(self.save_button)
         card_layout.addLayout(actions)
         content_layout.addWidget(card)
         content_layout.addStretch()
-        scroll.setWidget(content)
-        root.addWidget(scroll, 1)
+        self.scroll.setWidget(content)
+        root.addWidget(self.scroll, 1)
 
         self._editable = (
             self.full_name,
@@ -206,6 +208,18 @@ class PatientProfileView(BaseApiView):
         self.personal_title.setText(t("sec_personal_info"))
         self.contact_title.setText(t("sec_contact_info"))
         self.date_of_birth.setSpecialValueText(t("not_set"))
+        self.scroll.setAccessibleName(t("profile_title"))
+        self.avatar_text.setAccessibleName(t("profile_title"))
+        self.username.setAccessibleName(t("username"))
+        self.full_name.setAccessibleName(t("full_name"))
+        self.phone.setAccessibleName(t("phone"))
+        self.email.setAccessibleName(t("email"))
+        self.date_of_birth.setAccessibleName(t("date_of_birth"))
+        self.gender.setAccessibleName(t("gender"))
+        self.address.setAccessibleName(t("address"))
+        self.cancel_button.setAccessibleName(t("btn_cancel_action"))
+        self.save_button.setAccessibleName(t("btn_save"))
+        self.edit_button.setAccessibleName(t("btn_edit"))
         self._populate_gender_combo()
         for key, lbl in self._form_labels.items():
             lbl.setText(t(key))
@@ -268,7 +282,7 @@ class PatientProfileView(BaseApiView):
         self._set_editing(False)
 
     def _update_identity(self, full_name: str, username: str) -> None:
-        display_name = full_name or username or "Patient"
+        display_name = full_name or username or t("patient_default_name")
         initials = "".join(part[0] for part in display_name.split() if part)[:2].upper() or "P"
         self.avatar_text.setText(initials)
         self.hero_name.setText(display_name)
@@ -310,7 +324,7 @@ class PatientProfileView(BaseApiView):
 
     def _validation_error(self, widget: QWidget, message: str) -> None:
         self._refresh_property(widget, "error", True)
-        self.feedback.show_message("Check your details", message, severity="error")
+        self.feedback.show_message(t("check_details"), message, severity="error")
         widget.setFocus(Qt.FocusReason.ShortcutFocusReason)
 
     def _save(self) -> None:
@@ -319,19 +333,19 @@ class PatientProfileView(BaseApiView):
         email = self.email.text().strip()
         phone = self.phone.text().strip()
         if not full_name:
-            self._validation_error(self.full_name, "Full name is required.")
+            self._validation_error(self.full_name, t("err_fullname_required"))
             return
         if email and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
-            self._validation_error(self.email, "Enter a valid email address.")
+            self._validation_error(self.email, t("err_email_invalid"))
             return
         if phone and not re.fullmatch(r"\+?\d{7,14}", phone):
             self._validation_error(
                 self.phone,
-                "Phone must contain 7 to 14 digits, optionally prefixed by +.",
+                t("err_phone_invalid"),
             )
             return
         if len(self.address.toPlainText().strip()) > 255:
-            self._validation_error(self.address, "Address must be 255 characters or fewer.")
+            self._validation_error(self.address, t("err_address_len"))
             return
 
         selected_date = self.date_of_birth.date()
@@ -357,8 +371,8 @@ class PatientProfileView(BaseApiView):
             completed = True
             self._render(result)
             self.feedback.show_message(
-                "Profile updated",
-                "Your changes have been saved successfully.",
+                t("profile_updated_title"),
+                t("profile_updated_message"),
                 severity="success",
             )
 

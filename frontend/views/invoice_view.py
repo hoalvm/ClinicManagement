@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from PySide6.QtCore import Qt, Signal
@@ -11,7 +12,6 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QFrame,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -23,11 +23,12 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient
-from frontend.views.common import BaseApiView
-from frontend.widgets.empty_state import EmptyState
+from frontend.ui.design_system import ColumnPriority, ColumnSpec
+from frontend.views.common import BaseApiView, format_money
+from frontend.widgets.adaptive_data_table import AdaptiveDataTable
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.pagination import Pagination
-from frontend.widgets.status_badge import StatusBadgeDelegate
+from frontend.widgets.state_host import StateHost
 
 
 class InvoiceManagementView(BaseApiView):
@@ -69,6 +70,7 @@ class InvoiceManagementView(BaseApiView):
 
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Tìm theo tên bệnh nhân, SĐT hoặc mã HĐ...")
+        self.search_input.setAccessibleName("Tìm kiếm hóa đơn")
         self.search_input.returnPressed.connect(self._apply_filter)
         filter_layout.addWidget(self.search_input, 2)
 
@@ -86,37 +88,94 @@ class InvoiceManagementView(BaseApiView):
 
         layout.addWidget(filter_card)
 
-        # Invoices Table
-        self.table = QTableWidget()
-        self.table.setColumnCount(8)
-        self.table.setHorizontalHeaderLabels([
-            "Mã HĐ", "Mã hẹn", "Bệnh nhân", "Số điện thoại", "Bác sĩ", "Tổng tiền", "Trạng thái", "Thao tác"
-        ])
-        hdr = self.table.horizontalHeader()
-        hdr.setStretchLastSection(False)
-        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
-        hdr.setSectionResizeMode(7, QHeaderView.ResizeMode.Fixed)
-        self.table.setColumnWidth(6, 110)
-        self.table.setColumnWidth(7, 140)
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.table.setAlternatingRowColors(True)
-        self.table.setItemDelegateForColumn(6, StatusBadgeDelegate(self.table))
-        layout.addWidget(self.table)
-
-        self.empty_state = EmptyState(
-            "Không tìm thấy hóa đơn",
-            "Hóa đơn viện phí được lập sẽ hiển thị tại danh sách này.",
-            parent=self,
+        self.table = AdaptiveDataTable(
+            [
+                ColumnSpec(
+                    "Mã HĐ",
+                    "invoice_id",
+                    minimum_width=76,
+                    preferred_width=84,
+                    priority=ColumnPriority.HIGH,
+                    formatter=lambda value: f"INV-{int(value or 0):04d}",
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+                ColumnSpec(
+                    "Mã hẹn",
+                    "appointment_id",
+                    minimum_width=68,
+                    preferred_width=76,
+                    priority=ColumnPriority.NORMAL,
+                    formatter=lambda value: f"#{int(value or 0)}",
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+                ColumnSpec(
+                    "Bệnh nhân",
+                    "patient_name",
+                    minimum_width=120,
+                    priority=ColumnPriority.CRITICAL,
+                    stretch=True,
+                ),
+                ColumnSpec(
+                    "Số điện thoại",
+                    "patient_phone",
+                    minimum_width=96,
+                    preferred_width=106,
+                    priority=ColumnPriority.HIGH,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+                ColumnSpec(
+                    "Bác sĩ",
+                    "doctor_name",
+                    minimum_width=100,
+                    preferred_width=120,
+                    priority=ColumnPriority.NORMAL,
+                ),
+                ColumnSpec(
+                    "Tổng tiền",
+                    "total_amount",
+                    minimum_width=100,
+                    preferred_width=112,
+                    priority=ColumnPriority.CRITICAL,
+                    formatter=format_money,
+                    alignment=Qt.AlignmentFlag.AlignRight
+                    | Qt.AlignmentFlag.AlignVCenter,
+                ),
+                ColumnSpec(
+                    "Trạng thái",
+                    "status",
+                    minimum_width=100,
+                    preferred_width=110,
+                    priority=ColumnPriority.CRITICAL,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                    status=True,
+                ),
+                ColumnSpec(
+                    "Thao tác",
+                    "_actions",
+                    minimum_width=112,
+                    preferred_width=124,
+                    priority=ColumnPriority.CRITICAL,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+            ],
+            accessible_name="Danh sách hóa đơn",
         )
-        layout.addWidget(self.empty_state)
-        self.empty_state.hide()
+        self.table.setAccessibleDescription(
+            "Bảng hóa đơn chỉ đọc; trạng thái và thao tác thu phí luôn hiển thị."
+        )
+        self.table.setMinimumHeight(260)
+
+        self.state_host = StateHost(self.table)
+        self.bind_state_host(self.state_host)
+        self.empty_state = self.state_host.empty
+        self.empty_state.set_title("Không tìm thấy hóa đơn")
+        self.empty_state.set_description(
+            "Hóa đơn viện phí được lập sẽ hiển thị tại danh sách này."
+        )
+        self.empty_state.set_action("Làm mới")
+        self.state_host.empty_action_requested.connect(self._retry)
+        self.state_host.retry_requested.connect(self._retry)
+        layout.addWidget(self.state_host, 1)
 
         self.pagination = Pagination(parent=self)
         self.pagination.page_requested.connect(self._go_to_page)
@@ -156,6 +215,12 @@ class InvoiceManagementView(BaseApiView):
             "load_invoices",
             lambda: self.api_client.get("/api/v1/reception/invoices", params=params),
             self._on_invoices_loaded,
+            controls=(
+                self.search_input,
+                self.status_combo,
+                self.btn_filter,
+                self.pagination,
+            ),
             loading_text="Đang tải hóa đơn...",
         )
 
@@ -165,49 +230,37 @@ class InvoiceManagementView(BaseApiView):
         total_pages = data.get("total_pages", 1)
         self.pagination.update_state(self._current_page, total_pages, total)
 
+        rows = [
+            {
+                "invoice_id": inv.get("invoice_id", 0),
+                "appointment_id": inv.get("appointment_id", 0),
+                "patient_name": inv.get("patient_name", ""),
+                "patient_phone": inv.get("patient_phone", "") or "—",
+                "doctor_name": inv.get("doctor_name", ""),
+                "total_amount": inv.get("total_amount", 0),
+                "status": inv.get("status", "UNPAID"),
+                "_actions": "",
+            }
+            for inv in items
+        ]
+        self.table.set_rows(rows)
+
         if not items:
-            self.table.hide()
-            self.empty_state.show()
+            self.state_host.show_empty(
+                "Không tìm thấy hóa đơn",
+                "Hóa đơn viện phí được lập sẽ hiển thị tại danh sách này.",
+                action_text="Làm mới",
+            )
             return
 
-        self.empty_state.hide()
-        self.table.show()
-        self.table.setRowCount(len(items))
+        self.state_host.show_content()
 
         for row, inv in enumerate(items):
             inv_id = inv.get("invoice_id", 0)
-            appt_id = inv.get("appointment_id", 0)
-            patient_name = inv.get("patient_name", "")
-            patient_phone = inv.get("patient_phone", "") or "—"
-            doctor_name = inv.get("doctor_name", "")
-            amount_val = inv.get("total_amount", 0)
             status = inv.get("status", "UNPAID")
 
-            item_inv = QTableWidgetItem(f"INV-{inv_id:04d}")
-            item_inv.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 0, item_inv)
-
-            item_appt = QTableWidgetItem(f"#{appt_id}")
-            item_appt.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 1, item_appt)
-
-            self.table.setItem(row, 2, QTableWidgetItem(patient_name))
-
-            item_phone = QTableWidgetItem(patient_phone)
-            item_phone.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 3, item_phone)
-
-            self.table.setItem(row, 4, QTableWidgetItem(doctor_name))
-
-            item_amount = QTableWidgetItem(f"{float(amount_val):,.0f} ₫")
-            item_amount.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            self.table.setItem(row, 5, item_amount)
-
-            item_status = QTableWidgetItem(status)
-            item_status.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 6, item_status)
-
             action_widget = QWidget()
+            action_widget.setObjectName("tableCellWidget")
             act_layout = QHBoxLayout(action_widget)
             act_layout.setContentsMargins(4, 0, 4, 0)
             act_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -216,17 +269,57 @@ class InvoiceManagementView(BaseApiView):
                 btn_pay = QPushButton("Thu phí")
                 btn_pay.setObjectName("tableActionPrimary")
                 btn_pay.setCursor(Qt.PointingHandCursor)
+                btn_pay.setAccessibleName(f"Thu phí hóa đơn INV-{inv_id:04d}")
                 btn_pay.clicked.connect(lambda _, i_id=inv_id: self.pay_invoice_requested.emit(i_id))
                 act_layout.addWidget(btn_pay)
             else:
                 method = "Tiền mặt" if inv.get("payment_method") == "CASH" else "Thẻ"
                 paid_label = QLabel(f"Đã thu ({method})")
                 paid_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                paid_label.setStyleSheet("color: #166534; font-size: 11px; font-weight: 600;")
+                paid_label.setObjectName("paidLabel")
                 act_layout.addWidget(paid_label)
 
-            self.table.setCellWidget(row, 7, action_widget)
-            self.table.setRowHeight(row, 50)
+            self.table.setIndexWidget(self.table.model().index(row, 7), action_widget)
+            self.table.verticalHeader().resizeSection(row, 50)
+
+    def _retry(self) -> None:
+        self.load_invoices()
+
+    @staticmethod
+    def _collect_invoice_items(item_table: QTableWidget) -> list[dict[str, object]]:
+        """Validate editable invoice rows before creating a request payload."""
+
+        items: list[dict[str, object]] = []
+        for row in range(item_table.rowCount()):
+            cells = [item_table.item(row, column) for column in range(3)]
+            values = [cell.text().strip() if cell is not None else "" for cell in cells]
+            name, quantity_text, price_text = values
+            if not any(values):
+                continue
+            if not all(values):
+                raise ValueError(f"Dòng {row + 1} chưa nhập đủ tên, số lượng và đơn giá.")
+            try:
+                quantity = int(quantity_text)
+            except ValueError as exc:
+                raise ValueError(f"Số lượng ở dòng {row + 1} phải là số nguyên.") from exc
+            try:
+                unit_price = Decimal(price_text)
+            except InvalidOperation as exc:
+                raise ValueError(f"Đơn giá ở dòng {row + 1} không hợp lệ.") from exc
+            if quantity <= 0:
+                raise ValueError(f"Số lượng ở dòng {row + 1} phải lớn hơn 0.")
+            if not unit_price.is_finite() or unit_price < 0:
+                raise ValueError(f"Đơn giá ở dòng {row + 1} phải là số không âm.")
+            items.append(
+                {
+                    "item_name": name,
+                    "quantity": quantity,
+                    "unit_price": float(unit_price),
+                }
+            )
+        if not items:
+            raise ValueError("Vui lòng thêm ít nhất một khoản mục dịch vụ.")
+        return items
 
     def _create_invoice_dialog(self) -> None:
         dialog = QDialog(self)
@@ -279,23 +372,13 @@ class InvoiceManagementView(BaseApiView):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             appt_id_text = appt_input.text().strip()
             if not appt_id_text.isdigit():
-                self.feedback.show_message("Sai thông tin", "Vui lòng nhập mã lịch hẹn hợp lệ dạng số.", severity="danger")
+                self.feedback.show_message("Sai thông tin", "Vui lòng nhập mã lịch hẹn hợp lệ dạng số.", severity="error")
                 return
 
-            items_payload = []
-            for r in range(item_table.rowCount()):
-                name_cell = item_table.item(r, 0)
-                qty_cell = item_table.item(r, 1)
-                price_cell = item_table.item(r, 2)
-                if name_cell and qty_cell and price_cell:
-                    items_payload.append({
-                        "item_name": name_cell.text().strip(),
-                        "quantity": int(qty_cell.text().strip() or "1"),
-                        "unit_price": float(price_cell.text().strip() or "0"),
-                    })
-
-            if not items_payload:
-                self.feedback.show_message("Thiếu dịch vụ", "Vui lòng thêm ít nhất một khoản mục dịch vụ.", severity="danger")
+            try:
+                items_payload = self._collect_invoice_items(item_table)
+            except ValueError as exc:
+                self.feedback.show_message("Sai thông tin", str(exc), severity="error")
                 return
 
             payload = {
@@ -307,6 +390,7 @@ class InvoiceManagementView(BaseApiView):
                 "create_invoice",
                 lambda: self.api_client.post("/api/v1/reception/invoices", json=payload),
                 lambda res: self._on_invoice_created(res),
+                controls=(self.header.action_button,),
                 loading_text="Đang lập hóa đơn...",
             )
 
@@ -315,7 +399,7 @@ class InvoiceManagementView(BaseApiView):
         total = float(inv.get("total_amount", 0))
         self.feedback.show_message(
             "Lập hóa đơn thành công",
-            f"Đã lập hóa đơn INV-{inv_id:04d} với số tiền {total:,.0f} ₫.",
+            f"Đã lập hóa đơn INV-{inv_id:04d} với số tiền {format_money(total)}.",
             severity="success",
         )
         self.load_invoices()
