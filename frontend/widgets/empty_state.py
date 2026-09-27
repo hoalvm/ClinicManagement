@@ -36,7 +36,7 @@ class EmptyState(QFrame):
         self.icon_label.setObjectName("emptyStateIcon")
         self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.icon_label.setFixedSize(48, 48)
-        self.icon_label.setAccessibleName("Empty state illustration")
+        self.icon_label.setAccessibleName("Minh họa trạng thái không có dữ liệu")
         self.icon_label.setVisible(False)
         layout.addWidget(self.icon_label, 0, Qt.AlignmentFlag.AlignHCenter)
 
@@ -58,7 +58,7 @@ class EmptyState(QFrame):
         self.action_button.setObjectName("primaryButton")
         self.action_button.setProperty("uiRole", "emptyStateAction")
         self.action_button.setVisible(bool(action_text))
-        self.action_button.setAccessibleName(action_text or "Empty state action")
+        self.action_button.setAccessibleName(action_text or "Hành động cho trạng thái trống")
         self.action_button.clicked.connect(self.action_requested)
         layout.addSpacing(6)
         layout.addWidget(self.action_button, 0, Qt.AlignmentFlag.AlignHCenter)
@@ -89,7 +89,7 @@ class EmptyState(QFrame):
 
         label = text or ""
         self.action_button.setText(label)
-        self.action_button.setAccessibleName(label or "Empty state action")
+        self.action_button.setAccessibleName(label or "Hành động cho trạng thái trống")
         self.action_button.setVisible(bool(label))
 
     def set_action_enabled(self, enabled: bool) -> None:

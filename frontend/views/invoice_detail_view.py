@@ -225,8 +225,8 @@ class InvoiceDetailView(BaseApiView):
         self.invalidate_pending()
         self.clear_data()
         self._invoice_id = invoice_id
-        self.title.setText(f"Invoice #{invoice_id:06d}")
-        self.header.set_subtitle("Review billed services, totals, and payment information.")
+        self.header.set_title(t("invoice_detail_title"))
+        self.header.set_subtitle(f"#INV-{invoice_id:06d}")
         self.load()
 
     def load(self) -> None:
@@ -294,8 +294,8 @@ class InvoiceDetailView(BaseApiView):
     def clear_data(self) -> None:
         self._invoice_id = None
         self._appointment_id = None
-        self.title.setText("Invoice")
-        self.header.set_subtitle("Review billed services, totals, and payment information.")
+        self.header.set_title(t("invoice_detail_title"))
+        self.header.set_subtitle(t("invoice_detail_subtitle"))
         for value in self.values.values():
             if isinstance(value, StatusBadge):
                 value.set_status(None)

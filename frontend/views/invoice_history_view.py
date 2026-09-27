@@ -5,12 +5,10 @@ from __future__ import annotations
 from PySide6.QtCore import QModelIndex, Qt, Signal
 from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
-    QComboBox,
     QFrame,
     QGridLayout,
     QLabel,
     QPushButton,
-    QStackedWidget,
     QTableView,
     QVBoxLayout,
     QWidget,
@@ -26,9 +24,10 @@ from frontend.views.common import (
     require_page,
     table_item,
 )
-from frontend.widgets.empty_state import EmptyState
+from frontend.widgets.combo_box import ChevronComboBox
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.pagination import PaginationWidget
+from frontend.widgets.state_host import StateHost
 from frontend.widgets.status_badge import StatusBadgeDelegate
 
 
@@ -60,9 +59,9 @@ class InvoiceHistoryView(BaseApiView):
 
         self.status_label = QLabel(t("field_payment_status"))
         self.status_label.setObjectName("fieldLabel")
-        self.status = QComboBox()
+        self.status = ChevronComboBox()
         self.status.setMinimumWidth(170)
-        self.status.setAccessibleName("Filter invoices by payment status")
+        self.status.setAccessibleName(t("a11y_filter_invoices"))
         self.status.addItem(t("status_all"), "All")
         self.status.addItem(t("status_paid"), "PAID")
         self.status.addItem(t("status_unpaid"), "UNPAID")
@@ -70,10 +69,10 @@ class InvoiceHistoryView(BaseApiView):
 
         self.refresh_button = QPushButton(t("btn_refresh"))
         self.refresh_button.setObjectName("secondaryButton")
-        self.refresh_button.setAccessibleName("Refresh invoice history")
+        self.refresh_button.setAccessibleName(t("btn_refresh"))
         self.details_button = QPushButton(t("btn_view_details"))
         self.details_button.setObjectName("primaryButton")
-        self.details_button.setAccessibleName("View selected invoice details")
+        self.details_button.setAccessibleName(t("btn_view_details"))
         self.details_button.setEnabled(False)
 
         filters.addWidget(self.status_label, 1, 0)
@@ -86,33 +85,27 @@ class InvoiceHistoryView(BaseApiView):
         root.addWidget(self.loading)
 
         self.table = QTableView()
-        self.table.setAccessibleName("Invoice history results")
-        self.table.setAccessibleDescription(
-            "Select an invoice and press Enter to open its details."
-        )
+        self.table.setAccessibleName(t("a11y_invoice_results"))
+        self.table.setAccessibleDescription(t("a11y_open_selected_row"))
         self.model: QStandardItemModel = configure_table(
             self.table,
             [t("th_invoice_num"), t("field_date"), t("th_total_amount"), t("field_payment_status")],
             stretch_column=1,
-            column_widths={0: 155, 2: 190, 3: 132},
+            column_widths={0: 122, 2: 148, 3: 122},
         )
         self.table.setItemDelegateForColumn(3, StatusBadgeDelegate(self.table))
 
-        self.empty_state = EmptyState(
-            t("no_invoices_found"),
-            t("no_invoices_desc"),
-            action_text=t("btn_refresh"),
-        )
-        self.empty_state.setAccessibleName("No invoice results")
-
-        self.content_stack = QStackedWidget()
-        self.content_stack.addWidget(self.table)
-        self.content_stack.addWidget(self.empty_state)
-        self.content_stack.setCurrentWidget(self.table)
-        root.addWidget(self.content_stack, 1)
+        self.state_host = StateHost(self.table)
+        self.bind_state_host(self.state_host)
+        self.empty_state = self.state_host.empty
+        self.empty_state.set_title(t("no_invoices_found"))
+        self.empty_state.set_description(t("no_invoices_desc"))
+        self.empty_state.set_action(t("btn_refresh"))
+        self.empty_state.setAccessibleName(t("no_invoices_found"))
+        root.addWidget(self.state_host, 1)
 
         self.pagination = PaginationWidget()
-        self.pagination.setAccessibleName("Invoice history pagination")
+        self.pagination.setAccessibleName(t("invoice_history_title"))
         root.addWidget(self.pagination)
 
         self.status.currentIndexChanged.connect(self._filter_changed)
@@ -122,7 +115,8 @@ class InvoiceHistoryView(BaseApiView):
         self.table.selectionModel().selectionChanged.connect(
             lambda *_args: self._sync_details_button()
         )
-        self.empty_state.action_requested.connect(self._retry)
+        self.state_host.empty_action_requested.connect(self._retry)
+        self.state_host.retry_requested.connect(self._retry)
         self.pagination.page_changed.connect(self._change_page)
         self.pagination.page_size_changed.connect(self._page_size_changed)
 
@@ -151,6 +145,13 @@ class InvoiceHistoryView(BaseApiView):
 
         self.refresh_button.setText(t("btn_refresh"))
         self.details_button.setText(t("btn_view_details"))
+        self.status.setAccessibleName(t("a11y_filter_invoices"))
+        self.refresh_button.setAccessibleName(t("btn_refresh"))
+        self.details_button.setAccessibleName(t("btn_view_details"))
+        self.table.setAccessibleName(t("a11y_invoice_results"))
+        self.table.setAccessibleDescription(t("a11y_open_selected_row"))
+        self.empty_state.setAccessibleName(t("no_invoices_found"))
+        self.pagination.setAccessibleName(t("invoice_history_title"))
         self.empty_state.set_title(t("no_invoices_found"))
         self.empty_state.set_description(t("no_invoices_desc"))
         self.empty_state.set_action(t("btn_refresh"))
@@ -170,7 +171,6 @@ class InvoiceHistoryView(BaseApiView):
         if status_val != "All":
             params["status"] = status_val
 
-        self.content_stack.setCurrentWidget(self.table)
         self.details_button.setEnabled(False)
         self.run_api_task(
             "invoices",
@@ -218,7 +218,14 @@ class InvoiceHistoryView(BaseApiView):
         self.header.set_subtitle(t("invoices_count", count=total))
         self.table.clearSelection()
         self.details_button.setEnabled(False)
-        self.content_stack.setCurrentWidget(self.table if items else self.empty_state)
+        if items:
+            self.state_host.show_content()
+        else:
+            self.state_host.show_empty(
+                t("no_invoices_found"),
+                t("no_invoices_desc"),
+                action_text=t("btn_refresh"),
+            )
 
     def _selected_id(self) -> int | None:
         indexes = self.table.selectionModel().selectedRows(0)
@@ -269,5 +276,5 @@ class InvoiceHistoryView(BaseApiView):
         self.table.clearSelection()
         self.pagination.reset()
         self.header.set_subtitle(t("invoice_history_subtitle"))
-        self.content_stack.setCurrentWidget(self.table)
+        self.state_host.show_content()
         self.details_button.setEnabled(False)

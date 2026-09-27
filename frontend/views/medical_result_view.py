@@ -117,12 +117,13 @@ class MedicalResultView(BaseApiView):
         self.prescription_title.setObjectName("sectionTitle")
         prescription_layout.addWidget(self.prescription_title)
         self.prescription_table = QTableView()
-        self.prescription_table.setAccessibleName("Prescription items")
+        self.prescription_table.setAccessibleName(t("a11y_prescription_items"))
         self.prescription_model: QStandardItemModel = configure_table(
             self.prescription_table,
             [t("th_medicine"), t("th_quantity"), t("th_dosage"), t("th_instructions")],
             stretch_column=3,
             column_widths={0: 190, 1: 90, 2: 170, 3: 300},
+            wrap_columns={3},
         )
         self.prescription_table.setMinimumHeight(190)
         self.no_prescription = EmptyState(
@@ -166,19 +167,19 @@ class MedicalResultView(BaseApiView):
                 lbl.setText(t(field_key_map[key]))
 
         self.prescription_title.setText(t("sec_prescription"))
+        self.prescription_table.setAccessibleName(t("a11y_prescription_items"))
         p_headers = [t("th_medicine"), t("th_quantity"), t("th_dosage"), t("th_instructions")]
         for col, h in enumerate(p_headers):
             self.prescription_model.setHeaderData(col, Qt.Orientation.Horizontal, h)
 
         self.no_prescription.set_title(t("no_prescription_title"))
         self.no_prescription.set_description(t("no_prescription_desc"))
-        self.clear_data()
 
     def activate(self, medical_record_id: int) -> None:
         self.invalidate_pending()
         self.clear_data()
         self._medical_record_id = medical_record_id
-        self.header.set_subtitle(f"Medical record #{medical_record_id:06d}")
+        self.header.set_subtitle(f"#{medical_record_id:06d}")
         self.load()
 
     def load(self) -> None:
@@ -225,6 +226,8 @@ class MedicalResultView(BaseApiView):
                     table_item(item.get("instructions")),
                 ]
             )
+        if items:
+            self.prescription_table.resizeRowsToContents()
         has_items = bool(items)
         self.prescription_table.setVisible(has_items)
         self.no_prescription.setVisible(not has_items)
@@ -236,7 +239,7 @@ class MedicalResultView(BaseApiView):
     def clear_data(self) -> None:
         self._medical_record_id = None
         self._appointment_id = None
-        self.header.set_subtitle("A read-only summary of your examination and prescription.")
+        self.header.set_subtitle(t("medical_result_subtitle"))
         for value in self.values.values():
             value.setText("—")
         self.prescription_model.removeRows(0, self.prescription_model.rowCount())

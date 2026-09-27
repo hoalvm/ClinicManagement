@@ -5,13 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QPushButton,
-    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -22,6 +23,7 @@ from frontend.api.api_client import ApiClient
 from frontend.views.common import BaseApiView
 from frontend.widgets.empty_state import EmptyState
 from frontend.widgets.page_header import PageHeader
+from frontend.widgets.responsive_page import ResponsivePage
 from frontend.widgets.stat_card import StatCard
 
 
@@ -35,22 +37,23 @@ class ReceptionDashboardView(BaseApiView):
     def __init__(self, api_client: ApiClient, parent: QWidget | None = None) -> None:
         super().__init__(api_client, parent)
 
-        scroll = QScrollArea(self)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-
-        container = QWidget()
-        content_layout = QVBoxLayout(container)
-        content_layout.setContentsMargins(24, 24, 24, 24)
-        content_layout.setSpacing(20)
+        self.responsive_page = ResponsivePage(
+            self,
+            compact_breakpoint=900,
+            margins=(24, 24, 24, 24),
+            spacing=20,
+        )
+        content_layout = self.responsive_page.content_layout
 
         # Page Header
         self.header = PageHeader(
-            "Tiếp đón",
+            "Tổng quan",
             "Hàng đợi tiếp nhận và chỉ số hoạt động trong ngày",
             action_label="Làm mới",
             parent=self,
         )
+        if self.header.action_button is not None:
+            self.header.action_button.setObjectName("secondaryButton")
         self.header.action_clicked.connect(self.refresh)
         content_layout.addWidget(self.header)
         content_layout.addWidget(self.feedback)
@@ -64,7 +67,7 @@ class ReceptionDashboardView(BaseApiView):
         quick_actions_layout.setSpacing(10)
 
         quick_label = QLabel("Thao tác nhanh:")
-        quick_label.setStyleSheet("font-weight: 700; color: #475569; font-size: 13px;")
+        quick_label.setObjectName("quickActionsLabel")
         quick_actions_layout.addWidget(quick_label)
 
         self.btn_check_in = QPushButton("Tiếp nhận")
@@ -73,7 +76,7 @@ class ReceptionDashboardView(BaseApiView):
         self.btn_check_in.clicked.connect(lambda: self.navigate_requested.emit("check_in"))
         quick_actions_layout.addWidget(self.btn_check_in)
 
-        self.btn_book = QPushButton("Đặt lịch")
+        self.btn_book = QPushButton("Đặt lịch hộ")
         self.btn_book.setObjectName("secondaryButton")
         self.btn_book.setCursor(Qt.PointingHandCursor)
         self.btn_book.clicked.connect(lambda: self.navigate_requested.emit("book_for_patient"))
@@ -95,40 +98,50 @@ class ReceptionDashboardView(BaseApiView):
         content_layout.addWidget(quick_actions_box)
 
         # Stat Cards Grid
-        stats_row_1 = QHBoxLayout()
-        stats_row_1.setSpacing(16)
+        self.stats_grid = QGridLayout()
+        self.stats_grid.setHorizontalSpacing(16)
+        self.stats_grid.setVerticalSpacing(16)
 
         self.card_today = StatCard("Lịch hẹn hôm nay", "0", tone="brand", parent=self)
         self.card_pending = StatCard("Chờ xác nhận", "0", tone="warning", parent=self)
-        self.card_checked_in = StatCard("Đang chờ khám", "0", tone="info", parent=self)
-        self.card_unpaid = StatCard("Chưa thanh toán", "0", tone="danger", parent=self)
+        self.card_checked_in = StatCard("Đã tiếp nhận", "0", tone="info", parent=self)
+        self.card_unpaid = StatCard("Chưa thanh toán", "0", tone="error", parent=self)
 
-        stats_row_1.addWidget(self.card_today)
-        stats_row_1.addWidget(self.card_pending)
-        stats_row_1.addWidget(self.card_checked_in)
-        stats_row_1.addWidget(self.card_unpaid)
-        content_layout.addLayout(stats_row_1)
+        self._stat_cards = [
+            self.card_today,
+            self.card_pending,
+            self.card_checked_in,
+            self.card_unpaid,
+        ]
+        self._stat_columns = 0
+        content_layout.addLayout(self.stats_grid)
+        self._reflow_stats(force=True)
 
         # Waiting Room / Checked-In Queue Section
         section_label = QLabel("Bệnh nhân đang chờ khám")
-        section_label.setObjectName("sectionTitle")
-        section_label.setStyleSheet("margin-top: 8px;")
+        section_label.setObjectName("dashboardSectionTitle")
         content_layout.addWidget(section_label)
 
         self.queue_table = QTableWidget()
+        self.queue_table.setAccessibleName("Hàng đợi bệnh nhân đang chờ khám")
         self.queue_table.setColumnCount(6)
         self.queue_table.setHorizontalHeaderLabels([
             "Mã hẹn", "Họ và tên", "Số điện thoại", "Bác sĩ", "Giờ khám", "Thao tác"
         ])
         hdr = self.queue_table.horizontalHeader()
         hdr.setStretchLastSection(False)
-        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setMinimumSectionSize(60)
+        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
+        hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
         hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
-        self.queue_table.setColumnWidth(5, 160)
+        self.queue_table.setColumnWidth(0, 72)
+        self.queue_table.setColumnWidth(2, 112)
+        self.queue_table.setColumnWidth(3, 142)
+        self.queue_table.setColumnWidth(4, 76)
+        self.queue_table.setColumnWidth(5, 132)
         self.queue_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.queue_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.queue_table.setAlternatingRowColors(True)
@@ -145,10 +158,23 @@ class ReceptionDashboardView(BaseApiView):
 
         content_layout.addStretch(1)
 
-        scroll.setWidget(container)
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(0, 0, 0, 0)
-        root_layout.addWidget(scroll)
+        root_layout.addWidget(self.responsive_page)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self._reflow_stats()
+
+    def _reflow_stats(self, *, force: bool = False) -> None:
+        columns = 4 if self.width() >= 1000 else 2
+        if not force and columns == self._stat_columns:
+            return
+        self._stat_columns = columns
+        for index, card in enumerate(self._stat_cards):
+            self.stats_grid.addWidget(card, index // columns, index % columns)
+        for column in range(columns):
+            self.stats_grid.setColumnStretch(column, 1)
 
     def showEvent(self, event: Any) -> None:
         super().showEvent(event)
@@ -184,22 +210,30 @@ class ReceptionDashboardView(BaseApiView):
                 start_time = str(item.get("start_time", ""))[:5]
 
                 item_id = QTableWidgetItem(f"#{appt_id}")
+                item_id.setToolTip(item_id.text())
                 item_id.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.queue_table.setItem(row, 0, item_id)
 
-                self.queue_table.setItem(row, 1, QTableWidgetItem(patient.get("full_name", "")))
+                patient_item = QTableWidgetItem(patient.get("full_name", ""))
+                patient_item.setToolTip(patient_item.text())
+                self.queue_table.setItem(row, 1, patient_item)
 
                 item_phone = QTableWidgetItem(patient.get("phone", "") or "—")
+                item_phone.setToolTip(item_phone.text())
                 item_phone.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.queue_table.setItem(row, 2, item_phone)
 
-                self.queue_table.setItem(row, 3, QTableWidgetItem(doctor.get("full_name", "")))
+                doctor_item = QTableWidgetItem(doctor.get("full_name", ""))
+                doctor_item.setToolTip(doctor_item.text())
+                self.queue_table.setItem(row, 3, doctor_item)
 
                 item_time = QTableWidgetItem(start_time)
+                item_time.setToolTip(item_time.text())
                 item_time.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.queue_table.setItem(row, 4, item_time)
 
                 action_widget = QWidget()
+                action_widget.setObjectName("tableCellWidget")
                 act_layout = QHBoxLayout(action_widget)
                 act_layout.setContentsMargins(4, 0, 4, 0)
                 act_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -207,6 +241,7 @@ class ReceptionDashboardView(BaseApiView):
                 action_btn = QPushButton("Lập hóa đơn")
                 action_btn.setObjectName("tableActionPrimary")
                 action_btn.setCursor(Qt.PointingHandCursor)
+                action_btn.setAccessibleName(f"Lập hóa đơn cho lịch hẹn #{appt_id}")
                 action_btn.clicked.connect(lambda _, a_id=appt_id: self.create_invoice_requested.emit(a_id))
                 act_layout.addWidget(action_btn)
 

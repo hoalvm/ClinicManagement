@@ -1,277 +1,357 @@
-"""Modern, clean User Management page for Admin."""
+"""List-first account administration."""
+
+from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QComboBox,
-    QDialog,
-    QDialogButtonBox,
-    QFormLayout,
-    QFrame,
-    QGridLayout,
-    QHBoxLayout,
-    QHeaderView,
-    QLabel,
-    QLineEdit,
-    QMessageBox,
-    QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QFrame, QLineEdit, QMessageBox, QVBoxLayout
 
 from frontend.api_client import api_client
+from frontend.pages.admin_ui import (
+    AdminApiPage,
+    AdminFormDialog,
+    AdminRowActions,
+    AdminSearchBar,
+    matches_search,
+    require_success,
+    set_row_actions,
+)
+from frontend.ui.design_system import (
+    CellValue,
+    ColumnDisplayMode,
+    ColumnPriority,
+    ColumnSpec,
+)
+from frontend.widgets.adaptive_data_table import AdaptiveDataTable
+from frontend.widgets.combo_box import ChevronComboBox
 from frontend.widgets.page_header import PageHeader
-from frontend.widgets.status_badge import STATUS_LABELS_VN, StatusBadgeDelegate
+
+ROLE_LABELS = {
+    "PATIENT": "Bệnh nhân",
+    "DOCTOR": "Bác sĩ",
+    "STAFF": "Nhân viên",
+    "ADMIN": "Quản trị viên",
+}
 
 
-class UserManagementPage(QWidget):
-    def __init__(self):
+class UserManagementPage(AdminApiPage):
+    def __init__(self) -> None:
         super().__init__()
+        self._all_users: list[dict] = []
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(28, 24, 28, 24)
-        layout.setSpacing(18)
-
-        # ------------------- Page Header -------------------
+        layout.setSpacing(16)
         self.header = PageHeader(
             "Tài khoản",
-            "Quản trị danh sách và phân quyền",
+            "Quản lý tài khoản và quyền truy cập hệ thống",
+            action_label="Tạo tài khoản",
         )
+        self.header.action_clicked.connect(self.open_create_dialog)
         layout.addWidget(self.header)
+        self.add_request_feedback(layout)
 
-        # ------------------- Create Form Card -------------------
-        form_card = QFrame()
-        form_card.setObjectName("contentCard")
-        form_card_layout = QVBoxLayout(form_card)
-        form_card_layout.setContentsMargins(20, 18, 20, 18)
-        form_card_layout.setSpacing(14)
+        self.search = AdminSearchBar(
+            "Tìm theo tên đăng nhập, họ tên hoặc vai trò…"
+        )
+        self.search.search_changed.connect(self._apply_filter)
+        layout.addWidget(self.search)
 
-        form_title = QLabel("Thêm tài khoản")
-        form_title.setObjectName("sectionTitle")
-        form_card_layout.addWidget(form_title)
-
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(16)
-        grid.setVerticalSpacing(12)
-
-        # Username
-        col_u = QVBoxLayout()
-        col_u.setSpacing(5)
-        lbl_u = QLabel("Tên đăng nhập")
-        lbl_u.setObjectName("fieldLabel")
-        self.username_input = QLineEdit()
-        col_u.addWidget(lbl_u)
-        col_u.addWidget(self.username_input)
-        grid.addLayout(col_u, 0, 0)
-
-        # Fullname
-        col_fn = QVBoxLayout()
-        col_fn.setSpacing(5)
-        lbl_fn = QLabel("Họ và tên")
-        lbl_fn.setObjectName("fieldLabel")
-        self.fullname_input = QLineEdit()
-        col_fn.addWidget(lbl_fn)
-        col_fn.addWidget(self.fullname_input)
-        grid.addLayout(col_fn, 0, 1)
-
-        # Password
-        col_p = QVBoxLayout()
-        col_p.setSpacing(5)
-        lbl_p = QLabel("Mật khẩu")
-        lbl_p.setObjectName("fieldLabel")
-        self.password_input = QLineEdit()
-        self.password_input.setEchoMode(QLineEdit.Password)
-        col_p.addWidget(lbl_p)
-        col_p.addWidget(self.password_input)
-        grid.addLayout(col_p, 0, 2)
-
-        # Role
-        col_r = QVBoxLayout()
-        col_r.setSpacing(5)
-        lbl_r = QLabel("Vai trò")
-        lbl_r.setObjectName("fieldLabel")
-        self.role_input = QComboBox()
-        self.role_input.addItem("Bệnh nhân", "PATIENT")
-        self.role_input.addItem("Bác sĩ", "DOCTOR")
-        self.role_input.addItem("Nhân viên", "STAFF")
-        self.role_input.addItem("Quản trị viên", "ADMIN")
-        col_r.addWidget(lbl_r)
-        col_r.addWidget(self.role_input)
-        grid.addLayout(col_r, 0, 3)
-
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        add_btn = QPushButton("Thêm mới")
-        add_btn.setObjectName("primaryButton")
-        add_btn.setCursor(Qt.PointingHandCursor)
-        add_btn.setMinimumHeight(36)
-        add_btn.setMinimumWidth(120)
-        add_btn.clicked.connect(self.add_user)
-        btn_layout.addWidget(add_btn)
-
-        form_card_layout.addLayout(grid)
-        form_card_layout.addLayout(btn_layout)
-        layout.addWidget(form_card)
-
-        # ------------------- Data Table Card -------------------
         table_card = QFrame()
         table_card.setObjectName("contentCard")
-        table_card_layout = QVBoxLayout(table_card)
-        table_card_layout.setContentsMargins(20, 18, 20, 18)
-        table_card_layout.setSpacing(12)
-
-        table_title = QLabel("Danh sách tài khoản")
-        table_title.setObjectName("sectionTitle")
-        table_card_layout.addWidget(table_title)
-
-        self.table = QTableWidget()
-        self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(
-            ["ID", "Tên đăng nhập", "Họ và tên", "Vai trò", "Trạng thái", "Thao tác"]
+        table_card.setAccessibleName("Danh sách tài khoản")
+        card_layout = QVBoxLayout(table_card)
+        card_layout.setContentsMargins(16, 14, 16, 14)
+        self.table = AdaptiveDataTable(
+            (
+                ColumnSpec(
+                    "ID",
+                    "id",
+                    minimum_width=56,
+                    preferred_width=64,
+                    maximum_width=72,
+                    priority=int(ColumnPriority.CRITICAL),
+                    preserve_full=True,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+                ColumnSpec(
+                    "Tài khoản",
+                    "identity",
+                    minimum_width=210,
+                    preferred_width=300,
+                    maximum_width=460,
+                    grow_weight=2,
+                    display_mode=ColumnDisplayMode.WRAP_2,
+                    line_limit=2,
+                ),
+                ColumnSpec(
+                    "Vai trò",
+                    "role",
+                    minimum_width=120,
+                    preferred_width=136,
+                    maximum_width=156,
+                    preserve_full=True,
+                ),
+                ColumnSpec(
+                    "Trạng thái",
+                    "status",
+                    minimum_width=124,
+                    preferred_width=132,
+                    maximum_width=148,
+                    priority=int(ColumnPriority.CRITICAL),
+                    preserve_full=True,
+                    status=True,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+                ColumnSpec(
+                    "Thao tác",
+                    "actions",
+                    minimum_width=132,
+                    preferred_width=140,
+                    maximum_width=152,
+                    priority=int(ColumnPriority.CRITICAL),
+                    preserve_full=True,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+            ),
+            accessible_name="Danh sách tài khoản",
         )
-        self.table.setAlternatingRowColors(True)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setShowGrid(False)
-
-        header = self.table.horizontalHeader()
-        header.setFixedHeight(38)
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.Stretch)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.Fixed)
-        header.setSectionResizeMode(5, QHeaderView.Fixed)
-        self.table.setColumnWidth(4, 135)
-        self.table.setColumnWidth(5, 160)
-        self.table.setItemDelegateForColumn(4, StatusBadgeDelegate(self.table))
-
-        table_card_layout.addWidget(self.table)
-        layout.addWidget(table_card, 1)
-
+        card_layout.addWidget(self.table)
+        self.table_state = self.bind_state_host(
+            table_card,
+            self.load_data,
+            empty_title="Chưa có tài khoản",
+            empty_description="Tạo tài khoản đầu tiên để bắt đầu phân quyền người dùng.",
+            empty_action_text="Tạo tài khoản",
+            on_empty_action=self.open_create_dialog,
+        )
+        layout.addWidget(self.table_state, 1)
         self.load_data()
 
-    def load_data(self):
-        r = api_client.get("/users/")
-        if r.status_code != 200:
-            return
-        users = r.json()
-        self.table.clearContents()
-        self.table.setRowCount(len(users))
-        for row, u in enumerate(users):
-            item_id = QTableWidgetItem(str(u["UserID"]))
-            item_id.setTextAlignment(Qt.AlignCenter)
-            self.table.setItem(row, 0, item_id)
+    def load_data(self, *, clear_feedback: bool = True):
+        return self.run_admin_task(
+            "load-users",
+            lambda: require_success(
+                api_client.get("/users/"),
+                "Không thể tải danh sách tài khoản.",
+            ).json(),
+            self._users_loaded,
+            loading_text="Đang tải danh sách tài khoản…",
+            clear_feedback=clear_feedback,
+            stateful=True,
+            empty_when=lambda users: not users,
+        )
 
-            item_user = QTableWidgetItem(u["Username"])
-            self.table.setItem(row, 1, item_user)
+    def _users_loaded(self, users: list[dict]) -> None:
+        self._all_users = list(users)
+        self._apply_filter(self.search.text)
 
-            item_name = QTableWidgetItem(u["FullName"])
-            self.table.setItem(row, 2, item_name)
+    def _apply_filter(self, query: str) -> None:
+        users = [
+            user
+            for user in self._all_users
+            if matches_search(user, query, "Username", "FullName", "Role")
+        ]
+        rows = []
+        for user in users:
+            username = str(user.get("Username") or "—")
+            full_name = str(user.get("FullName") or "Chưa cập nhật họ tên")
+            rows.append(
+                {
+                    "id": user.get("UserID"),
+                    "identity": CellValue(
+                        username,
+                        full_name,
+                        accessible_text=f"{username}, {full_name}",
+                    ),
+                    "role": ROLE_LABELS.get(str(user.get("Role")), user.get("Role")),
+                    "status": "ACTIVE" if user.get("IsActive") else "INACTIVE",
+                    "actions": "",
+                }
+            )
+        self.table.set_rows(rows)
+        for row, user in enumerate(users):
+            username = str(user.get("Username") or "tài khoản")
+            active = bool(user.get("IsActive"))
+            actions = AdminRowActions(
+                f"tài khoản {username}",
+                self.table,
+                on_edit=lambda user=user: self.open_edit_dialog(user),
+                overflow_actions=(
+                    (
+                        "Khóa tài khoản" if active else "Mở khóa tài khoản",
+                        lambda user=user: self._confirm_toggle(user),
+                    ),
+                ),
+            )
+            set_row_actions(self.table, row, 4, actions)
 
-            # Role pill (rendered via delegate)
-            role_code = u["Role"]
-            item_role = QTableWidgetItem(STATUS_LABELS_VN.get(role_code, role_code))
-            item_role.setTextAlignment(Qt.AlignCenter)
-            self.table.setItem(row, 3, item_role)
+    def _build_dialog(
+        self,
+        *,
+        user: dict | None = None,
+    ) -> tuple[AdminFormDialog, dict[str, object]]:
+        editing = user is not None
+        dialog = AdminFormDialog(
+            "Chỉnh sửa tài khoản" if editing else "Tạo tài khoản",
+            "Cập nhật thông tin định danh và quyền truy cập."
+            if editing
+            else "Tạo tài khoản cho bệnh nhân, nhân viên hoặc quản trị viên.",
+            self,
+            save_text="Lưu thay đổi" if editing else "Tạo tài khoản",
+        )
+        username = QLineEdit(str((user or {}).get("Username") or ""))
+        fullname = QLineEdit(str((user or {}).get("FullName") or ""))
+        phone = QLineEdit(str((user or {}).get("Phone") or ""))
+        email = QLineEdit(str((user or {}).get("Email") or ""))
+        role = ChevronComboBox()
+        for code in ("PATIENT", "STAFF", "ADMIN"):
+            role.addItem(ROLE_LABELS[code], code)
+        current_role = str((user or {}).get("Role") or "PATIENT")
+        if editing and current_role == "DOCTOR":
+            role.insertItem(0, ROLE_LABELS["DOCTOR"], "DOCTOR")
+            role.setEnabled(False)
+            role.setToolTip("Vai trò bác sĩ được quản lý trong mục Bác sĩ.")
+        index = role.findData(current_role)
+        role.setCurrentIndex(max(0, index))
 
-            # Status pill (rendered via delegate)
-            is_active = u["IsActive"]
-            status_text = "ACTIVE" if is_active else "INACTIVE"
-            item_status = QTableWidgetItem(status_text)
-            item_status.setTextAlignment(Qt.AlignCenter)
-            self.table.setItem(row, 4, item_status)
+        dialog.add_field("Tên đăng nhập", username, 0, 0, required=True)
+        dialog.add_field("Họ và tên", fullname, 0, 1)
+        if not editing:
+            password = QLineEdit()
+            password.setEchoMode(QLineEdit.EchoMode.Password)
+            dialog.add_field("Mật khẩu", password, 1, 0, required=True)
+        else:
+            password = None
+        dialog.add_field("Vai trò", role, 1, 1 if not editing else 0, required=True)
+        dialog.add_field("Số điện thoại", phone, 2, 0)
+        dialog.add_field("Email", email, 2, 1)
+        return dialog, {
+            "username": username,
+            "fullname": fullname,
+            "password": password,
+            "role": role,
+            "phone": phone,
+            "email": email,
+        }
 
-            # Action buttons
-            edit_btn = QPushButton("Sửa")
-            edit_btn.setObjectName("actionEditBtn")
-            edit_btn.setCursor(Qt.PointingHandCursor)
-            edit_btn.setFixedSize(56, 28)
-            edit_btn.clicked.connect(
-                lambda _, uid=u["UserID"], un=u["Username"], fn=u["FullName"]: self.open_edit_dialog(
-                    uid, un, fn
+    def open_create_dialog(self) -> None:
+        dialog, controls = self._build_dialog()
+
+        def submit() -> None:
+            username = controls["username"].text().strip()
+            password = controls["password"].text()
+            if not username or not password:
+                dialog.show_request_error(
+                    "Thiếu thông tin",
+                    "Vui lòng nhập tên đăng nhập và mật khẩu.",
                 )
+                return
+            payload = {
+                "Username": username,
+                "FullName": controls["fullname"].text().strip(),
+                "Password": password,
+                "Role": controls["role"].currentData(),
+                "Phone": controls["phone"].text().strip() or None,
+                "Email": controls["email"].text().strip() or None,
+            }
+            dialog.set_busy(True)
+            self.run_admin_task(
+                "create-user",
+                lambda: require_success(
+                    api_client.post("/users/", json=payload),
+                    "Không thể tạo tài khoản.",
+                ),
+                lambda _response: self._saved(dialog, "Đã tạo tài khoản"),
+                on_finished=lambda: dialog.set_busy(False),
+                on_error=lambda error: dialog.show_request_error(
+                    "Không thể tạo tài khoản", self.error_message(error)
+                ),
+                loading_text="Đang tạo tài khoản…",
             )
 
-            del_btn = QPushButton("Khóa" if is_active else "Mở khóa")
-            del_btn.setObjectName("actionDeleteBtn")
-            del_btn.setCursor(Qt.PointingHandCursor)
-            del_btn.setFixedSize(76, 28)
-            del_btn.clicked.connect(lambda _, uid=u["UserID"]: self.delete_user(uid))
-
-            actions_widget = QWidget()
-            actions_layout = QHBoxLayout(actions_widget)
-            actions_layout.setContentsMargins(4, 0, 4, 0)
-            actions_layout.setSpacing(6)
-            actions_layout.setAlignment(Qt.AlignCenter)
-            actions_layout.addWidget(edit_btn)
-            actions_layout.addWidget(del_btn)
-
-            self.table.setCellWidget(row, 5, actions_widget)
-            self.table.setRowHeight(row, 48)
-
-    def add_user(self):
-        username = self.username_input.text().strip()
-        password = self.password_input.text()
-        if not username or not password:
-            QMessageBox.warning(self, "Thiếu thông tin", "Vui lòng nhập tên đăng nhập và mật khẩu.")
-            return
-
-        payload = {
-            "Username": username,
-            "FullName": self.fullname_input.text().strip(),
-            "Password": password,
-            "Role": self.role_input.currentData() or self.role_input.currentText(),
-        }
-        r = api_client.post("/users/", json=payload)
-        if r.status_code == 200:
-            self.load_data()
-            self.username_input.clear()
-            self.fullname_input.clear()
-            self.password_input.clear()
-        else:
-            QMessageBox.warning(self, "Lỗi", r.json().get("detail", "Không thể tạo tài khoản."))
-
-    def open_edit_dialog(self, user_id, username, fullname):
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Chỉnh sửa thông tin tài khoản")
-        dialog.setFixedWidth(360)
-
-        form = QFormLayout(dialog)
-        form.setContentsMargins(24, 24, 24, 24)
-        form.setSpacing(14)
-
-        dlg_title = QLabel("Cập nhật tài khoản")
-        dlg_title.setObjectName("sectionTitle")
-        form.addRow(dlg_title)
-
-        username_edit = QLineEdit(username)
-        fullname_edit = QLineEdit(fullname)
-        form.addRow("Tên đăng nhập:", username_edit)
-        form.addRow("Họ và tên:", fullname_edit)
-
-        buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-        buttons.button(QDialogButtonBox.Save).setText("Lưu")
-        buttons.button(QDialogButtonBox.Cancel).setText("Hủy")
-        form.addRow(buttons)
-
-        def save():
-            payload = {
-                "Username": username_edit.text().strip(),
-                "FullName": fullname_edit.text().strip(),
-            }
-            r = api_client.put(f"/users/{user_id}", json=payload)
-            if r.status_code == 200:
-                dialog.accept()
-                self.load_data()
-            else:
-                QMessageBox.warning(self, "Lỗi", r.json().get("detail", "Có lỗi xảy ra"))
-
-        buttons.accepted.connect(save)
-        buttons.rejected.connect(dialog.reject)
+        dialog.buttons.accepted.connect(submit)
         dialog.exec()
 
-    def delete_user(self, user_id):
-        if QMessageBox.question(self, "Xác nhận", "Bạn có chắc chắn muốn thay đổi trạng thái tài khoản này?") == QMessageBox.Yes:
-            api_client.delete(f"/users/{user_id}")
-            self.load_data()
+    def open_edit_dialog(self, user: dict) -> None:
+        dialog, controls = self._build_dialog(user=user)
+        user_id = user["UserID"]
+
+        def submit() -> None:
+            username = controls["username"].text().strip()
+            if not username:
+                dialog.show_request_error(
+                    "Thiếu thông tin", "Vui lòng nhập tên đăng nhập."
+                )
+                return
+            payload = {
+                "Username": username,
+                "FullName": controls["fullname"].text().strip(),
+                "Role": controls["role"].currentData(),
+                "Phone": controls["phone"].text().strip() or None,
+                "Email": controls["email"].text().strip() or None,
+            }
+            dialog.set_busy(True)
+            self.run_admin_task(
+                f"update-user:{user_id}",
+                lambda: require_success(
+                    api_client.put(f"/users/{user_id}", json=payload),
+                    "Không thể cập nhật tài khoản.",
+                ),
+                lambda _response: self._saved(dialog, "Đã cập nhật tài khoản"),
+                on_finished=lambda: dialog.set_busy(False),
+                on_error=lambda error: dialog.show_request_error(
+                    "Không thể cập nhật tài khoản", self.error_message(error)
+                ),
+                loading_text="Đang cập nhật tài khoản…",
+            )
+
+        dialog.buttons.accepted.connect(submit)
+        dialog.exec()
+
+    def _saved(self, dialog: AdminFormDialog, title: str) -> None:
+        dialog.accept()
+        self.feedback.show_message(
+            title,
+            "Thông tin tài khoản đã được lưu.",
+            severity="success",
+        )
+        self.load_data(clear_feedback=False)
+
+    def _confirm_toggle(self, user: dict) -> None:
+        active = bool(user.get("IsActive"))
+        verb = "khóa" if active else "mở khóa"
+        username = str(user.get("Username") or "tài khoản này")
+        answer = QMessageBox.question(
+            self,
+            f"Xác nhận {verb} tài khoản",
+            f"Bạn có chắc muốn {verb} tài khoản “{username}”?",
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        user_id = user["UserID"]
+
+        def operation():
+            if active:
+                return require_success(
+                    api_client.delete(f"/users/{user_id}"),
+                    "Không thể khóa tài khoản.",
+                )
+            return require_success(
+                api_client.put(f"/users/{user_id}", json={"IsActive": True}),
+                "Không thể mở khóa tài khoản.",
+            )
+
+        self.run_admin_task(
+            f"toggle-user:{user_id}",
+            operation,
+            lambda _response: self._toggle_finished(verb),
+            loading_text=f"Đang {verb} tài khoản…",
+        )
+
+    def _toggle_finished(self, verb: str) -> None:
+        self.feedback.show_message(
+            "Đã cập nhật trạng thái",
+            f"Tài khoản đã được {verb}.",
+            severity="success",
+        )
+        self.load_data(clear_feedback=False)

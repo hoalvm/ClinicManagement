@@ -8,6 +8,7 @@ import pytest
 from PySide6.QtWidgets import QApplication, QPushButton
 
 from frontend.api.api_client import ApiClient
+from frontend.core.i18n import t
 from frontend.core.session import SessionState
 from frontend.main_window import MainWindow
 from frontend.views.appointment_detail_view import AppointmentDetailView
@@ -220,6 +221,43 @@ def test_table_item_tooltip_preserves_full_elided_text() -> None:
     assert item.toolTip() == text
 
 
+def test_patient_prescription_instructions_wrap_and_keep_full_text(
+    qt_app: QApplication,
+) -> None:
+    view = MedicalResultView(MagicMock(spec=ApiClient))
+    instructions = (
+        "Uống một viên sau ăn sáng và tối trong mười ngày; không tự ý tăng liều "
+        "và liên hệ phòng khám nếu xuất hiện dấu hiệu bất thường."
+    )
+    view.resize(900, 650)
+    view.show()
+    view._render(
+        {
+            "appointment_id": 9,
+            "prescription": {
+                "items": [
+                    {
+                        "medicine_name": "Paracetamol giải phóng kéo dài",
+                        "quantity": 20,
+                        "dosage": "500 mg",
+                        "instructions": instructions,
+                    }
+                ]
+            },
+        }
+    )
+    qt_app.processEvents()
+
+    item = view.prescription_model.item(0, 3)
+    assert view.prescription_table.wordWrap()
+    assert item.toolTip() == instructions
+    assert 44 <= view.prescription_table.rowHeight(0) <= 72
+
+    view.close()
+    view.deleteLater()
+    qt_app.processEvents()
+
+
 def test_registration_and_profile_addresses_use_tab_for_focus_navigation(
     qt_app: QApplication,
 ) -> None:
@@ -237,25 +275,25 @@ def test_registration_and_profile_addresses_use_tab_for_focus_navigation(
 
 
 @pytest.mark.parametrize(
-    ("view_type", "filter_attribute", "filter_name", "table_name"),
+    ("view_type", "filter_attribute", "filter_name_key", "table_name_key"),
     [
         (
             AppointmentHistoryView,
             "search",
-            "Search appointment history",
-            "Appointment history results",
+            "a11y_search_appointments",
+            "a11y_appointment_results",
         ),
         (
             MedicalHistoryView,
             "search",
-            "Search medical history",
-            "Medical history results",
+            "a11y_search_medical_history",
+            "a11y_medical_history_results",
         ),
         (
             InvoiceHistoryView,
             "status",
-            "Filter invoices by payment status",
-            "Invoice history results",
+            "a11y_filter_invoices",
+            "a11y_invoice_results",
         ),
     ],
 )
@@ -263,15 +301,15 @@ def test_history_filters_and_tables_have_accessible_names(
     qt_app: QApplication,
     view_type: type[BaseApiView],
     filter_attribute: str,
-    filter_name: str,
-    table_name: str,
+    filter_name_key: str,
+    table_name_key: str,
 ) -> None:
     view = view_type(MagicMock(spec=ApiClient))
     filter_control = getattr(view, filter_attribute)
 
-    assert filter_control.accessibleName() == filter_name
-    assert view.table.accessibleName() == table_name
-    assert "Enter" in view.table.accessibleDescription()
+    assert filter_control.accessibleName() == t(filter_name_key)
+    assert view.table.accessibleName() == t(table_name_key)
+    assert view.table.accessibleDescription() == t("a11y_open_selected_row")
     assert view.refresh_button.accessibleName()
     assert view.details_button.accessibleName()
 

@@ -2,9 +2,50 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QKeyEvent, QMouseEvent
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtCore import QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QKeyEvent, QMouseEvent, QPainter, QPaintEvent
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
+
+_TONE_COLORS = {
+    "blue": "#0369A1",
+    "violet": "#6D28D9",
+    "amber": "#B45309",
+    "teal": "#0F766E",
+    "brand": "#0F766E",
+    "warning": "#B45309",
+    "info": "#0369A1",
+    "success": "#15803D",
+    "error": "#B91C1C",
+}
+
+
+class _AccentBar(QFrame):
+    """Tiny custom-painted accent that needs no per-widget style sheet."""
+
+    def __init__(self, color: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._color = QColor(color)
+        self.setObjectName("statAccent")
+        self.setFixedSize(4, 44)
+
+    def set_color(self, color: str) -> None:
+        resolved = QColor(color)
+        self._color = resolved if resolved.isValid() else QColor("#0F766E")
+        self.update()
+
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802, ARG002
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(self._color)
+        painter.drawRoundedRect(QRectF(self.rect()), 2, 2)
 
 
 class StatCard(QFrame):
@@ -26,20 +67,10 @@ class StatCard(QFrame):
         self.setProperty("tone", tone)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         self.setAccessibleName(f"{title}. Open related records")
 
-        colors = {
-            "blue": "#0369A1",
-            "violet": "#6D28D9",
-            "amber": "#B45309",
-            "teal": "#0F766E",
-            "brand": "#0F766E",
-            "warning": "#B45309",
-            "info": "#0369A1",
-            "success": "#15803D",
-            "danger": "#B91C1C",
-        }
-        accent_color = colors.get(tone, "#0F766E")
+        accent_color = _TONE_COLORS.get(tone, "#0F766E")
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(20, 18, 20, 18)
@@ -47,10 +78,7 @@ class StatCard(QFrame):
         layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         # Clean vertical accent indicator
-        self.accent_bar = QFrame()
-        self.accent_bar.setFixedWidth(4)
-        self.accent_bar.setFixedHeight(44)
-        self.accent_bar.setStyleSheet(f"background-color: {accent_color}; border-radius: 2px;")
+        self.accent_bar = _AccentBar(accent_color)
         layout.addWidget(self.accent_bar, 0, Qt.AlignmentFlag.AlignVCenter)
 
         text_layout = QVBoxLayout()
@@ -60,6 +88,8 @@ class StatCard(QFrame):
         self._value.setObjectName("statValue")
         self._title_label = QLabel(title)
         self._title_label.setObjectName("statTitle")
+        self._title_label.setWordWrap(True)
+        self._title_label.setToolTip(title)
         text_layout.addWidget(self._value)
         text_layout.addWidget(self._title_label)
 
@@ -68,11 +98,17 @@ class StatCard(QFrame):
     def set_title(self, title: str) -> None:
         self._title = title
         self._title_label.setText(title)
+        self._title_label.setToolTip(title)
         self.setAccessibleName(f"{self._title}: {self._value.text()}. Open related records")
 
     def set_value(self, value: object) -> None:
-        self._value.setText(str(value))
-        self.setAccessibleName(f"{self._title}: {value}. Open related records")
+        resolved = "—" if value is None else str(value)
+        self._value.setText(resolved)
+        self.setAccessibleName(f"{self._title}: {resolved}. Open related records")
+
+    def set_tone(self, tone: str) -> None:
+        self.setProperty("tone", tone)
+        self.accent_bar.set_color(_TONE_COLORS.get(tone, "#0F766E"))
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:  # noqa: N802
         inside = self.rect().contains(event.position().toPoint())
@@ -93,7 +129,6 @@ class ModernStatCard(StatCard):
 
     def __init__(self, title: str, value: object, accent_color: str = "#0F766E"):
         super().__init__(title, value, parent=None)
-        if hasattr(self, "accent_bar"):
-            self.accent_bar.setStyleSheet(f"background-color: {accent_color}; border-radius: 2px;")
+        self.accent_bar.set_color(accent_color)
 
 

@@ -4,16 +4,16 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QWidget
 
 
 class LoadingIndicator(QWidget):
-    def __init__(self, text: str = "Loading…", parent: QWidget | None = None) -> None:
+    def __init__(self, text: str = "Đang tải…", parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("loadingIndicator")
-        self.setAccessibleName("Loading")
+        self.setAccessibleName(text)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
         self._label = QLabel(text)
         self._bar = QProgressBar()
-        self._bar.setAccessibleName("Request in progress")
+        self._bar.setAccessibleName("Yêu cầu đang được xử lý")
         self._bar.setRange(0, 0)
         self._bar.setTextVisible(False)
         self._bar.setFixedWidth(110)

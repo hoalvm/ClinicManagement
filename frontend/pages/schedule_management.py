@@ -1,24 +1,33 @@
-"""Modern, clean Schedule Management page for Admin."""
+"""List-first doctor-schedule administration."""
+
+from __future__ import annotations
 
 from PySide6.QtCore import Qt, QTime
 from PySide6.QtWidgets import (
-    QComboBox,
     QFrame,
-    QGridLayout,
-    QHBoxLayout,
-    QHeaderView,
-    QLabel,
+    QLineEdit,
     QMessageBox,
-    QPushButton,
     QSpinBox,
-    QTableWidget,
-    QTableWidgetItem,
     QTimeEdit,
     QVBoxLayout,
-    QWidget,
 )
 
 from frontend.api_client import api_client
+from frontend.pages.admin_ui import (
+    AdminApiPage,
+    AdminFormDialog,
+    AdminRowActions,
+    require_success,
+    set_row_actions,
+)
+from frontend.ui.design_system import (
+    CellValue,
+    ColumnDisplayMode,
+    ColumnPriority,
+    ColumnSpec,
+)
+from frontend.widgets.adaptive_data_table import AdaptiveDataTable
+from frontend.widgets.combo_box import ChevronComboBox
 from frontend.widgets.page_header import PageHeader
 
 DAYS_VN = {
@@ -32,228 +41,364 @@ DAYS_VN = {
 }
 
 
-class ScheduleManagementPage(QWidget):
-    def __init__(self):
+def _time_text(value: object) -> str:
+    text = str(value or "")
+    return text[:5] if len(text) >= 5 else text or "—"
+
+
+def _qtime(value: object, fallback: QTime) -> QTime:
+    parsed = QTime.fromString(_time_text(value), "HH:mm")
+    return parsed if parsed.isValid() else fallback
+
+
+class ScheduleManagementPage(AdminApiPage):
+    def __init__(self) -> None:
         super().__init__()
+        self._doctors: list[dict] = []
+        self._doctor_names: dict[int, str] = {}
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(28, 24, 28, 24)
-        layout.setSpacing(18)
-
-        # ------------------- Header -------------------
+        layout.setSpacing(16)
         self.header = PageHeader(
             "Lịch trực",
-            "Phân ca làm việc của bác sĩ",
+            "Quản lý ca làm việc định kỳ của bác sĩ",
+            action_label="Thêm lịch trực",
         )
+        self.header.action_clicked.connect(self.open_create_dialog)
         layout.addWidget(self.header)
+        self.add_request_feedback(layout)
 
-        # ------------------- Create Form Card -------------------
-        form_card = QFrame()
-        form_card.setObjectName("contentCard")
-        form_card_layout = QVBoxLayout(form_card)
-        form_card_layout.setContentsMargins(20, 18, 20, 18)
-        form_card_layout.setSpacing(14)
-
-        form_title = QLabel("Thêm ca trực")
-        form_title.setObjectName("sectionTitle")
-        form_card_layout.addWidget(form_title)
-
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(14)
-        grid.setVerticalSpacing(10)
-
-        # Doctor
-        col_doc = QVBoxLayout()
-        col_doc.setSpacing(4)
-        lbl_doc = QLabel("Bác sĩ")
-        lbl_doc.setObjectName("fieldLabel")
-        self.doctor_combo = QComboBox()
-        col_doc.addWidget(lbl_doc)
-        col_doc.addWidget(self.doctor_combo)
-        grid.addLayout(col_doc, 0, 0, 1, 2)
-
-        # Day of week
-        col_day = QVBoxLayout()
-        col_day.setSpacing(4)
-        lbl_day = QLabel("Ngày trong tuần")
-        lbl_day.setObjectName("fieldLabel")
-        self.day_combo = QComboBox()
-        for day_id, day_name in DAYS_VN.items():
-            self.day_combo.addItem(day_name, day_id)
-        col_day.addWidget(lbl_day)
-        col_day.addWidget(self.day_combo)
-        grid.addLayout(col_day, 0, 2)
-
-        # Start Time
-        col_st = QVBoxLayout()
-        col_st.setSpacing(4)
-        lbl_st = QLabel("Giờ bắt đầu")
-        lbl_st.setObjectName("fieldLabel")
-        self.start_time = QTimeEdit(QTime(8, 0))
-        self.start_time.setDisplayFormat("HH:mm")
-        col_st.addWidget(lbl_st)
-        col_st.addWidget(self.start_time)
-        grid.addLayout(col_st, 1, 0)
-
-        # End Time
-        col_et = QVBoxLayout()
-        col_et.setSpacing(4)
-        lbl_et = QLabel("Giờ kết thúc")
-        lbl_et.setObjectName("fieldLabel")
-        self.end_time = QTimeEdit(QTime(17, 0))
-        self.end_time.setDisplayFormat("HH:mm")
-        col_et.addWidget(lbl_et)
-        col_et.addWidget(self.end_time)
-        grid.addLayout(col_et, 1, 1)
-
-        # Slot duration
-        col_dur = QVBoxLayout()
-        col_dur.setSpacing(4)
-        lbl_dur = QLabel("Thời lượng ca (phút)")
-        lbl_dur.setObjectName("fieldLabel")
-        self.slot_duration = QSpinBox()
-        self.slot_duration.setRange(5, 240)
-        self.slot_duration.setValue(30)
-        col_dur.addWidget(lbl_dur)
-        col_dur.addWidget(self.slot_duration)
-        grid.addLayout(col_dur, 1, 2)
-
-        # Button row
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        add_btn = QPushButton("Thêm mới")
-        add_btn.setObjectName("primaryButton")
-        add_btn.setCursor(Qt.PointingHandCursor)
-        add_btn.setMinimumHeight(36)
-        add_btn.setMinimumWidth(120)
-        add_btn.clicked.connect(self.add_schedule)
-        btn_layout.addWidget(add_btn)
-
-        form_card_layout.addLayout(grid)
-        form_card_layout.addLayout(btn_layout)
-        layout.addWidget(form_card)
-
-        # ------------------- Table Card -------------------
         table_card = QFrame()
         table_card.setObjectName("contentCard")
-        table_card_layout = QVBoxLayout(table_card)
-        table_card_layout.setContentsMargins(20, 18, 20, 18)
-        table_card_layout.setSpacing(12)
-
-        table_title = QLabel("Danh sách lịch làm việc hiện tại")
-        table_title.setObjectName("sectionTitle")
-        table_card_layout.addWidget(table_title)
-
-        self.table = QTableWidget()
-        self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels([
-            "ID",
-            "Bác sĩ",
-            "Ngày",
-            "Giờ bắt đầu",
-            "Giờ kết thúc",
-            "Thao tác",
-        ])
-        self.table.setAlternatingRowColors(True)
-        self.table.verticalHeader().setVisible(False)
-        self.table.setShowGrid(False)
-
-        header = self.table.horizontalHeader()
-        header.setFixedHeight(38)
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.Fixed)
-        self.table.setColumnWidth(5, 100)
-
-        table_card_layout.addWidget(self.table)
-        layout.addWidget(table_card, 1)
-
+        table_card.setAccessibleName("Danh sách lịch trực")
+        card_layout = QVBoxLayout(table_card)
+        card_layout.setContentsMargins(16, 14, 16, 14)
+        self.table = AdaptiveDataTable(
+            (
+                ColumnSpec(
+                    "ID",
+                    "id",
+                    minimum_width=56,
+                    preferred_width=64,
+                    maximum_width=72,
+                    priority=int(ColumnPriority.CRITICAL),
+                    preserve_full=True,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+                ColumnSpec(
+                    "Bác sĩ",
+                    "doctor",
+                    minimum_width=220,
+                    preferred_width=360,
+                    maximum_width=560,
+                    grow_weight=3,
+                    display_mode=ColumnDisplayMode.WRAP_2,
+                    line_limit=2,
+                ),
+                ColumnSpec(
+                    "Ca trực",
+                    "shift",
+                    minimum_width=180,
+                    preferred_width=230,
+                    maximum_width=300,
+                    grow_weight=1,
+                    display_mode=ColumnDisplayMode.WRAP_2,
+                    line_limit=2,
+                ),
+                ColumnSpec(
+                    "Thời lượng",
+                    "duration",
+                    minimum_width=110,
+                    preferred_width=120,
+                    maximum_width=132,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+                ColumnSpec(
+                    "Trạng thái",
+                    "status",
+                    minimum_width=124,
+                    preferred_width=132,
+                    maximum_width=148,
+                    priority=int(ColumnPriority.CRITICAL),
+                    preserve_full=True,
+                    status=True,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+                ColumnSpec(
+                    "Thao tác",
+                    "actions",
+                    minimum_width=132,
+                    preferred_width=140,
+                    maximum_width=152,
+                    priority=int(ColumnPriority.CRITICAL),
+                    preserve_full=True,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+            ),
+            accessible_name="Danh sách lịch trực",
+        )
+        card_layout.addWidget(self.table)
+        self.table_state = self.bind_state_host(
+            table_card,
+            self.load_data,
+            empty_title="Chưa có lịch trực",
+            empty_description="Tạo lịch trực đầu tiên để mở giờ làm việc cho bác sĩ.",
+            empty_action_text="Thêm lịch trực",
+            on_empty_action=self.open_create_dialog,
+        )
+        layout.addWidget(self.table_state, 1)
         self.load_doctors()
         self.load_data()
 
     def load_doctors(self):
-        self.doctor_combo.clear()
-        self.doctor_map = {}
-        r = api_client.get("/doctors/")
-        if r.status_code == 200:
-            for d in r.json():
-                if d["IsActive"]:
-                    label = f"{d['FullName']} ({d.get('SpecialtyName') or 'Chưa phân khoa'})"
-                    self.doctor_combo.addItem(label)
-                    self.doctor_map[label] = d["DoctorID"]
+        return self.run_admin_task(
+            "load-schedule-doctors",
+            lambda: require_success(
+                api_client.get("/doctors/"),
+                "Không thể tải danh sách bác sĩ.",
+            ).json(),
+            self._doctors_loaded,
+            loading_text="Đang tải danh sách bác sĩ…",
+        )
 
-    def load_data(self):
-        r = api_client.get("/schedules/")
-        if r.status_code != 200:
-            return
-        items = r.json()
-        self.table.clearContents()
-
-        doctors_map = {}
-        rd = api_client.get("/doctors/")
-        if rd.status_code == 200:
-            doctors_map = {d["DoctorID"]: d["FullName"] for d in rd.json()}
-
-        self.table.setRowCount(len(items))
-        for row, s in enumerate(items):
-            item_id = QTableWidgetItem(str(s["ScheduleID"]))
-            item_id.setTextAlignment(Qt.AlignCenter)
-            self.table.setItem(row, 0, item_id)
-
-            self.table.setItem(row, 1, QTableWidgetItem(doctors_map.get(s["DoctorID"], "—")))
-
-            item_day = QTableWidgetItem(DAYS_VN.get(s["DayOfWeek"], "—"))
-            item_day.setTextAlignment(Qt.AlignCenter)
-            self.table.setItem(row, 2, item_day)
-
-            st_item = QTableWidgetItem(str(s["StartTime"])[:5] if len(str(s["StartTime"])) >= 5 else str(s["StartTime"]))
-            st_item.setTextAlignment(Qt.AlignCenter)
-            self.table.setItem(row, 3, st_item)
-
-            et_item = QTableWidgetItem(str(s["EndTime"])[:5] if len(str(s["EndTime"])) >= 5 else str(s["EndTime"]))
-            et_item.setTextAlignment(Qt.AlignCenter)
-            self.table.setItem(row, 4, et_item)
-
-            # Delete button
-            del_btn = QPushButton("Xóa")
-            del_btn.setObjectName("actionDeleteBtn")
-            del_btn.setCursor(Qt.PointingHandCursor)
-            del_btn.setFixedSize(60, 28)
-            del_btn.clicked.connect(lambda _, sid=s["ScheduleID"]: self.delete_item(sid))
-
-            actions_widget = QWidget()
-            actions_layout = QHBoxLayout(actions_widget)
-            actions_layout.setContentsMargins(4, 0, 4, 0)
-            actions_layout.setAlignment(Qt.AlignCenter)
-            actions_layout.addWidget(del_btn)
-
-            self.table.setCellWidget(row, 5, actions_widget)
-            self.table.setRowHeight(row, 48)
-
-    def add_schedule(self):
-        self.load_doctors()
-        doctor_label = self.doctor_combo.currentText()
-        if not doctor_label:
-            QMessageBox.warning(self, "Lỗi", "Chưa có bác sĩ nào — hãy tạo bác sĩ trước.")
-            return
-
-        payload = {
-            "DoctorID": self.doctor_map[doctor_label],
-            "DayOfWeek": self.day_combo.currentData(),
-            "StartTime": self.start_time.time().toString("HH:mm:ss"),
-            "EndTime": self.end_time.time().toString("HH:mm:ss"),
-            "SlotDuration": self.slot_duration.value(),
+    def _doctors_loaded(self, doctors: list[dict]) -> None:
+        self._doctors = [doctor for doctor in doctors if doctor.get("IsActive")]
+        self._doctor_names = {
+            int(doctor["DoctorID"]): str(doctor.get("FullName") or "—")
+            for doctor in doctors
         }
-        r = api_client.post("/schedules/", json=payload)
-        if r.status_code == 200:
-            self.load_data()
-        else:
-            QMessageBox.warning(self, "Lỗi", r.json().get("detail", "Không thể thêm lịch làm việc."))
 
-    def delete_item(self, schedule_id):
-        if QMessageBox.question(self, "Xác nhận", "Bạn có chắc muốn xóa lịch làm việc này?") == QMessageBox.Yes:
-            api_client.delete(f"/schedules/{schedule_id}")
-            self.load_data()
+    def load_data(self, *, clear_feedback: bool = True):
+        return self.run_admin_task(
+            "load-schedules",
+            self._fetch_schedule_data,
+            self._populate_schedules,
+            loading_text="Đang tải lịch trực…",
+            clear_feedback=clear_feedback,
+            stateful=True,
+            empty_when=lambda result: not result[0],
+        )
+
+    @staticmethod
+    def _fetch_schedule_data():
+        schedules = require_success(
+            api_client.get("/schedules/"),
+            "Không thể tải lịch trực.",
+        ).json()
+        doctors = require_success(
+            api_client.get("/doctors/"),
+            "Không thể tải thông tin bác sĩ.",
+        ).json()
+        return schedules, doctors
+
+    def _populate_schedules(self, result) -> None:
+        schedules, doctors = result
+        self._doctor_names = {
+            int(doctor["DoctorID"]): str(doctor.get("FullName") or "—")
+            for doctor in doctors
+        }
+        rows = []
+        for schedule in schedules:
+            doctor_name = self._doctor_names.get(int(schedule["DoctorID"]), "—")
+            day = DAYS_VN.get(int(schedule.get("DayOfWeek") or 0), "Không rõ ngày")
+            start = _time_text(schedule.get("StartTime"))
+            end = _time_text(schedule.get("EndTime"))
+            rows.append(
+                {
+                    "id": schedule.get("ScheduleID"),
+                    "doctor": doctor_name,
+                    "shift": CellValue(
+                        day,
+                        f"{start}–{end}",
+                        accessible_text=f"{day}, từ {start} đến {end}",
+                    ),
+                    "duration": f"{schedule.get('SlotDuration') or 30} phút",
+                    "status": "ACTIVE" if schedule.get("IsActive", True) else "INACTIVE",
+                    "actions": "",
+                }
+            )
+        self.table.set_rows(rows)
+        for row, schedule in enumerate(schedules):
+            doctor_name = self._doctor_names.get(int(schedule["DoctorID"]), "bác sĩ")
+            active = bool(schedule.get("IsActive", True))
+            overflow = (
+                (
+                    "Xóa lịch trực",
+                    lambda schedule=schedule: self._confirm_delete(schedule),
+                ),
+            ) if active else ()
+            actions = AdminRowActions(
+                f"lịch trực của {doctor_name}",
+                self.table,
+                on_edit=(
+                    (lambda schedule=schedule: self.open_edit_dialog(schedule))
+                    if active
+                    else None
+                ),
+                overflow_actions=overflow,
+            )
+            set_row_actions(self.table, row, 5, actions)
+
+    def _build_dialog(self, schedule: dict | None = None):
+        editing = schedule is not None
+        dialog = AdminFormDialog(
+            "Chỉnh sửa lịch trực" if editing else "Thêm lịch trực",
+            "Chọn ngày làm việc, khoảng giờ và thời lượng mỗi lượt khám.",
+            self,
+            save_text="Lưu thay đổi" if editing else "Thêm lịch trực",
+        )
+        doctor_combo = ChevronComboBox()
+        for doctor in self._doctors:
+            label = str(doctor.get("FullName") or "—")
+            specialty = str(doctor.get("SpecialtyName") or "Chưa phân chuyên khoa")
+            doctor_combo.addItem(f"{label} · {specialty}", doctor["DoctorID"])
+        doctor_display = QLineEdit()
+        doctor_display.setReadOnly(True)
+        day_combo = ChevronComboBox()
+        for day_id, day_name in DAYS_VN.items():
+            day_combo.addItem(day_name, day_id)
+        start = QTimeEdit(QTime(8, 0))
+        start.setDisplayFormat("HH:mm")
+        end = QTimeEdit(QTime(17, 0))
+        end.setDisplayFormat("HH:mm")
+        duration = QSpinBox()
+        duration.setRange(5, 240)
+        duration.setSuffix(" phút")
+        duration.setValue(30)
+
+        if editing:
+            doctor_display.setText(
+                self._doctor_names.get(int(schedule["DoctorID"]), "—")
+            )
+            day_combo.setCurrentIndex(
+                max(0, day_combo.findData(schedule.get("DayOfWeek")))
+            )
+            start.setTime(_qtime(schedule.get("StartTime"), QTime(8, 0)))
+            end.setTime(_qtime(schedule.get("EndTime"), QTime(17, 0)))
+            duration.setValue(int(schedule.get("SlotDuration") or 30))
+            dialog.add_field("Bác sĩ", doctor_display, 0, 0, column_span=2)
+        else:
+            dialog.add_field("Bác sĩ", doctor_combo, 0, 0, required=True, column_span=2)
+        dialog.add_field("Ngày trong tuần", day_combo, 1, 0, required=True)
+        dialog.add_field("Thời lượng mỗi lượt", duration, 1, 1, required=True)
+        dialog.add_field("Giờ bắt đầu", start, 2, 0, required=True)
+        dialog.add_field("Giờ kết thúc", end, 2, 1, required=True)
+        return dialog, doctor_combo, day_combo, start, end, duration
+
+    def open_create_dialog(self) -> None:
+        if not self._doctors:
+            QMessageBox.information(
+                self,
+                "Chưa có bác sĩ",
+                "Hãy tạo ít nhất một bác sĩ đang hoạt động trước khi thêm lịch trực.",
+            )
+            return
+        dialog, doctor, day, start, end, duration = self._build_dialog()
+
+        def submit() -> None:
+            if start.time() >= end.time():
+                dialog.show_request_error(
+                    "Khoảng giờ chưa hợp lệ",
+                    "Giờ kết thúc phải muộn hơn giờ bắt đầu.",
+                )
+                return
+            payload = {
+                "DoctorID": doctor.currentData(),
+                "DayOfWeek": day.currentData(),
+                "StartTime": start.time().toString("HH:mm:ss"),
+                "EndTime": end.time().toString("HH:mm:ss"),
+                "SlotDuration": duration.value(),
+            }
+            self._submit_dialog(
+                dialog,
+                "create-schedule",
+                lambda: require_success(
+                    api_client.post("/schedules/", json=payload),
+                    "Không thể thêm lịch trực.",
+                ),
+                "Đã thêm lịch trực",
+            )
+
+        dialog.buttons.accepted.connect(submit)
+        dialog.exec()
+
+    def open_edit_dialog(self, schedule: dict) -> None:
+        dialog, _doctor, day, start, end, duration = self._build_dialog(schedule)
+        schedule_id = schedule["ScheduleID"]
+
+        def submit() -> None:
+            if start.time() >= end.time():
+                dialog.show_request_error(
+                    "Khoảng giờ chưa hợp lệ",
+                    "Giờ kết thúc phải muộn hơn giờ bắt đầu.",
+                )
+                return
+            payload = {
+                "DayOfWeek": day.currentData(),
+                "StartTime": start.time().toString("HH:mm:ss"),
+                "EndTime": end.time().toString("HH:mm:ss"),
+                "SlotDuration": duration.value(),
+            }
+            self._submit_dialog(
+                dialog,
+                f"update-schedule:{schedule_id}",
+                lambda: require_success(
+                    api_client.put(f"/schedules/{schedule_id}", json=payload),
+                    "Không thể cập nhật lịch trực.",
+                ),
+                "Đã cập nhật lịch trực",
+            )
+
+        dialog.buttons.accepted.connect(submit)
+        dialog.exec()
+
+    def _submit_dialog(self, dialog, key, operation, success_title) -> None:
+        dialog.set_busy(True)
+        self.run_admin_task(
+            key,
+            operation,
+            lambda _response: self._saved(dialog, success_title),
+            on_finished=lambda: dialog.set_busy(False),
+            on_error=lambda error: dialog.show_request_error(
+                "Không thể lưu lịch trực", self.error_message(error)
+            ),
+            loading_text="Đang lưu lịch trực…",
+        )
+
+    def _saved(self, dialog: AdminFormDialog, title: str) -> None:
+        dialog.accept()
+        self.feedback.show_message(
+            title,
+            "Thông tin lịch trực đã được lưu.",
+            severity="success",
+        )
+        self.load_data(clear_feedback=False)
+
+    def _confirm_delete(self, schedule: dict) -> None:
+        doctor_name = self._doctor_names.get(int(schedule["DoctorID"]), "bác sĩ")
+        answer = QMessageBox.question(
+            self,
+            "Xóa lịch trực",
+            f"Bạn có chắc muốn xóa lịch trực của “{doctor_name}”?",
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        schedule_id = schedule["ScheduleID"]
+        self.run_admin_task(
+            f"delete-schedule:{schedule_id}",
+            lambda: require_success(
+                api_client.delete(f"/schedules/{schedule_id}"),
+                "Không thể xóa lịch trực.",
+            ),
+            lambda _response: self._deleted(),
+            loading_text="Đang xóa lịch trực…",
+        )
+
+    def _deleted(self) -> None:
+        self.feedback.show_message(
+            "Đã xóa lịch trực",
+            "Lịch trực đã được ngừng sử dụng.",
+            severity="success",
+        )
+        self.load_data(clear_feedback=False)

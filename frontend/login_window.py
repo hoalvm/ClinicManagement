@@ -1,6 +1,11 @@
-"""Modern, clean login window for ClinicManagement."""
+"""Central, non-blocking login window for ClinicManagement."""
 
-from PySide6.QtCore import Qt
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any
+
+from PySide6.QtCore import Qt, QThreadPool, Slot
 from PySide6.QtWidgets import (
     QFrame,
     QLabel,
@@ -10,13 +15,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from frontend.api.workers import ApiWorker
 from frontend.api_client import api_client
 
 
 class LoginWindow(QWidget):
-    def __init__(self, on_success):
+    def __init__(self, on_success: Callable[[], None]):
         super().__init__()
         self.on_success = on_success
+        self._login_worker: ApiWorker | None = None
+        self._routing_pending = False
         self.setWindowTitle("Đăng nhập - Clinic Management")
         self.resize(440, 540)
         self.setMinimumSize(400, 500)
@@ -35,19 +43,17 @@ class LoginWindow(QWidget):
 
         # Header branding
         tag_label = QLabel("HỆ THỐNG Y TẾ")
-        tag_label.setStyleSheet(
-            "color: #0f766e; font-size: 11px; font-weight: 700; letter-spacing: 1px;"
-        )
+        tag_label.setObjectName("authTagLabel")
         tag_label.setAlignment(Qt.AlignCenter)
         card_layout.addWidget(tag_label)
 
         title_label = QLabel("Clinic Management")
-        title_label.setStyleSheet("color: #0f172a; font-size: 22px; font-weight: 700;")
+        title_label.setObjectName("authMainTitle")
         title_label.setAlignment(Qt.AlignCenter)
         card_layout.addWidget(title_label)
 
         subtitle_label = QLabel("Đăng nhập để tiếp tục")
-        subtitle_label.setStyleSheet("color: #64748b; font-size: 13px;")
+        subtitle_label.setObjectName("mutedLabel")
         subtitle_label.setAlignment(Qt.AlignCenter)
         subtitle_label.setWordWrap(True)
         card_layout.addWidget(subtitle_label)
@@ -56,10 +62,7 @@ class LoginWindow(QWidget):
 
         # Inline error banner
         self.error_label = QLabel()
-        self.error_label.setStyleSheet(
-            "background-color: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; "
-            "border-radius: 6px; padding: 8px 12px; font-size: 12px; font-weight: 500;"
-        )
+        self.error_label.setObjectName("loginErrorBanner")
         self.error_label.setWordWrap(True)
         self.error_label.setVisible(False)
         card_layout.addWidget(self.error_label)
@@ -70,6 +73,7 @@ class LoginWindow(QWidget):
         user_label = QLabel("Tên đăng nhập")
         user_label.setObjectName("fieldLabel")
         self.username_input = QLineEdit()
+        self.username_input.setAccessibleName("Tên đăng nhập")
         self.username_input.setPlaceholderText("Nhập tên đăng nhập...")
         self.username_input.returnPressed.connect(self.handle_login)
         user_box.addWidget(user_label)
@@ -82,6 +86,7 @@ class LoginWindow(QWidget):
         pwd_label = QLabel("Mật khẩu")
         pwd_label.setObjectName("fieldLabel")
         self.password_input = QLineEdit()
+        self.password_input.setAccessibleName("Mật khẩu")
         self.password_input.setEchoMode(QLineEdit.Password)
         self.password_input.setPlaceholderText("Nhập mật khẩu...")
         self.password_input.returnPressed.connect(self.handle_login)
@@ -97,32 +102,90 @@ class LoginWindow(QWidget):
         self.login_btn.setMinimumHeight(40)
         self.login_btn.setCursor(Qt.PointingHandCursor)
         self.login_btn.clicked.connect(self.handle_login)
+        self.login_btn.setAccessibleName("Đăng nhập")
         card_layout.addWidget(self.login_btn)
 
         main_layout.addWidget(card)
 
-    def handle_login(self):
+    def handle_login(self) -> None:
+        if self._login_worker is not None:
+            return
         self.error_label.setVisible(False)
         username = self.username_input.text().strip()
         password = self.password_input.text()
+        self._set_field_error(self.username_input, not username)
+        self._set_field_error(self.password_input, not password)
 
         if not username or not password:
             self.error_label.setText("Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.")
             self.error_label.setVisible(True)
             return
 
-        self.login_btn.setEnabled(False)
-        self.login_btn.setText("Đang đăng nhập...")
+        worker = ApiWorker(lambda: api_client.login(username, password))
+        self._login_worker = worker
+        self._sync_busy_state()
+        worker.signals.success.connect(self._login_finished)
+        worker.signals.error.connect(self._login_failed)
+        worker.signals.finished.connect(self._login_cleanup)
+        QThreadPool.globalInstance().start(worker)
 
-        try:
-            ok, err = api_client.login(username, password)
-            if ok:
-                self.on_success()
-            else:
-                self.error_label.setText(err or "Sai tài khoản hoặc mật khẩu.")
-                self.error_label.setVisible(True)
-                self.password_input.clear()
-                self.password_input.setFocus()
-        finally:
-            self.login_btn.setEnabled(True)
+    @Slot(object)
+    def _login_finished(self, result: Any) -> None:
+        ok, error = result
+        if ok:
+            self.on_success()
+            return
+        self._show_error(error or "Sai tài khoản hoặc mật khẩu.")
+
+    @Slot(object)
+    def _login_failed(self, _error: Exception) -> None:
+        self._show_error("Không thể xử lý đăng nhập. Vui lòng thử lại.")
+
+    def _show_error(self, message: str) -> None:
+        self.error_label.setText(message)
+        self.error_label.setVisible(True)
+        self._set_field_error(self.password_input, True)
+        self.password_input.clear()
+        self.password_input.setFocus()
+
+    @staticmethod
+    def _set_field_error(field: QLineEdit, active: bool) -> None:
+        field.setProperty("hasError", active)
+        field.style().unpolish(field)
+        field.style().polish(field)
+
+    @Slot()
+    def _login_cleanup(self) -> None:
+        self._login_worker = None
+        self.password_input.clear()
+        self._sync_busy_state()
+
+    def set_routing_pending(self, pending: bool) -> None:
+        """Keep credentials locked while an asynchronous role route is resolving."""
+
+        self._routing_pending = pending
+        self._sync_busy_state()
+
+    def reset_for_login(self) -> None:
+        """Remove sensitive state before presenting the central login again."""
+
+        self._routing_pending = False
+        self.password_input.clear()
+        self.error_label.clear()
+        self.error_label.setVisible(False)
+        self._set_field_error(self.username_input, False)
+        self._set_field_error(self.password_input, False)
+        self._sync_busy_state()
+
+    def _sync_busy_state(self) -> None:
+        login_pending = self._login_worker is not None
+        busy = login_pending or self._routing_pending
+        self.username_input.setEnabled(not busy)
+        self.password_input.setEnabled(not busy)
+        self.login_btn.setEnabled(not busy)
+        if login_pending:
+            self.login_btn.setText("Đang đăng nhập...")
+        elif self._routing_pending:
+            self.login_btn.setText("Đang mở ứng dụng...")
+        else:
             self.login_btn.setText("Đăng nhập")

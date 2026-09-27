@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from frontend.api.api_client import ApiClient, ApiError
 from frontend.core.i18n import get_i18n, t
 from frontend.views.common import BaseApiView, require_dict
+from frontend.widgets.form_field import FormField
 from frontend.widgets.language_selector import LanguageSelector
 
 
@@ -72,54 +73,45 @@ class LoginView(BaseApiView):
         card_layout.addWidget(self.loading)
 
         # Username input
-        user_box = QVBoxLayout()
-        user_box.setSpacing(5)
-        self.username_label = QLabel("Username")
-        self.username_label.setObjectName("fieldLabel")
         self.username = QLineEdit()
         self.username.setMaxLength(50)
         self.username.setClearButtonEnabled(True)
-        self.username.setAccessibleName("Username")
-        self.username_label.setBuddy(self.username)
-        user_box.addWidget(self.username_label)
-        user_box.addWidget(self.username)
-        card_layout.addLayout(user_box)
+        self.username.setAccessibleName(t("username"))
+        self.username_field = FormField(t("username"), self.username, required=True)
+        self.username_label = self.username_field.label
+        card_layout.addWidget(self.username_field)
 
         # Password input
-        pwd_box = QVBoxLayout()
-        pwd_box.setSpacing(5)
-        self.password_label = QLabel("Password")
-        self.password_label.setObjectName("fieldLabel")
         self.password = QLineEdit()
         self.password.setMaxLength(128)
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
-        self.password.setAccessibleName("Password")
-        self.password_label.setBuddy(self.password)
-        pwd_box.addWidget(self.password_label)
-        pwd_box.addWidget(self.password)
-        card_layout.addLayout(pwd_box)
+        self.password.setAccessibleName(t("password"))
+        self.password_field = FormField(t("password"), self.password, required=True)
+        self.password_label = self.password_field.label
+        card_layout.addWidget(self.password_field)
 
-        self.show_password = QCheckBox("Show password")
+        self.show_password = QCheckBox(t("show_password"))
         self.show_password.setCursor(Qt.PointingHandCursor)
-        self.show_password.setAccessibleName("Show password")
+        self.show_password.setAccessibleName(t("show_password"))
         self.show_password.toggled.connect(self._toggle_password)
         card_layout.addWidget(self.show_password)
 
         card_layout.addSpacing(4)
 
-        self.login_button = QPushButton("Sign in")
+        self.login_button = QPushButton(t("sign_in_button"))
         self.login_button.setObjectName("primaryButton")
         self.login_button.setCursor(Qt.PointingHandCursor)
         self.login_button.setMinimumHeight(42)
-        self.login_button.setAccessibleName("Sign in")
-        self.register_button = QPushButton("Create a patient account")
+        self.login_button.setAccessibleName(t("sign_in_button"))
+        self.register_button = QPushButton(t("create_account_button"))
         self.register_button.setObjectName("secondaryButton")
         self.register_button.setCursor(Qt.PointingHandCursor)
         self.register_button.setMinimumHeight(40)
+        self.register_button.setAccessibleName(t("create_account_button"))
         card_layout.addWidget(self.login_button)
         card_layout.addWidget(self.register_button)
 
-        self.help_text = QLabel("Need help? Contact your clinic directly.")
+        self.help_text = QLabel(t("need_help"))
         self.help_text.setObjectName("helperText")
         self.help_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_layout.addWidget(self.help_text)
@@ -145,14 +137,19 @@ class LoginView(BaseApiView):
         self.tag_label.setText(t("portal_tag"))
         self.title_label.setText(t("sign_in_title"))
         self.subtitle_label.setText(t("sign_in_subtitle"))
-        self.username_label.setText(t("username"))
+        self.username_field.set_label_text(t("username"))
         self.username.setPlaceholderText(t("username_placeholder", default="Nhập tên đăng nhập..."))
-        self.password_label.setText(t("password"))
+        self.password_field.set_label_text(t("password"))
         self.password.setPlaceholderText(t("password_placeholder", default="Nhập mật khẩu..."))
         self.show_password.setText(t("show_password"))
         self.login_button.setText(t("sign_in_button"))
         self.register_button.setText(t("create_account_button"))
         self.help_text.setText(t("need_help"))
+        self.username.setAccessibleName(t("username"))
+        self.password.setAccessibleName(t("password"))
+        self.show_password.setAccessibleName(t("show_password"))
+        self.login_button.setAccessibleName(t("sign_in_button"))
+        self.register_button.setAccessibleName(t("create_account_button"))
         self.username.setFocus()
 
     def set_username(self, username: str) -> None:
@@ -196,7 +193,7 @@ class LoginView(BaseApiView):
                 user = require_dict(self.api_client.get("/api/v1/auth/me"))
                 if user.get("role") != "PATIENT" or user.get("patient_id") is None:
                     raise ApiError(
-                        "This portal is available to patient accounts only.",
+                        t("err_patient_only"),
                         status_code=403,
                     )
             except Exception:
@@ -225,16 +222,13 @@ class LoginView(BaseApiView):
         )
 
     def _show_validation(self, field: QLineEdit, message: str) -> None:
-        field.setProperty("error", True)
-        field.style().unpolish(field)
-        field.style().polish(field)
+        wrapper = self.username_field if field is self.username else self.password_field
+        wrapper.set_error(message)
         self.feedback.show_message(t("check_details"), message, severity="error")
         field.setFocus()
         field.selectAll()
 
     def _clear_validation(self) -> None:
         self.feedback.clear()
-        for field in (self.username, self.password):
-            field.setProperty("error", False)
-            field.style().unpolish(field)
-            field.style().polish(field)
+        self.username_field.clear_error()
+        self.password_field.clear_error()

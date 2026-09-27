@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QCloseEvent, QResizeEvent
 from PySide6.QtWidgets import (
-    QHBoxLayout,
     QMainWindow,
     QMessageBox,
     QStackedWidget,
@@ -26,21 +25,28 @@ from frontend.views.medical_history_view import MedicalHistoryView
 from frontend.views.medical_result_view import MedicalResultView
 from frontend.views.patient_profile_view import PatientProfileView
 from frontend.views.register_view import RegisterView
+from frontend.widgets.application_shell import ApplicationShell
 from frontend.widgets.sidebar import Sidebar
 
 
 class MainWindow(QMainWindow):
     """Own authentication screens and one authenticated QStackedWidget."""
 
+    logout_requested = Signal()
+    SIDEBAR_COMPACT_BREAKPOINT = 1240
+
     def __init__(
         self,
         api_client: ApiClient,
         session: SessionState,
         parent: QWidget | None = None,
+        *,
+        central_auth: bool = False,
     ) -> None:
         super().__init__(parent)
         self.api_client = api_client
         self.session = session
+        self.central_auth = central_auth
         self._history: list[str] = []
         self._handling_expiry = False
         self.setWindowTitle("ClinicCare Patient Portal")
@@ -55,15 +61,10 @@ class MainWindow(QMainWindow):
         self.root_stack.addWidget(self.login_view)
         self.root_stack.addWidget(self.register_view)
 
-        self.shell = QWidget()
-        shell_layout = QHBoxLayout(self.shell)
-        shell_layout.setContentsMargins(0, 0, 0, 0)
-        shell_layout.setSpacing(0)
         self.sidebar = Sidebar()
         self.page_stack = QStackedWidget()
         self.page_stack.setObjectName("pageStack")
-        shell_layout.addWidget(self.sidebar)
-        shell_layout.addWidget(self.page_stack, 1)
+        self.shell = ApplicationShell(self.sidebar, self.page_stack)
         self.root_stack.addWidget(self.shell)
 
         self.dashboard_view = DashboardView(api_client)
@@ -145,8 +146,8 @@ class MainWindow(QMainWindow):
         self._show_login()
         self.login_view.set_username(username)
         self.login_view.feedback.show_message(
-            "Account created",
-            "Your patient account is ready. Enter your password to sign in.",
+            "Tạo tài khoản thành công",
+            "Tài khoản bệnh nhân đã sẵn sàng. Hãy nhập mật khẩu để đăng nhập.",
             severity="success",
         )
 
@@ -225,6 +226,10 @@ class MainWindow(QMainWindow):
 
     def _logout(self) -> None:
         self._clear_session()
+        if self.central_auth:
+            self.logout_requested.emit()
+            self.close()
+            return
         self.login_view.reset()
         self._show_login()
 
@@ -233,12 +238,21 @@ class MainWindow(QMainWindow):
             return
         self._handling_expiry = True
         self._clear_session()
+        if self.central_auth:
+            QMessageBox.warning(
+                self,
+                "Phiên đăng nhập đã hết hạn",
+                "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+            )
+            self.logout_requested.emit()
+            self.close()
+            return
         self.login_view.reset()
         self._show_login()
         QMessageBox.warning(
             self,
-            "Session expired",
-            "Session expired. Please login again.",
+            "Phiên đăng nhập đã hết hạn",
+            "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
         )
 
     def _clear_session(self) -> None:
@@ -253,8 +267,10 @@ class MainWindow(QMainWindow):
         self.sidebar.clear_user()
 
     def _sync_sidebar_mode(self) -> None:
-        if hasattr(self, "sidebar"):
-            self.sidebar.set_compact(self.width() < 1100)
+        if hasattr(self, "shell"):
+            self.shell.set_sidebar_compact(
+                self.width() < self.SIDEBAR_COMPACT_BREAKPOINT
+            )
 
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
         super().resizeEvent(event)
@@ -274,11 +290,13 @@ if __name__ == "__main__":
     from frontend.core.config import get_frontend_settings
     from frontend.core.session import SessionState
     from frontend.style import APP_STYLE
+    from frontend.widgets.focus_visible import install_focus_visible
 
     settings = get_frontend_settings()
     app = QApplication.instance() or QApplication(sys.argv)
     app.setFont(QFont("Segoe UI", 10))
     app.setStyleSheet(APP_STYLE)
+    install_focus_visible(app)
 
     portal_client = ApiClient(
         base_url=settings.api_base_url,

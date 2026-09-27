@@ -1,19 +1,10 @@
-"""Modern, clean Reception & Cashier Dashboard for Clinic Staff."""
+"""Shared-shell workspace for reception and cashier staff."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QListWidget,
-    QMainWindow,
-    QPushButton,
-    QStackedWidget,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtCore import Signal
+from PySide6.QtGui import QCloseEvent, QResizeEvent
+from PySide6.QtWidgets import QMainWindow, QStackedWidget
 
 from frontend.api.api_client import ApiClient
 from frontend.core.config import get_frontend_settings
@@ -25,15 +16,33 @@ from frontend.views.invoice_view import InvoiceManagementView
 from frontend.views.payment_history_view import PaymentHistoryView
 from frontend.views.payment_view import PaymentView
 from frontend.views.reception_dashboard_view import ReceptionDashboardView
+from frontend.widgets.app_sidebar import AppSidebar, NavigationItem
+from frontend.widgets.application_shell import ApplicationShell
 
 
 class ReceptionDashboard(QMainWindow):
-    """Container shell for reception, patient intake, appointment booking, and cashier desks."""
+    """Reception, patient intake, appointment booking, and cashier shell."""
 
     logout_requested = Signal()
+    # Keep the content-side breakpoints stable while the sidebar changes width.
+    # At 1320 px the expanded sidebar still leaves enough room for the widest
+    # two-column reception page.
+    SIDEBAR_COMPACT_BREAKPOINT = 1320
+
+    _NAVIGATION = (
+        NavigationItem("dashboard", "Tổng quan", "dashboard", "NGHIỆP VỤ"),
+        NavigationItem("check_in", "Tiếp nhận bệnh nhân", "medical"),
+        NavigationItem("book_for_patient", "Đặt lịch hộ", "calendar"),
+        NavigationItem("appointment_management", "Lịch hẹn", "calendar"),
+        NavigationItem("invoice_management", "Hóa đơn", "invoice", "THU NGÂN"),
+        NavigationItem("payment", "Thu phí", "invoice"),
+        NavigationItem("payment_history", "Lịch sử thanh toán", "invoice"),
+    )
 
     def __init__(self, api_client: ApiClient | None = None) -> None:
         super().__init__()
+        self._logout_in_progress = False
+        self._client_disposed = False
         settings = get_frontend_settings()
         self.api_client = api_client or ApiClient(
             base_url=settings.api_base_url,
@@ -55,107 +64,26 @@ class ReceptionDashboard(QMainWindow):
                         },
                     )
 
-        self.setWindowTitle("ClinicCare - Quầy Tiếp Đón & Thu Ngân")
+        self.setWindowTitle("ClinicCare - Quầy Tiếp đón & Thu ngân")
         self.resize(1280, 800)
         self.setMinimumSize(1100, 680)
 
-        container = QWidget()
-        main_layout = QHBoxLayout(container)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
-
-        # ------------------- Left Sidebar -------------------
-        sidebar = QFrame()
-        sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(240)
-        sidebar_layout = QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(16, 24, 16, 20)
-        sidebar_layout.setSpacing(12)
-
-        # Brand header
-        brand_row = QWidget()
-        brand_layout = QHBoxLayout(brand_row)
-        brand_layout.setContentsMargins(0, 0, 0, 0)
-        brand_layout.setSpacing(10)
-
-        brand_mark = QLabel("C")
-        brand_mark.setAlignment(Qt.AlignCenter)
-        brand_mark.setFixedSize(40, 40)
-        brand_mark.setStyleSheet(
-            "background-color: #0f766e; color: #ffffff; border-radius: 10px; font-size: 20px; font-weight: 800;"
+        self.sidebar = AppSidebar(
+            self._NAVIGATION,
+            brand_subtitle="Tiếp đón & Thu ngân",
+            logout_text="Đăng xuất",
         )
-        brand_layout.addWidget(brand_mark)
-
-        brand_text = QWidget()
-        brand_text_layout = QVBoxLayout(brand_text)
-        brand_text_layout.setContentsMargins(0, 0, 0, 0)
-        brand_text_layout.setSpacing(1)
-        brand_title = QLabel("ClinicCare")
-        brand_title.setStyleSheet("color: #ffffff; font-size: 16px; font-weight: 700;")
-        brand_text_layout.addWidget(brand_title)
-        brand_layout.addWidget(brand_text, 1)
-
-        sidebar_layout.addWidget(brand_row)
-        sidebar_layout.addSpacing(20)
-
-        nav_title = QLabel("NGHIỆP VỤ")
-        nav_title.setObjectName("sidebarSectionLabel")
-        sidebar_layout.addWidget(nav_title)
-        sidebar_layout.addSpacing(4)
-
-        # Menu List
-        self.menu = QListWidget()
-        self.menu.setObjectName("adminSidebar")
-        self._menu_routes = [
-            ("dashboard", "Tiếp đón"),
-            ("check_in", "Check-in"),
-            ("book_for_patient", "Đặt lịch"),
-            ("appointment_management", "Lịch hẹn"),
-            ("invoice_management", "Hóa đơn"),
-            ("payment", "Thu phí"),
-            ("payment_history", "Lịch sử thu"),
-        ]
-        for _, label in self._menu_routes:
-            self.menu.addItem(label)
-        sidebar_layout.addWidget(self.menu, 1)
-
-        # User Info & Logout
-        user_card = QFrame()
-        user_card.setObjectName("sidebarUser")
-        user_card.setStyleSheet(
-            "background-color: #1e293b; border-radius: 8px; border: 1px solid #334155;"
+        self.sidebar.set_user(
+            {
+                "username": session_state.username or "Nhân viên",
+                "role": "STAFF",
+            },
+            role_label="Tiếp đón & Thu ngân",
         )
-        user_card_layout = QHBoxLayout(user_card)
-        user_card_layout.setContentsMargins(10, 8, 10, 8)
-        user_card_layout.setSpacing(10)
-
-        avatar = QLabel("NV")
-        avatar.setFixedSize(36, 36)
-        avatar.setAlignment(Qt.AlignCenter)
-        avatar.setStyleSheet(
-            "background-color: #0f766e; color: #ffffff; border-radius: 8px; font-size: 13px; font-weight: 700;"
-        )
-        user_card_layout.addWidget(avatar)
-
-        info_layout = QVBoxLayout()
-        info_layout.setContentsMargins(0, 0, 0, 0)
-        info_layout.setSpacing(1)
-        user_name = QLabel(session_state.username or "Nhân viên")
-        user_name.setStyleSheet("color: #ffffff; font-size: 13px; font-weight: 600;")
-        user_role = QLabel("Tiếp đón & Thu ngân")
-        user_role.setStyleSheet("color: #94a3b8; font-size: 11px;")
-        info_layout.addWidget(user_name)
-        info_layout.addWidget(user_role)
-        user_card_layout.addLayout(info_layout, 1)
-        sidebar_layout.addWidget(user_card)
-
-        self.logout_btn = QPushButton("Đăng xuất")
-        self.logout_btn.setObjectName("logoutButton")
-        self.logout_btn.setCursor(Qt.PointingHandCursor)
-        self.logout_btn.clicked.connect(self.handle_logout)
-        sidebar_layout.addWidget(self.logout_btn)
-
-        # ------------------- Right Content Stack -------------------
+        self.sidebar.navigation_requested.connect(self.navigate_by_route)
+        self.sidebar.logout_requested.connect(self.handle_logout)
+        # Compatibility alias for callers targeting the shell's logout control.
+        self.logout_btn = self.sidebar.logout_button
         self.pages = QStackedWidget()
         self.view_dashboard = ReceptionDashboardView(self.api_client)
         self.view_check_in = CheckInView(self.api_client)
@@ -165,25 +93,29 @@ class ReceptionDashboard(QMainWindow):
         self.view_payment = PaymentView(self.api_client)
         self.view_payment_history = PaymentHistoryView(self.api_client)
 
-        self.pages.addWidget(self.view_dashboard)  # index 0
-        self.pages.addWidget(self.view_check_in)  # index 1
-        self.pages.addWidget(self.view_book)  # index 2
-        self.pages.addWidget(self.view_appts)  # index 3
-        self.pages.addWidget(self.view_invoices)  # index 4
-        self.pages.addWidget(self.view_payment)  # index 5
-        self.pages.addWidget(self.view_payment_history)  # index 6
+        self._route_to_page = {
+            "dashboard": self.view_dashboard,
+            "check_in": self.view_check_in,
+            "book_for_patient": self.view_book,
+            "appointment_management": self.view_appts,
+            "invoice_management": self.view_invoices,
+            "payment": self.view_payment,
+            "payment_history": self.view_payment_history,
+        }
+        for page in self._route_to_page.values():
+            self.pages.addWidget(page)
 
         self._connect_signals()
-
-        self.menu.currentRowChanged.connect(self.on_menu_changed)
-        self.menu.setCurrentRow(0)
-
-        main_layout.addWidget(sidebar)
-        main_layout.addWidget(self.pages, 1)
-
-        self.setCentralWidget(container)
+        self.shell = ApplicationShell(self.sidebar, self.pages)
+        self.setCentralWidget(self.shell)
+        self.shell.set_sidebar_compact(
+            self.width() < self.SIDEBAR_COMPACT_BREAKPOINT
+        )
+        self.navigate_by_route("dashboard")
 
     def _connect_signals(self) -> None:
+        for page in self._route_to_page.values():
+            page.session_expired.connect(self.handle_logout)
         self.view_dashboard.navigate_requested.connect(self.navigate_by_route)
         self.view_dashboard.check_in_requested.connect(self._handle_check_in_requested)
         self.view_dashboard.create_invoice_requested.connect(
@@ -194,39 +126,65 @@ class ReceptionDashboard(QMainWindow):
         )
 
     def navigate_by_route(self, route: str) -> None:
-        route_map = {
-            "dashboard": 0,
-            "check_in": 1,
-            "book_for_patient": 2,
-            "appointment_management": 3,
-            "invoice_management": 4,
-            "payment": 5,
-            "payment_history": 6,
-        }
-        if route in route_map:
-            self.menu.setCurrentRow(route_map[route])
-
-    def _handle_check_in_requested(self, appt_id: int) -> None:
-        self.navigate_by_route("check_in")
-        self.view_check_in.search_input.setText(str(appt_id))
-        self.view_check_in.search_and_load()
-
-    def _handle_create_invoice_requested(self, appt_id: int) -> None:
-        self.navigate_by_route("invoice_management")
-
-    def _handle_pay_invoice_requested(self, inv_id: int) -> None:
-        self.navigate_by_route("payment")
-        self.view_payment.inv_input.setText(str(inv_id))
-        self.view_payment._fetch_invoice()
+        page = self._route_to_page.get(route)
+        if page is None:
+            return
+        current = self.pages.currentWidget()
+        if current is not page and hasattr(current, "invalidate_pending"):
+            current.invalidate_pending()
+        self.pages.setCurrentWidget(page)
+        self.sidebar.set_active(route)
+        if hasattr(page, "refresh"):
+            page.refresh()
+        elif hasattr(page, "_fetch_today_queue"):
+            page._fetch_today_queue()
 
     def on_menu_changed(self, index: int) -> None:
-        self.pages.setCurrentIndex(index)
-        current_page = self.pages.currentWidget()
-        if hasattr(current_page, "refresh"):
-            current_page.refresh()
-        elif hasattr(current_page, "_fetch_today_queue"):
-            current_page._fetch_today_queue()
+        """Compatibility entry point for legacy callers using numeric navigation."""
+
+        routes = tuple(self._route_to_page)
+        if 0 <= index < len(routes):
+            self.navigate_by_route(routes[index])
+
+    def _handle_check_in_requested(self, appointment_id: int) -> None:
+        self.view_check_in.search_input.setText(str(appointment_id))
+        self.navigate_by_route("check_in")
+
+    def _handle_create_invoice_requested(self, _appointment_id: int) -> None:
+        self.navigate_by_route("invoice_management")
+
+    def _handle_pay_invoice_requested(self, invoice_id: int) -> None:
+        self.navigate_by_route("payment")
+        self.view_payment.set_invoice_id(invoice_id)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        if hasattr(self, "shell"):
+            self.shell.set_sidebar_compact(
+                event.size().width() < self.SIDEBAR_COMPACT_BREAKPOINT
+            )
 
     def handle_logout(self) -> None:
+        if self._logout_in_progress:
+            return
+        self._logout_in_progress = True
+        self._dispose_session()
         self.logout_requested.emit()
         self.close()
+
+    def _dispose_session(self) -> None:
+        """Invalidate stale callbacks and release this shell's private client."""
+
+        if self._client_disposed:
+            return
+        self._client_disposed = True
+        for page in self._route_to_page.values():
+            page.invalidate_pending()
+            page.clear_data()
+        self.api_client.clear_access_token()
+        session_state.clear()
+        self.api_client.close()
+
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
+        self._dispose_session()
+        super().closeEvent(event)

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
 from frontend.core.i18n import get_i18n
+from frontend.widgets.combo_box import ChevronComboBox
 
 
 class LanguageSelector(QWidget):
@@ -21,58 +22,15 @@ class LanguageSelector(QWidget):
 
         if show_label:
             self.label = QLabel("Ngôn ngữ:")
-            self.label.setStyleSheet("color: #64748b; font-size: 12px; font-weight: 600;")
+            self.label.setObjectName("languageLabel")
             layout.addWidget(self.label)
         else:
             self.label = None
 
-        self.combo = QComboBox(self)
+        self.combo = ChevronComboBox(self)
         self.combo.setObjectName("languageCombo")
         self.combo.setCursor(Qt.CursorShape.PointingHandCursor)
         self.combo.setMinimumHeight(32)
-        self.combo.setStyleSheet(
-            "QComboBox#languageCombo { "
-            "   background: #ffffff; "
-            "   border: 1px solid #cbd5e1; "
-            "   border-radius: 6px; "
-            "   padding: 4px 10px; "
-            "   font-size: 12px; "
-            "   font-weight: 600; "
-            "   color: #1e293b; "
-            "} "
-            "QComboBox#languageCombo:hover { "
-            "   border-color: #0f766e; "
-            "   background: #f8fafc; "
-            "} "
-            "QComboBox#languageCombo::drop-down { "
-            "   border: none; "
-            "   width: 20px; "
-            "} "
-            "QComboBox#languageCombo QAbstractItemView { "
-            "   background-color: #ffffff; "
-            "   color: #0f172a; "
-            "   border: 1px solid #cbd5e1; "
-            "   border-radius: 6px; "
-            "   padding: 2px; "
-            "   outline: none; "
-            "   selection-background-color: #e6fffa; "
-            "   selection-color: #0f766e; "
-            "} "
-            "QComboBox#languageCombo QAbstractItemView::item { "
-            "   background-color: #ffffff; "
-            "   color: #0f172a; "
-            "   min-height: 28px; "
-            "   padding: 5px 8px; "
-            "   font-size: 12px; "
-            "   font-weight: 600; "
-            "} "
-            "QComboBox#languageCombo QAbstractItemView::item:hover, "
-            "QComboBox#languageCombo QAbstractItemView::item:selected { "
-            "   background-color: #e6fffa; "
-            "   color: #0f766e; "
-            "   font-weight: 700; "
-            "}"
-        )
 
         self.combo.addItem("Tiếng Việt", "vi")
         self.combo.addItem("English", "en")

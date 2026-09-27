@@ -10,16 +10,19 @@ from typing import Any
 from PySide6.QtCore import QObject, Qt, QThreadPool, Signal, Slot
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
-    QAbstractItemView,
-    QHeaderView,
     QTableView,
     QWidget,
 )
 
 from frontend.api.api_client import ApiClient, ApiError
 from frontend.api.workers import ApiWorker
+from frontend.core.i18n import t
+from frontend.ui.design_system import ColumnSpec
+from frontend.widgets.adaptive_data_table import configure_table_view
 from frontend.widgets.feedback_banner import FeedbackBanner
 from frontend.widgets.loading_indicator import LoadingIndicator
+from frontend.widgets.state_host import StateHost
+from frontend.widgets.status_badge import display_status
 
 
 class _TaskHandler(QObject):
@@ -33,6 +36,7 @@ class _TaskHandler(QObject):
         controls: tuple[QWidget, ...],
         on_finished: Callable[[], None] | None,
         expire_on_401: bool,
+        is_current: Callable[[], bool] | None,
     ) -> None:
         super().__init__(view)
         self.view = view
@@ -42,6 +46,19 @@ class _TaskHandler(QObject):
         self.controls = controls
         self.on_finished = on_finished
         self.expire_on_401 = expire_on_401
+        self.is_current = is_current
+
+    def accepts_result(self) -> bool:
+        """Return whether this request still represents the active UI choice."""
+
+        if self.generation != self.view._generation:
+            return False
+        if self.is_current is None:
+            return True
+        try:
+            return bool(self.is_current())
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            return False
 
     @Slot(object)
     def success(self, result: Any) -> None:
@@ -67,6 +84,7 @@ class BaseApiView(QWidget):
         self.api_client = api_client
         self.loading = LoadingIndicator(parent=self)
         self.feedback = FeedbackBanner(parent=self)
+        self.state_host: StateHost | None = None
         self._workers: dict[tuple[str, int], ApiWorker] = {}
         self._handlers: dict[tuple[str, int], _TaskHandler] = {}
         self._generation = 0
@@ -78,9 +96,10 @@ class BaseApiView(QWidget):
         on_success: Callable[[Any], None],
         *,
         controls: Iterable[QWidget] = (),
-        loading_text: str = "Loading…",
+        loading_text: str | None = None,
         on_finished: Callable[[], None] | None = None,
         expire_on_401: bool = True,
+        is_current: Callable[[], bool] | None = None,
     ) -> bool:
         generation = self._generation
         task_key = (key, generation)
@@ -91,7 +110,11 @@ class BaseApiView(QWidget):
         controlled_widgets = tuple(controls)
         for widget in controlled_widgets:
             widget.setEnabled(False)
-        self.loading.start(loading_text)
+        resolved_loading_text = loading_text or t("loading")
+        if self.state_host is not None:
+            self.state_host.show_loading(resolved_loading_text)
+        else:
+            self.loading.start(resolved_loading_text)
 
         worker = ApiWorker(operation)
         self._workers[task_key] = worker
@@ -102,6 +125,7 @@ class BaseApiView(QWidget):
             controlled_widgets,
             on_finished,
             expire_on_401,
+            is_current,
         )
         self._handlers[task_key] = handler
         worker.signals.success.connect(handler.success)
@@ -111,7 +135,7 @@ class BaseApiView(QWidget):
         return True
 
     def _task_succeeded(self, handler: _TaskHandler, result: Any) -> None:
-        if handler.generation != self._generation:
+        if not handler.accepts_result():
             return
         try:
             handler.on_success(result)
@@ -123,26 +147,45 @@ class BaseApiView(QWidget):
                 type(exc).__name__,
                 exc,
             )
-            self.feedback.show_message(
-                "Unexpected response",
-                "The server response did not contain the expected information.",
-                severity="error",
-            )
+            if self.state_host is not None:
+                self.state_host.show_error(
+                    t("error_response_title"),
+                    t("error_response_message"),
+                )
+            else:
+                self.feedback.show_message(
+                    t("error_response_title"),
+                    t("error_response_message"),
+                    severity="error",
+                )
 
     def _task_failed(self, handler: _TaskHandler, exc: Exception) -> None:
-        if handler.generation != self._generation:
+        if not handler.accepts_result():
             return
         if isinstance(exc, ApiError):
             if exc.status_code == 401 and handler.expire_on_401:
                 self.session_expired.emit()
                 return
-            self.feedback.show_message("Request failed", exc.message, severity="error")
+            if self.state_host is not None:
+                self.state_host.show_error(t("error_request_title"), exc.message)
+            else:
+                self.feedback.show_message(
+                    t("error_request_title"),
+                    exc.message,
+                    severity="error",
+                )
             return
-        self.feedback.show_message(
-            "Unexpected error",
-            "An unexpected error occurred while processing the request.",
-            severity="error",
-        )
+        if self.state_host is not None:
+            self.state_host.show_error(
+                t("error_unexpected_title"),
+                t("error_unexpected_message"),
+            )
+        else:
+            self.feedback.show_message(
+                t("error_unexpected_title"),
+                t("error_unexpected_message"),
+                severity="error",
+            )
 
     def _task_finished(self, handler: _TaskHandler) -> None:
         self._workers.pop(handler.task_key, None)
@@ -150,13 +193,17 @@ class BaseApiView(QWidget):
         handler.deleteLater()
         if handler.generation != self._generation:
             return
-        for widget in handler.controls:
-            widget.setEnabled(True)
+        accepted = handler.accepts_result()
+        if accepted:
+            for widget in handler.controls:
+                widget.setEnabled(True)
         if not any(
-            worker_generation == handler.generation for _, worker_generation in self._workers
+            active_handler.generation == handler.generation
+            and active_handler.accepts_result()
+            for active_handler in self._handlers.values()
         ):
             self.loading.stop()
-        if handler.on_finished:
+        if accepted and handler.on_finished:
             handler.on_finished()
 
     def invalidate_pending(self) -> None:
@@ -167,7 +214,14 @@ class BaseApiView(QWidget):
                 widget.setEnabled(True)
         self.loading.stop()
         self.feedback.clear()
+        if self.state_host is not None:
+            self.state_host.show_content()
         self._generation += 1
+
+    def bind_state_host(self, state_host: StateHost) -> None:
+        """Route loading and failure states through a page's shared state host."""
+
+        self.state_host = state_host
 
     def clear_data(self) -> None:
         """Clear patient-specific state. Subclasses override when needed."""
@@ -179,29 +233,24 @@ def configure_table(
     *,
     stretch_column: int | None = None,
     column_widths: dict[int, int] | None = None,
+    wrap_columns: Iterable[int] = (),
 ) -> QStandardItemModel:
     model = QStandardItemModel(0, len(headers), table)
     model.setHorizontalHeaderLabels(headers)
     table.setModel(model)
-    table.setAlternatingRowColors(True)
-    table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-    table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-    table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-    table.setSortingEnabled(False)
-    table.setShowGrid(False)
-    table.setWordWrap(False)
-    table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
-    table.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
-    table.verticalHeader().setVisible(False)
-    table.verticalHeader().setDefaultSectionSize(46)
-    header = table.horizontalHeader()
-    header.setMinimumSectionSize(72)
-    header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-    header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-    if stretch_column is not None:
-        header.setSectionResizeMode(stretch_column, QHeaderView.ResizeMode.Stretch)
-    for column, width in (column_widths or {}).items():
-        table.setColumnWidth(column, width)
+    widths = column_widths or {}
+    wrapped = frozenset(wrap_columns)
+    specs = [
+        ColumnSpec(
+            header=header,
+            minimum_width=min(88, widths.get(index, 88)),
+            preferred_width=widths.get(index),
+            stretch=index == stretch_column,
+            wrap=index in wrapped,
+        )
+        for index, header in enumerate(headers)
+    ]
+    configure_table_view(table, specs)
     return model
 
 
@@ -211,6 +260,8 @@ def table_item(value: object, *, user_data: object | None = None) -> QStandardIt
     # Stretched table columns can elide long diagnoses, reasons, or medication
     # instructions.  A tooltip keeps the complete read-only value accessible.
     item.setToolTip(text)
+    item.setAccessibleText(text)
+    item.setEditable(False)
     item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
     if user_data is not None:
         item.setData(user_data, Qt.ItemDataRole.UserRole)
@@ -218,8 +269,7 @@ def table_item(value: object, *, user_data: object | None = None) -> QStandardIt
 
 
 def status_item(value: object) -> QStandardItem:
-    status = str(value or "").strip().replace("_", " ").title()
-    item = table_item(status)
+    item = table_item(display_status(value))
     item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
     return item
 
@@ -248,7 +298,7 @@ def format_datetime(value: object) -> str:
         parsed = datetime.fromisoformat(raw)
     except ValueError:
         return str(value)
-    return parsed.strftime("%d/%m/%Y %H:%M")
+    return parsed.strftime("%d/%m/%Y · %H:%M")
 
 
 def format_time(value: object) -> str:
@@ -262,12 +312,22 @@ def format_time(value: object) -> str:
     return parsed.strftime("%H:%M")
 
 
+def format_time_range(start: object, end: object) -> str:
+    """Format one clinical slot consistently with a compact en dash."""
+
+    start_text = format_time(start)
+    end_text = format_time(end)
+    if start_text == "—" and end_text == "—":
+        return "—"
+    return f"{start_text}–{end_text}"
+
+
 def format_money(value: object) -> str:
     try:
         amount = Decimal(str(value))
     except (InvalidOperation, TypeError, ValueError):
         return "—"
-    return f"{amount:,.0f} VND"
+    return f"{amount:,.0f}".replace(",", ".") + " ₫"
 
 
 def require_dict(value: Any) -> dict[str, Any]:

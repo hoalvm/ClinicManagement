@@ -18,12 +18,15 @@ from PySide6.QtWidgets import (
 
 from frontend.api.api_client import ApiClient, ApiError
 from frontend.core.i18n import t
+from frontend.views.common import format_date, format_time_range
+from frontend.widgets.async_task_controller import AsyncTaskController
 
 
 class CancelAppointmentDialog(QDialog):
     """Accessible cancellation dialog requiring explicit reason input."""
 
     appointment_canceled = Signal(dict)
+    session_expired = Signal()
 
     def __init__(
         self,
@@ -35,6 +38,8 @@ class CancelAppointmentDialog(QDialog):
         self.api_client = api_client
         self.appointment = appointment
         self.appointment_id = appointment.get("appointment_id", 0)
+        self._tasks = AsyncTaskController(self)
+        self.finished.connect(lambda _result: self._tasks.invalidate())
 
         self.setWindowTitle(t("cancel_dialog_title"))
         self.setModal(True)
@@ -56,18 +61,18 @@ class CancelAppointmentDialog(QDialog):
 
         # Summary box
         summary_card = QFrame()
-        summary_card.setObjectName("card")
-        summary_card.setStyleSheet(
-            "QFrame#card { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px; }"
-        )
+        summary_card.setObjectName("destructiveSummaryCard")
         card_layout = QVBoxLayout(summary_card)
         card_layout.setSpacing(6)
 
         doctor_info = appointment.get("doctor", {})
         doc_name = doctor_info.get("full_name", "Bác sĩ")
         spec_name = doctor_info.get("specialty", "")
-        date_str = appointment.get("appointment_date", "")
-        time_str = f"{appointment.get('start_time', '')} - {appointment.get('end_time', '')}"
+        date_str = format_date(appointment.get("appointment_date"))
+        time_str = format_time_range(
+            appointment.get("start_time"),
+            appointment.get("end_time"),
+        )
 
         card_layout.addWidget(QLabel(f"<b>{t('field_doctor')}:</b> {doc_name} ({spec_name})"))
         card_layout.addWidget(QLabel(f"<b>{t('field_date')}:</b> {date_str}"))
@@ -82,6 +87,8 @@ class CancelAppointmentDialog(QDialog):
         self.reason_edit = QTextEdit()
         self.reason_edit.setPlaceholderText(t("cancel_reason_placeholder"))
         self.reason_edit.setMaximumHeight(90)
+        self.reason_edit.setTabChangesFocus(True)
+        self.reason_edit.setAccessibleName(t("cancel_reason_label"))
         layout.addWidget(self.reason_edit)
 
         self.error_label = QLabel()
@@ -102,34 +109,51 @@ class CancelAppointmentDialog(QDialog):
 
         self.confirm_button = QPushButton(t("confirm_cancel_btn"))
         self.confirm_button.setObjectName("dangerButton")
-        self.confirm_button.setStyleSheet(
-            "background: #dc2626; color: #ffffff; border: 1px solid #b91c1c; font-weight: 600; min-height: 38px; border-radius: 8px; padding: 0 16px;"
-        )
+        self.confirm_button.setDefault(True)
         self.confirm_button.clicked.connect(self._submit_cancel)
         btn_layout.addWidget(self.confirm_button)
 
         layout.addLayout(btn_layout)
 
     def _submit_cancel(self) -> None:
+        if self._tasks.is_running("cancel"):
+            return
         reason = self.reason_edit.toPlainText().strip()
         self.error_label.setVisible(False)
-        self.confirm_button.setEnabled(False)
         self.confirm_button.setText(t("processing"))
 
-        try:
-            result = self.api_client.post(
+        def operation() -> object:
+            return self.api_client.post(
                 f"/api/v1/appointments/{self.appointment_id}/cancel",
                 json={"cancellation_reason": reason or None},
             )
-            self.appointment_canceled.emit(result)
+
+        def succeeded(result: object) -> None:
+            if isinstance(result, dict):
+                self.appointment_canceled.emit(result)
+            else:
+                self.appointment_canceled.emit({})
             self.accept()
-        except ApiError as exc:
-            self.error_label.setText(exc.message)
+
+        def failed(error: Exception) -> None:
+            if isinstance(error, ApiError) and error.status_code == 401:
+                self.session_expired.emit()
+                self.reject()
+                return
+            message = (
+                error.message if isinstance(error, ApiError) else t("error_unexpected_message")
+            )
+            self.error_label.setText(message)
             self.error_label.setVisible(True)
-            self.confirm_button.setEnabled(True)
+
+        def finished() -> None:
             self.confirm_button.setText(t("confirm_cancel_btn"))
-        except Exception as exc:
-            self.error_label.setText(str(exc))
-            self.error_label.setVisible(True)
-            self.confirm_button.setEnabled(True)
-            self.confirm_button.setText(t("confirm_cancel_btn"))
+
+        self._tasks.run(
+            "cancel",
+            operation,
+            succeeded,
+            failed,
+            controls=(self.reason_edit, self.back_button, self.confirm_button),
+            on_finished=finished,
+        )

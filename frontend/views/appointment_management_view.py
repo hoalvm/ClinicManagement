@@ -6,30 +6,39 @@ from typing import Any
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QComboBox,
     QDateEdit,
     QDialog,
     QFormLayout,
     QFrame,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
     QScrollArea,
-    QTableWidget,
-    QTableWidgetItem,
     QTimeEdit,
     QVBoxLayout,
     QWidget,
 )
 
 from frontend.api.api_client import ApiClient
-from frontend.views.common import BaseApiView
-from frontend.widgets.empty_state import EmptyState
+from frontend.ui.design_system import (
+    CellValue,
+    ColumnDisplayMode,
+    ColumnPriority,
+    ColumnSpec,
+)
+from frontend.views.common import BaseApiView, format_date, format_time
+from frontend.widgets.adaptive_data_table import AdaptiveDataTable
+from frontend.widgets.filter_toolbar import FilterToolbar
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.pagination import Pagination
-from frontend.widgets.status_badge import StatusBadgeDelegate
+from frontend.widgets.state_host import StateHost
+from frontend.widgets.status_badge import display_status
+from frontend.widgets.table_actions import (
+    RowAction,
+    TableActionMenu,
+    table_action_cell,
+)
 
 
 class AppointmentManagementView(BaseApiView):
@@ -65,64 +74,118 @@ class AppointmentManagementView(BaseApiView):
         layout.addWidget(self.feedback)
         layout.addWidget(self.loading)
 
-        # Filter Controls Bar
-        filter_card = QFrame()
-        filter_card.setObjectName("filterCard")
-        filter_bar = QHBoxLayout(filter_card)
-        filter_bar.setContentsMargins(16, 10, 16, 10)
-        filter_bar.setSpacing(12)
-
-        self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Tìm kiếm theo tên bệnh nhân, SĐT hoặc lý do...")
-        self.search_input.returnPressed.connect(self._apply_filter)
-        filter_bar.addWidget(self.search_input, 2)
-
-        self.status_combo = QComboBox()
-        self.status_combo.addItem("Tất cả trạng thái", "")
-        self.status_combo.addItem("Chờ xác nhận", "PENDING")
-        self.status_combo.addItem("Đã xác nhận", "CONFIRMED")
-        self.status_combo.addItem("Chờ khám", "CHECKED_IN")
-        self.status_combo.addItem("Hoàn thành", "COMPLETED")
-        self.status_combo.addItem("Đã hủy", "CANCELLED")
-        self.status_combo.currentIndexChanged.connect(self._apply_filter)
-        filter_bar.addWidget(self.status_combo, 1)
-
-        self.btn_refresh = QPushButton("Lọc")
-        self.btn_refresh.setCursor(Qt.PointingHandCursor)
-        self.btn_refresh.clicked.connect(self._apply_filter)
-        filter_bar.addWidget(self.btn_refresh)
-
-        layout.addWidget(filter_card)
-
-        # Table
-        self.table = QTableWidget()
-        self.table.setColumnCount(7)
-        self.table.setHorizontalHeaderLabels([
-            "Mã hẹn", "Thời gian", "Bệnh nhân", "Số điện thoại", "Bác sĩ", "Trạng thái", "Thao tác"
-        ])
-        hdr = self.table.horizontalHeader()
-        hdr.setStretchLastSection(False)
-        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
-        hdr.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
-        self.table.setColumnWidth(5, 110)
-        self.table.setColumnWidth(6, 320)
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.table.setItemDelegateForColumn(5, StatusBadgeDelegate(self.table))
-        layout.addWidget(self.table)
-
-        self.empty_state = EmptyState(
-            "Không tìm thấy lịch hẹn",
-            "Thử thay đổi điều kiện tìm kiếm hoặc tạo lịch hẹn mới.",
-            parent=self,
+        self.filters = FilterToolbar(
+            "Tìm tên bệnh nhân, số điện thoại hoặc lý do",
+            search_accessible_name="Tìm kiếm lịch hẹn",
         )
-        layout.addWidget(self.empty_state)
-        self.empty_state.hide()
+        self.search_input = self.filters.search_input
+        self.status_combo = self.filters.add_filter(
+            "status",
+            (
+                ("Tất cả trạng thái", ""),
+                (display_status("PENDING", "vi"), "PENDING"),
+                (display_status("CONFIRMED", "vi"), "CONFIRMED"),
+                (display_status("CHECKED_IN", "vi"), "CHECKED_IN"),
+                (display_status("IN_PROGRESS", "vi"), "IN_PROGRESS"),
+                (display_status("COMPLETED", "vi"), "COMPLETED"),
+                (display_status("CANCELLED", "vi"), "CANCELLED"),
+            ),
+            accessible_name="Lọc lịch hẹn theo trạng thái",
+        )
+        self.btn_refresh = self.filters.clear_button
+        self.filters.filters_changed.connect(self._apply_filter)
+        self.search_input.returnPressed.connect(self.filters.flush_search)
+        layout.addWidget(self.filters)
+
+        self.table = AdaptiveDataTable(
+            [
+                ColumnSpec(
+                    "Mã hẹn",
+                    "appointment_id",
+                    minimum_width=64,
+                    preferred_width=72,
+                    maximum_width=88,
+                    priority=ColumnPriority.HIGH,
+                    formatter=lambda value: f"#{int(value or 0)}",
+                    display_mode=ColumnDisplayMode.FULL,
+                    preserve_full=True,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+                ColumnSpec(
+                    "Thời gian",
+                    "appointment_time",
+                    minimum_width=116,
+                    preferred_width=132,
+                    maximum_width=154,
+                    priority=ColumnPriority.HIGH,
+                    display_mode=ColumnDisplayMode.WRAP_2,
+                    line_limit=2,
+                ),
+                ColumnSpec(
+                    "Bệnh nhân",
+                    "patient",
+                    minimum_width=154,
+                    preferred_width=190,
+                    maximum_width=280,
+                    priority=ColumnPriority.CRITICAL,
+                    grow_weight=3,
+                    display_mode=ColumnDisplayMode.WRAP_2,
+                    line_limit=2,
+                    stretch=True,
+                ),
+                ColumnSpec(
+                    "Bác sĩ",
+                    "doctor_name",
+                    minimum_width=132,
+                    preferred_width=164,
+                    maximum_width=230,
+                    priority=ColumnPriority.NORMAL,
+                    grow_weight=2,
+                    display_mode=ColumnDisplayMode.WRAP_2,
+                    line_limit=2,
+                ),
+                ColumnSpec(
+                    "Trạng thái",
+                    "status",
+                    minimum_width=104,
+                    preferred_width=112,
+                    maximum_width=126,
+                    priority=ColumnPriority.CRITICAL,
+                    display_mode=ColumnDisplayMode.FULL,
+                    preserve_full=True,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                    status=True,
+                ),
+                ColumnSpec(
+                    "Thao tác",
+                    "_actions",
+                    minimum_width=126,
+                    preferred_width=142,
+                    maximum_width=154,
+                    priority=ColumnPriority.CRITICAL,
+                    display_mode=ColumnDisplayMode.FULL,
+                    preserve_full=True,
+                    alignment=Qt.AlignmentFlag.AlignCenter,
+                ),
+            ],
+            accessible_name="Danh sách lịch hẹn",
+        )
+        self.table.setAccessibleDescription(
+            "Bảng lịch hẹn chỉ đọc; trạng thái và thao tác chính luôn hiển thị."
+        )
+        self.table.setMinimumHeight(260)
+
+        self.state_host = StateHost(self.table)
+        self.bind_state_host(self.state_host)
+        self.empty_state = self.state_host.empty
+        self.empty_state.set_title("Không tìm thấy lịch hẹn")
+        self.empty_state.set_description(
+            "Thử thay đổi điều kiện tìm kiếm hoặc tạo lịch hẹn mới."
+        )
+        self.empty_state.set_action("Làm mới")
+        self.state_host.empty_action_requested.connect(self._retry)
+        self.state_host.retry_requested.connect(self._retry)
+        layout.addWidget(self.state_host, 1)
 
         # Pagination
         self.pagination = Pagination(parent=self)
@@ -138,9 +201,12 @@ class AppointmentManagementView(BaseApiView):
         super().showEvent(event)
         self.load_appointments()
 
-    def _apply_filter(self) -> None:
+    def _apply_filter(self, _values: object | None = None) -> None:
         self._current_page = 1
         self.load_appointments()
+
+    def _clear_filters(self) -> None:
+        self.filters.clear()
 
     def _go_to_page(self, page: int) -> None:
         self._current_page = page
@@ -163,6 +229,12 @@ class AppointmentManagementView(BaseApiView):
             "load_staff_appts",
             lambda: self.api_client.get("/api/v1/reception/appointments", params=params),
             self._on_appointments_loaded,
+            controls=(
+                self.search_input,
+                self.status_combo,
+                self.btn_refresh,
+                self.pagination,
+            ),
             loading_text="Đang tải danh sách lịch hẹn...",
         )
 
@@ -173,85 +245,105 @@ class AppointmentManagementView(BaseApiView):
         total_pages = data.get("total_pages", 1)
         self.pagination.update_state(self._current_page, total_pages, total)
 
-        if not items:
-            self.table.hide()
-            self.empty_state.show()
-            return
-
-        self.empty_state.hide()
-        self.table.show()
-        self.table.setRowCount(len(items))
-
-        for row, appt in enumerate(items):
+        rows: list[dict[str, Any]] = []
+        for appt in items:
             appt_id = appt.get("appointment_id", 0)
             appt_date = str(appt.get("appointment_date", ""))
             start_time = str(appt.get("start_time", ""))[:5]
             patient = appt.get("patient", {})
             doctor = appt.get("doctor", {})
             status = appt.get("status", "PENDING")
+            rows.append(
+                {
+                    "appointment_id": appt_id,
+                    "appointment_time": CellValue(
+                        format_date(appt_date),
+                        format_time(start_time),
+                    ),
+                    "patient": CellValue(
+                        str(patient.get("full_name", "") or "—"),
+                        str(patient.get("phone", "") or "Chưa có số điện thoại"),
+                    ),
+                    "doctor_name": doctor.get("full_name", ""),
+                    "status": status,
+                    "_actions": "",
+                }
+            )
 
-            item_id = QTableWidgetItem(f"#{appt_id}")
-            item_id.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 0, item_id)
+        self.table.set_rows(rows)
+        if not items:
+            self.state_host.show_empty(
+                "Không tìm thấy lịch hẹn",
+                "Thử thay đổi điều kiện tìm kiếm hoặc tạo lịch hẹn mới.",
+                action_text="Làm mới",
+            )
+            return
 
-            item_dt = QTableWidgetItem(f"{appt_date} {start_time}")
-            item_dt.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 1, item_dt)
+        self.state_host.show_content()
 
-            self.table.setItem(row, 2, QTableWidgetItem(patient.get("full_name", "")))
+        for row, appt in enumerate(items):
+            appt_id = appt.get("appointment_id", 0)
+            status = appt.get("status", "PENDING")
 
-            item_phone = QTableWidgetItem(patient.get("phone", "") or "—")
-            item_phone.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 3, item_phone)
-
-            self.table.setItem(row, 4, QTableWidgetItem(doctor.get("full_name", "")))
-
-            item_status = QTableWidgetItem(status)
-            item_status.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(row, 5, item_status)
-
-            # Actions cell container
-            actions_widget = QWidget()
-            actions_layout = QHBoxLayout(actions_widget)
-            actions_layout.setContentsMargins(4, 0, 4, 0)
-            actions_layout.setSpacing(6)
-            actions_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-            if status == "PENDING":
-                btn_confirm = QPushButton("Xác nhận")
-                btn_confirm.setObjectName("tableActionPrimary")
-                btn_confirm.setCursor(Qt.PointingHandCursor)
-                btn_confirm.clicked.connect(lambda _, a_id=appt_id: self._confirm_appointment(a_id))
-                actions_layout.addWidget(btn_confirm)
-
+            primary: QPushButton | None = None
             if status in ("PENDING", "CONFIRMED"):
-                btn_checkin = QPushButton("Tiếp nhận")
-                btn_checkin.setObjectName("tableActionInfo")
-                btn_checkin.setCursor(Qt.PointingHandCursor)
-                btn_checkin.clicked.connect(lambda _, a_id=appt_id: self._check_in_appointment(a_id))
-                actions_layout.addWidget(btn_checkin)
-
+                primary_label = "Xác nhận" if status == "PENDING" else "Tiếp nhận"
+                primary = QPushButton(primary_label)
+                primary.setObjectName("tableActionPrimary")
+                primary.setCursor(Qt.PointingHandCursor)
+                primary.setAccessibleName(f"{primary_label} lịch hẹn #{appt_id}")
+                if status == "PENDING":
+                    primary.clicked.connect(
+                        lambda _, a_id=appt_id: self._confirm_appointment(a_id)
+                    )
+                else:
+                    primary.clicked.connect(
+                        lambda _, a_id=appt_id: self._check_in_appointment(a_id)
+                    )
+            overflow: TableActionMenu | None = None
             if status not in ("COMPLETED", "CANCELLED"):
-                btn_reschedule = QPushButton("Đổi lịch")
-                btn_reschedule.setObjectName("tableActionSecondary")
-                btn_reschedule.setCursor(Qt.PointingHandCursor)
-                btn_reschedule.clicked.connect(lambda _, a=appt: self._reschedule_dialog(a))
-                actions_layout.addWidget(btn_reschedule)
+                actions: list[RowAction] = []
+                if status == "PENDING":
+                    actions.append(
+                        RowAction(
+                            "Tiếp nhận",
+                            lambda a_id=appt_id: self._check_in_appointment(a_id),
+                        )
+                    )
+                actions.extend(
+                    (
+                        RowAction(
+                            "Đổi lịch",
+                            lambda value=appt: self._reschedule_dialog(value),
+                        ),
+                        RowAction(
+                            "Hủy lịch",
+                            lambda a_id=appt_id: self._cancel_dialog(a_id),
+                            destructive=True,
+                        ),
+                    )
+                )
+                overflow = TableActionMenu(
+                    actions,
+                    accessible_name=f"Thao tác khác cho lịch hẹn #{appt_id}",
+                )
+            actions_widget = table_action_cell(
+                primary,
+                overflow,
+                accessible_name=f"Thao tác lịch hẹn #{appt_id}",
+            )
+            self.table.setIndexWidget(self.table.model().index(row, 5), actions_widget)
+            self.table.verticalHeader().resizeSection(row, 60)
 
-                btn_cancel = QPushButton("Hủy")
-                btn_cancel.setObjectName("tableActionDanger")
-                btn_cancel.setCursor(Qt.PointingHandCursor)
-                btn_cancel.clicked.connect(lambda _, a_id=appt_id: self._cancel_dialog(a_id))
-                actions_layout.addWidget(btn_cancel)
-
-            self.table.setCellWidget(row, 6, actions_widget)
-            self.table.setRowHeight(row, 50)
+    def _retry(self) -> None:
+        self.load_appointments()
 
     def _confirm_appointment(self, appt_id: int) -> None:
         self.run_api_task(
             f"confirm_{appt_id}",
             lambda: self.api_client.post(f"/api/v1/reception/appointments/{appt_id}/confirm"),
             lambda _: self._on_action_success(f"Đã xác nhận lịch hẹn #{appt_id} thành công!"),
+            controls=(self.table,),
             loading_text="Đang xác nhận lịch hẹn...",
         )
 
@@ -260,6 +352,7 @@ class AppointmentManagementView(BaseApiView):
             f"checkin_{appt_id}",
             lambda: self.api_client.post(f"/api/v1/reception/appointments/{appt_id}/check-in"),
             lambda _: self._on_action_success(f"Đã tiếp nhận bệnh nhân cho lịch hẹn #{appt_id}!"),
+            controls=(self.table,),
             loading_text="Đang tiếp nhận bệnh nhân...",
         )
 
@@ -301,6 +394,7 @@ class AppointmentManagementView(BaseApiView):
                     json={"cancellation_reason": reason},
                 ),
                 lambda _: self._on_action_success(f"Đã hủy lịch hẹn #{appt_id}."),
+                controls=(self.table,),
                 loading_text="Đang hủy lịch hẹn...",
             )
 
@@ -313,7 +407,7 @@ class AppointmentManagementView(BaseApiView):
 
         date_edit = QDateEdit()
         date_edit.setCalendarPopup(True)
-        date_edit.setDisplayFormat("yyyy-MM-dd")
+        date_edit.setDisplayFormat("dd/MM/yyyy")
         form.addRow("Ngày khám mới:", date_edit)
 
         time_edit = QTimeEdit()
@@ -338,11 +432,12 @@ class AppointmentManagementView(BaseApiView):
 
         if dialog.exec() == QDialog.DialogCode.Accepted:
             new_date = date_edit.date().toString("yyyy-MM-dd")
-            new_time = time_edit.time().toString("HH:mm:00")
+            selected_time = time_edit.time()
+            new_time = selected_time.toString("HH:mm:00")
             payload = {
                 "appointment_date": new_date,
                 "start_time": new_time,
-                "end_time": "10:00:00",
+                "end_time": selected_time.addSecs(30 * 60).toString("HH:mm:00"),
                 "reason": reason_edit.text().strip() or "Đổi lịch bởi nhân viên tiếp đón",
             }
             self.run_api_task(
@@ -352,5 +447,6 @@ class AppointmentManagementView(BaseApiView):
                     json=payload,
                 ),
                 lambda _: self._on_action_success(f"Đã đổi lịch hẹn #{appt_id} sang ngày {new_date}!"),
+                controls=(self.table,),
                 loading_text="Đang cập nhật lịch hẹn...",
             )

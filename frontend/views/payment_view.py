@@ -20,7 +20,8 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient
-from frontend.views.common import BaseApiView
+from frontend.views.common import BaseApiView, format_money
+from frontend.widgets.empty_state import EmptyState
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.status_badge import StatusBadge
 
@@ -45,7 +46,7 @@ class PaymentView(BaseApiView):
 
         self.header = PageHeader(
             "Thu phí",
-            "Thanh toán và xuất biên lai",
+            "Tìm hóa đơn, ghi nhận thanh toán và xuất biên lai.",
             parent=self,
         )
         layout.addWidget(self.header)
@@ -59,21 +60,29 @@ class PaymentView(BaseApiView):
         lookup_layout.setContentsMargins(18, 14, 18, 14)
         lookup_layout.setSpacing(12)
 
-        lookup_label = QLabel("Mã hóa đơn:")
+        lookup_label = QLabel("Tìm hóa đơn")
         lookup_label.setObjectName("fieldLabel")
         lookup_layout.addWidget(lookup_label)
 
         self.inv_input = QLineEdit()
-        self.inv_input.setPlaceholderText("Nhập mã hóa đơn...")
+        self.inv_input.setPlaceholderText("Nhập mã hóa đơn hoặc số điện thoại")
+        self.inv_input.setAccessibleName("Mã hóa đơn hoặc số điện thoại bệnh nhân")
         self.inv_input.returnPressed.connect(self._fetch_invoice)
         lookup_layout.addWidget(self.inv_input, 2)
 
-        self.btn_find = QPushButton("Tìm kiếm")
+        self.btn_find = QPushButton("Tìm hóa đơn")
         self.btn_find.setCursor(Qt.PointingHandCursor)
         self.btn_find.clicked.connect(self._fetch_invoice)
         lookup_layout.addWidget(self.btn_find)
 
         layout.addWidget(lookup_card)
+
+        self.empty_prompt = EmptyState(
+            "Chưa chọn hóa đơn",
+            "Nhập mã hóa đơn hoặc số điện thoại bệnh nhân để bắt đầu thu phí.",
+            icon="search",
+        )
+        layout.addWidget(self.empty_prompt)
 
         # Invoice Details & Settlement Panel
         self.settlement_card = QFrame()
@@ -92,12 +101,14 @@ class PaymentView(BaseApiView):
 
         grid.addWidget(QLabel("Bệnh nhân:"), 0, 0)
         self.lbl_patient = QLabel("—")
-        self.lbl_patient.setStyleSheet("font-weight: 600; color: #1e293b;")
+        self.lbl_patient.setWordWrap(True)
+        self.lbl_patient.setObjectName("fieldValueStrong")
         grid.addWidget(self.lbl_patient, 0, 1)
 
         grid.addWidget(QLabel("Bác sĩ:"), 0, 2)
         self.lbl_doctor = QLabel("—")
-        self.lbl_doctor.setStyleSheet("font-weight: 600; color: #1e293b;")
+        self.lbl_doctor.setWordWrap(True)
+        self.lbl_doctor.setObjectName("fieldValueStrong")
         grid.addWidget(self.lbl_doctor, 0, 3)
 
         grid.addWidget(QLabel("Trạng thái:"), 1, 0)
@@ -106,15 +117,15 @@ class PaymentView(BaseApiView):
 
         grid.addWidget(QLabel("Tổng cần thu:"), 1, 2)
         self.lbl_total = QLabel("0 ₫")
-        self.lbl_total.setStyleSheet("font-size: 18px; font-weight: 800; color: #b91c1c;")
+        self.lbl_total.setObjectName("amountDue")
         grid.addWidget(self.lbl_total, 1, 3)
 
         settle_layout.addLayout(grid)
 
         # Payment Method Selector
+        settle_layout.addSpacing(8)
         method_label = QLabel("Hình thức thanh toán:")
         method_label.setObjectName("sectionTitle")
-        method_label.setStyleSheet("margin-top: 8px;")
         settle_layout.addWidget(method_label)
 
         self.method_group = QButtonGroup(self)
@@ -148,7 +159,7 @@ class PaymentView(BaseApiView):
 
         cash_layout.addWidget(QLabel("Tiền thối lại:"), 1, 0)
         self.lbl_change = QLabel("0 ₫")
-        self.lbl_change.setStyleSheet("font-size: 16px; font-weight: 700; color: #15803d;")
+        self.lbl_change.setObjectName("changeAmount")
         cash_layout.addWidget(self.lbl_change, 1, 1)
 
         settle_layout.addWidget(self.cash_box)
@@ -174,7 +185,8 @@ class PaymentView(BaseApiView):
         receipt_layout.setContentsMargins(24, 20, 24, 20)
 
         self.receipt_text = QLabel("Biên lai thu tiền")
-        self.receipt_text.setStyleSheet("font-family: monospace; font-size: 13px; color: #14532d;")
+        self.receipt_text.setWordWrap(True)
+        self.receipt_text.setObjectName("receiptText")
         receipt_layout.addWidget(self.receipt_text)
 
         layout.addWidget(self.receipt_card)
@@ -217,13 +229,17 @@ class PaymentView(BaseApiView):
     def _on_invoice_search_loaded(self, data: dict[str, Any]) -> None:
         items = data.get("items", [])
         if not items:
-            self.feedback.show_message("Không tìm thấy", "Không tìm thấy hóa đơn phù hợp với từ khóa.", severity="danger")
+            self.feedback.show_message("Không tìm thấy", "Không tìm thấy hóa đơn phù hợp với từ khóa.", severity="error")
+            self._current_invoice = None
             self.settlement_card.hide()
+            self.receipt_card.hide()
+            self.empty_prompt.show()
             return
         self._show_invoice_details(items[0])
 
     def _show_invoice_details(self, matched: dict[str, Any]) -> None:
         self._current_invoice = matched
+        self.empty_prompt.hide()
         self.settlement_card.show()
         self.receipt_card.hide()
 
@@ -234,7 +250,7 @@ class PaymentView(BaseApiView):
         self.badge_status.set_status(matched.get("status", "UNPAID"))
 
         amount = float(matched.get("total_amount", 0))
-        self.lbl_total.setText(f"{amount:,.0f} ₫")
+        self.lbl_total.setText(format_money(amount))
         self.cash_input.setText(f"{int(amount)}")
         self._calculate_change()
 
@@ -256,7 +272,7 @@ class PaymentView(BaseApiView):
         text = self.cash_input.text().replace(",", "").replace(".", "").strip()
         tendered = float(text) if text.isdigit() else 0.0
         change = max(0.0, tendered - total)
-        self.lbl_change.setText(f"{change:,.0f} ₫")
+        self.lbl_change.setText(format_money(change))
 
     def _process_payment(self) -> None:
         if not self._current_invoice:
@@ -265,6 +281,18 @@ class PaymentView(BaseApiView):
         inv_id = self._current_invoice.get("invoice_id")
         method = "CASH" if self.rb_cash.isChecked() else "CARD"
         amount = float(self._current_invoice.get("total_amount", 0))
+
+        if method == "CASH":
+            tendered_text = self.cash_input.text().replace(",", "").replace(".", "").strip()
+            tendered = float(tendered_text) if tendered_text.isdigit() else 0.0
+            if tendered < amount:
+                self.feedback.show_message(
+                    "Số tiền chưa đủ",
+                    "Tiền khách đưa phải lớn hơn hoặc bằng tổng tiền cần thu.",
+                    severity="error",
+                )
+                self.cash_input.setFocus()
+                return
 
         payload = {
             "payment_method": method,
@@ -276,6 +304,7 @@ class PaymentView(BaseApiView):
             lambda: self.api_client.post(f"/api/v1/reception/invoices/{inv_id}/pay", json=payload),
             self._on_payment_success,
             loading_text="Đang xử lý thanh toán...",
+            controls=(self.btn_pay,),
         )
 
     def _on_payment_success(self, res: dict[str, Any]) -> None:
@@ -286,7 +315,9 @@ class PaymentView(BaseApiView):
         method_str = "Tiền mặt" if method == "CASH" else "Thẻ ngân hàng"
 
         self.feedback.show_message("Thu tiền thành công", f"Hóa đơn INV-{inv_id:04d} đã được thanh toán thành công ({method_str})!", severity="success")
+        self._current_invoice = None
         self.settlement_card.hide()
+        self.empty_prompt.hide()
 
         # Display Receipt
         receipt = f"""
@@ -299,7 +330,7 @@ Bệnh nhân: {patient_name}
 Bác sĩ khám: {res.get('doctor_name')}
 Phương thức: {method_str}
 --------------------------------------------------
-TỔNG THANH TOÁN: {total:,.0f} ₫
+TỔNG THANH TOÁN: {format_money(total)}
 TRẠNG THÁI: ĐÃ THANH TOÁN
 ==================================================
            Cảm ơn Quý khách & Chúc mau khỏe!
