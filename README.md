@@ -6,11 +6,10 @@
   <img src="https://img.shields.io/badge/SQLAlchemy-2.0-D71F00?style=flat-square">
   <img src="https://img.shields.io/badge/Pydantic-v2-E92063?style=flat-square&logo=pydantic&logoColor=white">
   <img src="https://img.shields.io/badge/PySide6-Qt-41CD52?style=flat-square&logo=qt&logoColor=white">
-  <img src="https://img.shields.io/badge/Microsoft_SQL_Server-CC2927?style=flat-square&logo=microsoftsqlserver&logoColor=white">
 </p>
 
 Hệ thống quản lý phòng khám toàn diện, được thiết kế theo kiến trúc phân tầng hiện đại:
-- **Frontend:** Desktop Application với thiết kế giao diện đồ họa hiện đại bằng **PySide6 (Qt with Python)**.
+- **Frontend:** Desktop Application với thiết kế giao diện đồ họa hiện đại bằng **PySide6 (Qt Python)**.
 - **Backend:** Dịch vụ RESTful API xây dựng trên nền tảng **FastAPI**, **SQLAlchemy 2.0 ORM** và **Pydantic v2**.
 - **Database:** Microsoft SQL Server với ràng buộc toàn vẹn dữ liệu chặt chẽ, kết nối thông qua **ODBC Driver 18**.
 
@@ -53,9 +52,10 @@ Hệ thống hỗ trợ 4 nhóm người dùng chính:
 .\script\init_run.ps1
 ```
 
-Script sẽ tự động tạo môi trường ảo `venv`, cài đặt thư viện phụ thuộc và sinh tệp cấu hình `.env`.
-
-*(Nếu cài đặt thủ công: chạy `python -m venv venv`, kích hoạt venv và thực hiện `pip install -r requirements.txt`).*
+Script sẽ tự động:
+- Sinh tệp cấu hình `.env` với khóa bảo mật ngẫu nhiên.
+- Tạo môi trường ảo `venv` và cài đặt các thư viện phụ thuộc từ `requirements.txt`.
+- Kết nối SQL Server và khởi tạo cơ sở dữ liệu `ClinicManagementDB` từ `database/ClinicManagementDB.sql`.
 
 ### 2. Nạp dữ liệu mẫu
 

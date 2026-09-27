@@ -14,7 +14,7 @@ Write-Host "Project directory: $ProjectRoot`n" -ForegroundColor DarkGray
 # ------------------------------------------------------------------------------
 # 1. Detect Python executable on system
 # ------------------------------------------------------------------------------
-Write-Host "[1/5] Checking Python installation..." -ForegroundColor Yellow
+Write-Host "[1/6] Checking Python installation..." -ForegroundColor Yellow
 
 $PythonExecutable = $null
 
@@ -79,7 +79,7 @@ Write-Host "[OK] Detected: $PyVerString (using: $PythonExecutable)" -ForegroundC
 # ------------------------------------------------------------------------------
 # 2. Setup Virtual Environment (venv)
 # ------------------------------------------------------------------------------
-Write-Host "`n[2/5] Setting up virtual environment (venv)..." -ForegroundColor Yellow
+Write-Host "`n[2/6] Setting up virtual environment (venv)..." -ForegroundColor Yellow
 
 $VenvDir = Join-Path $ProjectRoot "venv"
 $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
@@ -114,7 +114,7 @@ if ($NeedCreate) {
 # ------------------------------------------------------------------------------
 # 3. Configure Environment Variables (.env)
 # ------------------------------------------------------------------------------
-Write-Host "`n[3/5] Checking configuration (.env)..." -ForegroundColor Yellow
+Write-Host "`n[3/6] Checking configuration (.env)..." -ForegroundColor Yellow
 
 $EnvFile = Join-Path $ProjectRoot ".env"
 $EnvExample = Join-Path $ProjectRoot ".env.example"
@@ -144,14 +144,14 @@ if (-not (Test-Path -LiteralPath $EnvFile)) {
 # ------------------------------------------------------------------------------
 # 4. Upgrade pip
 # ------------------------------------------------------------------------------
-Write-Host "`n[4/5] Upgrading pip..." -ForegroundColor Yellow
+Write-Host "`n[4/6] Upgrading pip..." -ForegroundColor Yellow
 & "$VenvPython" -m pip install --upgrade pip --quiet
 Write-Host "[OK] Pip is up to date." -ForegroundColor Green
 
 # ------------------------------------------------------------------------------
 # 5. Install Dependencies
 # ------------------------------------------------------------------------------
-Write-Host "`n[5/5] Installing dependencies from requirements.txt..." -ForegroundColor Yellow
+Write-Host "`n[5/6] Installing dependencies from requirements.txt..." -ForegroundColor Yellow
 
 $ReqFile = Join-Path $ProjectRoot "requirements.txt"
 if (Test-Path -LiteralPath $ReqFile) {
@@ -165,3 +165,20 @@ if (Test-Path -LiteralPath $ReqFile) {
     Write-Host "[ERROR] requirements.txt not found at '$ReqFile'!" -ForegroundColor Red
     exit 1
 }
+
+# ------------------------------------------------------------------------------
+# 6. Initialize Database Schema (SQL Server)
+# ------------------------------------------------------------------------------
+Write-Host "`n[6/6] Initializing database schema (SQL Server)..." -ForegroundColor Yellow
+
+try {
+    & "$VenvPython" -m backend.app.db.init_db
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "[OK] Database schema verified / initialized successfully." -ForegroundColor Green
+    } else {
+        Write-Host "[WARN] Could not automatically initialize database. Please check your SQL Server service and .env settings, then run '.\script\init_db.ps1'." -ForegroundColor Yellow
+    }
+} catch {
+    Write-Host "[WARN] Database initialization encountered an error: $_" -ForegroundColor Yellow
+    Write-Host "You can initialize the database later using: .\script\init_db.ps1" -ForegroundColor Yellow
+}
