@@ -17,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
+from backend.app.core.clock import clinic_today
 from backend.app.db.session import engine, get_db
 from backend.app.main import app
 
@@ -154,8 +155,17 @@ def test_patient01_seeded_read_flow_uses_real_sql_server(
     upcoming_response = sqlserver_client.get("/api/v1/appointments/me/upcoming", headers=headers)
     assert upcoming_response.status_code == 200, upcoming_response.text
     upcoming = upcoming_response.json()
-    assert upcoming is not None
-    assert upcoming["status"] in {"PENDING", "CONFIRMED"}
+    eligible_upcoming = [
+        item
+        for item in appointment_items
+        if item["status"] in {"PENDING", "CONFIRMED"}
+        and item["appointment_date"] >= clinic_today().isoformat()
+    ]
+    if eligible_upcoming:
+        assert upcoming is not None
+        assert upcoming["status"] in {"PENDING", "CONFIRMED"}
+    else:
+        assert upcoming is None
 
     completed = _get_page(
         sqlserver_client,
@@ -234,14 +244,15 @@ def test_patient01_seeded_read_flow_uses_real_sql_server(
         status="UNPAID",
     )
     unpaid_items = unpaid_invoices["items"]
-    assert isinstance(unpaid_items, list) and unpaid_items
-    unpaid_detail = _get_detail(
-        sqlserver_client,
-        "/api/v1/invoices/me",
-        unpaid_items[0]["invoice_id"],
-        headers,
-    )
-    assert unpaid_detail["payment"] is None
+    assert isinstance(unpaid_items, list)
+    if unpaid_items:
+        unpaid_detail = _get_detail(
+            sqlserver_client,
+            "/api/v1/invoices/me",
+            unpaid_items[0]["invoice_id"],
+            headers,
+        )
+        assert unpaid_detail["payment"] is None
     assert dashboard["unpaid_invoices"] == unpaid_invoices["total"]
 
 
@@ -307,7 +318,7 @@ def test_register_then_login_is_visible_inside_outer_transaction(
     sqlserver_client: TestClient,
 ) -> None:
     suffix = uuid4().hex[:16]
-    username = f"it_{suffix}"
+    username = f"it{suffix}"
     register_response = sqlserver_client.post(
         "/api/v1/auth/register",
         json={

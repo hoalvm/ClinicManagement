@@ -103,11 +103,19 @@ def test_specialty_search_ignores_mouse_wheel_selection(
 def test_date_selection_updates_results_without_confirmation_button(
     booking_view: BookingView,
 ) -> None:
-    target = QDate(2026, 9, 28)
+    booking_view.selected_specialty = {
+        "specialty_id": 5,
+        "specialty_name": "Cơ Xương Khớp",
+    }
+    target = QDate.currentDate().addDays(1)
+    while target.dayOfWeek() != 1:
+        target = target.addDays(1)
     booking_view.step2_date_edit.blockSignals(True)
     booking_view.step2_date_edit.setDate(target)
     booking_view.step2_date_edit.blockSignals(False)
     booking_view._load_doctors_for_date()
 
-    assert booking_view.by_date_doc_header.text() == "Bác sĩ làm việc Thứ Hai, 28/09/2026"
+    assert booking_view.by_date_doc_header.text() == (
+        f"Bác sĩ làm việc Thứ Hai, {target.toString('dd/MM/yyyy')}"
+    )
     assert booking_view.s2_open_cal_btn.objectName() == "bookingDateChip"

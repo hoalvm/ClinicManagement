@@ -13,7 +13,6 @@ from backend.app.main import app
 from backend.app.models import Appointment, Doctor, MedicalRecord
 
 
-
 @pytest.fixture
 def fake_db_session() -> MagicMock:
     return MagicMock(name="mock_db_session")

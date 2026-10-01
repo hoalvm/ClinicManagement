@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from PySide6.QtCore import QThreadPool
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -14,7 +15,12 @@ from PySide6.QtWidgets import (
 
 from frontend.api_client import api_client
 from frontend.pages import admin_ui
-from frontend.pages.admin_ui import AdminApiError, AdminApiPage, require_success
+from frontend.pages.admin_ui import (
+    AdminApiError,
+    AdminApiPage,
+    AdminRowActions,
+    require_success,
+)
 from frontend.style import APP_STYLE
 from frontend.ui.design_system import ViewState
 from frontend.widgets.adaptive_data_table import AdaptiveDataTable
@@ -42,6 +48,13 @@ class _DeferredPool:
 
     def start(self, worker) -> None:
         self.workers.append(worker)
+
+
+def _drain_admin_workers(qt_app: QApplication) -> None:
+    """Wait for the intentionally asynchronous Admin request, then deliver signals."""
+
+    QThreadPool.globalInstance().waitForDone(2000)
+    qt_app.processEvents()
 
 
 @pytest.fixture(scope="module")
@@ -131,7 +144,7 @@ def admin_window(monkeypatch: pytest.MonkeyPatch, qt_app: QApplication):
     window = AdminDashboard()
     window.resize(1100, 680)
     window.show()
-    qt_app.processEvents()
+    _drain_admin_workers(qt_app)
     yield window
     window.close()
     window.deleteLater()
@@ -149,7 +162,7 @@ def test_minimum_admin_window_uses_compact_sidebar_and_tables_fit(
 
     for route in admin_window._routes:
         admin_window._navigate(route)
-        qt_app.processEvents()
+        _drain_admin_workers(qt_app)
         page = admin_window.pages.currentWidget()
         for table in page.findChildren(AdaptiveDataTable):
             assert table.editTriggers() == QAbstractItemView.EditTrigger.NoEditTriggers
@@ -170,13 +183,46 @@ def test_minimum_admin_window_uses_compact_sidebar_and_tables_fit(
     assert admin_window.sidebar.width() == admin_window.EXPANDED_SIDEBAR_WIDTH
 
 
+def test_user_role_filter_uses_role_code_instead_of_display_label(
+    admin_window,
+    qt_app: QApplication,
+) -> None:
+    admin_window._navigate("users")
+    _drain_admin_workers(qt_app)
+    page = admin_window.pages.currentWidget()
+
+    page.role_filter.setCurrentIndex(page.role_filter.findData("PATIENT"))
+    page._apply_filter()
+    assert page.table.model().rowCount() == 0
+
+    page.role_filter.setCurrentIndex(page.role_filter.findData("ADMIN"))
+    page._apply_filter()
+    assert page.table.model().rowCount() == 1
+
+
+def test_admin_edit_callback_ignores_qt_checked_argument(qt_app: QApplication) -> None:
+    selected: list[dict[str, int]] = []
+    user = {"UserID": 17}
+    actions = AdminRowActions(
+        "tai khoan patient17",
+        on_edit=lambda item=user: selected.append(item),
+    )
+
+    assert actions.edit_button is not None
+    actions.edit_button.click()
+
+    assert selected == [user]
+    actions.deleteLater()
+    qt_app.processEvents()
+
+
 def test_statistics_cards_reflow_without_duplicates(
     admin_window,
     qt_app: QApplication,
 ) -> None:
     admin_window.resize(1100, 680)
     admin_window._navigate("statistics")
-    qt_app.processEvents()
+    _drain_admin_workers(qt_app)
     page = admin_window.pages.currentWidget()
 
     assert page.cards_layout.count() == 5
@@ -196,7 +242,7 @@ def test_statistics_cards_reflow_without_duplicates(
     assert positions == [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1)]
 
     page.load_data()
-    qt_app.processEvents()
+    _drain_admin_workers(qt_app)
     assert page.cards_layout.count() == 5
     assert len({id(card) for card in page._stat_cards}) == 5
 
@@ -234,7 +280,7 @@ def test_all_admin_pages_use_explicit_content_state(
 ) -> None:
     for route in admin_window._routes:
         admin_window._navigate(route)
-        qt_app.processEvents()
+        _drain_admin_workers(qt_app)
         page = admin_window.pages.currentWidget()
 
         assert isinstance(page.state_host, StateHost)
@@ -255,7 +301,7 @@ def test_admin_crud_pages_are_list_first_with_dialog_ctas(
     }
     for route, action_label in expected.items():
         admin_window._navigate(route)
-        qt_app.processEvents()
+        _drain_admin_workers(qt_app)
         page = admin_window.pages.currentWidget()
         assert page.header.action_button.text() == action_label
         assert page.table.data_model.rowCount() == 1
@@ -269,7 +315,7 @@ def test_admin_grouped_cells_keep_full_secondary_information(
     qt_app: QApplication,
 ) -> None:
     admin_window._navigate("doctors")
-    qt_app.processEvents()
+    _drain_admin_workers(qt_app)
     page = admin_window.pages.currentWidget()
     doctor_item = page.table.data_model.item(0, 1)
     assert "CCHN-123456789" in doctor_item.toolTip()
@@ -283,7 +329,7 @@ def test_admin_search_uses_shared_debounced_filter_toolbar(
 ) -> None:
     for route in ("users", "doctors", "clinics"):
         admin_window._navigate(route)
-        qt_app.processEvents()
+        _drain_admin_workers(qt_app)
         page = admin_window.pages.currentWidget()
         assert isinstance(page.search, FilterToolbar)
         page.search.set_debounce_ms(0)
@@ -302,7 +348,7 @@ def test_admin_dialogs_use_form_fields_and_painted_combos(
 ) -> None:
     for route in ("users", "doctors", "specialties", "clinics", "schedules"):
         admin_window._navigate(route)
-        qt_app.processEvents()
+        _drain_admin_workers(qt_app)
         page = admin_window.pages.currentWidget()
         built = page._build_dialog()
         dialog = built[0]
