@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from PySide6.QtCore import QTimer, Qt, QThreadPool, Slot
+from PySide6.QtCore import Qt, QThreadPool, QTimer, Slot
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from frontend.ui.design_system import FeedbackSeverity
@@ -17,6 +17,9 @@ class FeedbackBanner(QFrame):
         self.setProperty("severity", FeedbackSeverity.INFO.value)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._dismiss_timer = QTimer(self)
+        self._dismiss_timer.setSingleShot(True)
+        self._dismiss_timer.timeout.connect(self.clear)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(14, 11, 14, 11)
@@ -61,6 +64,7 @@ class FeedbackBanner(QFrame):
         message: str,
         *,
         severity: FeedbackSeverity | str = FeedbackSeverity.INFO,
+        timeout_ms: int | None = None,
     ) -> None:
         normalized = FeedbackSeverity.coerce(severity)
         self.setProperty("severity", normalized.value)
@@ -74,8 +78,19 @@ class FeedbackBanner(QFrame):
             label.style().unpolish(label)
             label.style().polish(label)
         self.show()
+        self._dismiss_timer.stop()
+        resolved_timeout = (
+            timeout_ms
+            if timeout_ms is not None
+            else (
+                6500 if normalized in (FeedbackSeverity.INFO, FeedbackSeverity.SUCCESS) else 10000
+            )
+        )
+        if resolved_timeout > 0:
+            self._dismiss_timer.start(resolved_timeout)
 
     def clear(self) -> None:
+        self._dismiss_timer.stop()
         self.hide()
         self._title.clear()
         self._message.clear()

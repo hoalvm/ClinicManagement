@@ -50,10 +50,19 @@ class UserManagementPage(AdminApiPage):
         layout.addWidget(self.header)
         self.add_request_feedback(layout)
 
-        self.search = AdminSearchBar(
-            "Tìm theo tên đăng nhập, họ tên hoặc vai trò…"
+        self.search = AdminSearchBar("Tìm theo tên đăng nhập, họ tên hoặc vai trò…")
+        self.role_filter = self.search.add_filter(
+            "role",
+            (
+                ("Tất cả vai trò", None),
+                ("Bệnh nhân", "PATIENT"),
+                ("Bác sĩ", "DOCTOR"),
+                ("Nhân viên", "STAFF"),
+                ("Quản trị viên", "ADMIN"),
+            ),
+            accessible_name="Lọc tài khoản theo vai trò",
         )
-        self.search.search_changed.connect(self._apply_filter)
+        self.search.filters_changed.connect(self._apply_filter)
         layout.addWidget(self.search)
 
         table_card = QFrame()
@@ -125,7 +134,6 @@ class UserManagementPage(AdminApiPage):
             on_empty_action=self.open_create_dialog,
         )
         layout.addWidget(self.table_state, 1)
-        self.load_data()
 
     def load_data(self, *, clear_feedback: bool = True):
         return self.run_admin_task(
@@ -143,13 +151,17 @@ class UserManagementPage(AdminApiPage):
 
     def _users_loaded(self, users: list[dict]) -> None:
         self._all_users = list(users)
-        self._apply_filter(self.search.text)
+        self._apply_filter(self.search.values())
 
-    def _apply_filter(self, query: str) -> None:
+    def _apply_filter(self, values: object | None = None) -> None:
+        filters = values if isinstance(values, dict) else self.search.values()
+        query = str(filters.get("search") or "")
+        selected_role = filters.get("role")
         users = [
             user
             for user in self._all_users
             if matches_search(user, query, "Username", "FullName", "Role")
+            and (not selected_role or user.get("Role") == selected_role)
         ]
         rows = []
         for user in users:
@@ -279,9 +291,7 @@ class UserManagementPage(AdminApiPage):
         def submit() -> None:
             username = controls["username"].text().strip()
             if not username:
-                dialog.show_request_error(
-                    "Thiếu thông tin", "Vui lòng nhập tên đăng nhập."
-                )
+                dialog.show_request_error("Thiếu thông tin", "Vui lòng nhập tên đăng nhập.")
                 return
             payload = {
                 "Username": username,

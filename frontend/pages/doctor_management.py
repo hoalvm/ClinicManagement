@@ -45,10 +45,23 @@ class DoctorManagementPage(AdminApiPage):
         layout.addWidget(self.header)
         self.add_request_feedback(layout)
 
-        self.search = AdminSearchBar(
-            "Tìm theo tên, chuyên khoa, phòng khám hoặc số giấy phép…"
+        self.search = AdminSearchBar("Tìm theo tên, chuyên khoa, phòng khám hoặc số giấy phép…")
+        self.specialty_filter = self.search.add_filter(
+            "specialty",
+            (("Tất cả chuyên khoa", None),),
+            accessible_name="Lọc bác sĩ theo chuyên khoa",
         )
-        self.search.search_changed.connect(self._apply_filter)
+        self.clinic_filter = self.search.add_filter(
+            "clinic",
+            (("Tất cả phòng khám", None),),
+            accessible_name="Lọc bác sĩ theo phòng khám",
+        )
+        self.status_filter = self.search.add_filter(
+            "status",
+            (("Tất cả trạng thái", None), ("Hoạt động", True), ("Ngừng hoạt động", False)),
+            accessible_name="Lọc bác sĩ theo trạng thái",
+        )
+        self.search.filters_changed.connect(self._apply_filter)
         layout.addWidget(self.search)
 
         table_card = QFrame()
@@ -132,8 +145,6 @@ class DoctorManagementPage(AdminApiPage):
             on_empty_action=self.open_create_dialog,
         )
         layout.addWidget(self.table_state, 1)
-        self.load_lookups()
-        self.load_data()
 
     def load_lookups(self):
         return self.run_admin_task(
@@ -159,6 +170,21 @@ class DoctorManagementPage(AdminApiPage):
         specialties, clinics = result
         self._specialties = [item for item in specialties if item.get("IsActive")]
         self._clinics = [item for item in clinics if item.get("IsActive")]
+        for combo in (self.specialty_filter, self.clinic_filter):
+            combo.blockSignals(True)
+            while combo.count() > 1:
+                combo.removeItem(1)
+        for item in self._specialties:
+            self.specialty_filter.addItem(item["SpecialtyName"], item["SpecialtyID"])
+        for item in self._clinics:
+            label = str(item.get("ClinicName") or "Phòng khám")
+            address = str(item.get("Address") or "").strip()
+            self.clinic_filter.addItem(
+                f"{label} · {address}" if address else label,
+                item["ClinicID"],
+            )
+        self.specialty_filter.blockSignals(False)
+        self.clinic_filter.blockSignals(False)
 
     def load_data(self, *, clear_feedback: bool = True):
         return self.run_admin_task(
@@ -176,9 +202,14 @@ class DoctorManagementPage(AdminApiPage):
 
     def _doctors_loaded(self, doctors: list[dict]) -> None:
         self._all_doctors = list(doctors)
-        self._apply_filter(self.search.text)
+        self._apply_filter(self.search.values())
 
-    def _apply_filter(self, query: str) -> None:
+    def _apply_filter(self, values: object | None = None) -> None:
+        filters = values if isinstance(values, dict) else self.search.values()
+        query = str(filters.get("search") or "")
+        specialty_id = filters.get("specialty")
+        clinic_id = filters.get("clinic")
+        active = filters.get("status")
         doctors = [
             doctor
             for doctor in self._all_doctors
@@ -190,6 +221,9 @@ class DoctorManagementPage(AdminApiPage):
                 "ClinicName",
                 "LicenseNumber",
             )
+            and (not specialty_id or doctor.get("SpecialtyID") == specialty_id)
+            and (not clinic_id or doctor.get("ClinicID") == clinic_id)
+            and (active is None or bool(doctor.get("IsActive")) is bool(active))
         ]
         rows = []
         for doctor in doctors:
@@ -249,7 +283,9 @@ class DoctorManagementPage(AdminApiPage):
         clinic = ChevronComboBox()
         clinic.addItem("Chưa phân phòng khám", None)
         for item in self._clinics:
-            clinic.addItem(item["ClinicName"], item["ClinicID"])
+            name = str(item.get("ClinicName") or "Phòng khám")
+            address = str(item.get("Address") or "").strip()
+            clinic.addItem(f"{name} · {address}" if address else name, item["ClinicID"])
         license_input = QLineEdit(str((doctor or {}).get("LicenseNumber") or ""))
 
         if editing:
@@ -262,20 +298,14 @@ class DoctorManagementPage(AdminApiPage):
             dialog.add_field("Họ và tên bác sĩ", fullname, 0, 0, column_span=2)
             dialog.add_field("Chuyên khoa", specialty, 1, 0, required=True)
             dialog.add_field("Phòng khám", clinic, 1, 1)
-            dialog.add_field(
-                "Số giấy phép hành nghề", license_input, 2, 0, column_span=2
-            )
+            dialog.add_field("Số giấy phép hành nghề", license_input, 2, 0, column_span=2)
         else:
             dialog.add_field("Tên đăng nhập", username, 0, 0, required=True)
             dialog.add_field("Mật khẩu", password, 0, 1, required=True)
-            dialog.add_field(
-                "Họ và tên bác sĩ", fullname, 1, 0, required=True, column_span=2
-            )
+            dialog.add_field("Họ và tên bác sĩ", fullname, 1, 0, required=True, column_span=2)
             dialog.add_field("Chuyên khoa", specialty, 2, 0, required=True)
             dialog.add_field("Phòng khám", clinic, 2, 1)
-            dialog.add_field(
-                "Số giấy phép hành nghề", license_input, 3, 0, column_span=2
-            )
+            dialog.add_field("Số giấy phép hành nghề", license_input, 3, 0, column_span=2)
         return dialog, {
             "username": username,
             "password": password,

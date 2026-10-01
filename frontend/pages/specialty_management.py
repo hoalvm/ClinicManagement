@@ -99,7 +99,6 @@ class SpecialtyManagementPage(AdminApiPage):
             on_empty_action=self.open_create_dialog,
         )
         layout.addWidget(self.table_state, 1)
-        self.load_data()
 
     def load_data(self, *, clear_feedback: bool = True):
         return self.run_admin_task(
@@ -174,9 +173,7 @@ class SpecialtyManagementPage(AdminApiPage):
         def submit() -> None:
             specialty_name = name.text().strip()
             if not specialty_name:
-                dialog.show_request_error(
-                    "Thiếu thông tin", "Vui lòng nhập tên chuyên khoa."
-                )
+                dialog.show_request_error("Thiếu thông tin", "Vui lòng nhập tên chuyên khoa.")
                 return
             payload = {
                 "SpecialtyName": specialty_name,
@@ -202,9 +199,7 @@ class SpecialtyManagementPage(AdminApiPage):
         def submit() -> None:
             specialty_name = name.text().strip()
             if not specialty_name:
-                dialog.show_request_error(
-                    "Thiếu thông tin", "Vui lòng nhập tên chuyên khoa."
-                )
+                dialog.show_request_error("Thiếu thông tin", "Vui lòng nhập tên chuyên khoa.")
                 return
             payload = {
                 "SpecialtyName": specialty_name,
@@ -265,9 +260,7 @@ class SpecialtyManagementPage(AdminApiPage):
                     "Không thể ngừng hoạt động chuyên khoa.",
                 )
             return require_success(
-                api_client.put(
-                    f"/specialties/{specialty_id}", json={"IsActive": True}
-                ),
+                api_client.put(f"/specialties/{specialty_id}", json={"IsActive": True}),
                 "Không thể kích hoạt lại chuyên khoa.",
             )
 

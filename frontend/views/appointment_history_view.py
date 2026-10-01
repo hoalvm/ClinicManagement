@@ -6,9 +6,9 @@ from PySide6.QtCore import QDate, QModelIndex, Qt, Signal
 from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
     QCalendarWidget,
-    QFrame,
     QCheckBox,
     QDateEdit,
+    QFrame,
     QGridLayout,
     QLabel,
     QLineEdit,

@@ -7,10 +7,10 @@ from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
     QCalendarWidget,
     QCheckBox,
-    QFrame,
     QDateEdit,
-    QLabel,
+    QFrame,
     QGridLayout,
+    QLabel,
     QLineEdit,
     QPushButton,
     QTableView,
@@ -27,8 +27,8 @@ from frontend.views.common import (
     require_page,
     table_item,
 )
-from frontend.widgets.page_header import PageHeader
 from frontend.widgets.combo_box import ChevronComboBox
+from frontend.widgets.page_header import PageHeader
 from frontend.widgets.pagination import PaginationWidget
 from frontend.widgets.state_host import StateHost
 

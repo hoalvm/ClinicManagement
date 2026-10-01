@@ -148,8 +148,6 @@ class ScheduleManagementPage(AdminApiPage):
             on_empty_action=self.open_create_dialog,
         )
         layout.addWidget(self.table_state, 1)
-        self.load_doctors()
-        self.load_data()
 
     def load_doctors(self):
         return self.run_admin_task(
@@ -165,8 +163,7 @@ class ScheduleManagementPage(AdminApiPage):
     def _doctors_loaded(self, doctors: list[dict]) -> None:
         self._doctors = [doctor for doctor in doctors if doctor.get("IsActive")]
         self._doctor_names = {
-            int(doctor["DoctorID"]): str(doctor.get("FullName") or "—")
-            for doctor in doctors
+            int(doctor["DoctorID"]): str(doctor.get("FullName") or "—") for doctor in doctors
         }
 
     def load_data(self, *, clear_feedback: bool = True):
@@ -195,8 +192,7 @@ class ScheduleManagementPage(AdminApiPage):
     def _populate_schedules(self, result) -> None:
         schedules, doctors = result
         self._doctor_names = {
-            int(doctor["DoctorID"]): str(doctor.get("FullName") or "—")
-            for doctor in doctors
+            int(doctor["DoctorID"]): str(doctor.get("FullName") or "—") for doctor in doctors
         }
         rows = []
         for schedule in schedules:
@@ -224,17 +220,19 @@ class ScheduleManagementPage(AdminApiPage):
             active = bool(schedule.get("IsActive", True))
             overflow = (
                 (
-                    "Xóa lịch trực",
-                    lambda schedule=schedule: self._confirm_delete(schedule),
-                ),
-            ) if active else ()
+                    (
+                        "Xóa lịch trực",
+                        lambda schedule=schedule: self._confirm_delete(schedule),
+                    ),
+                )
+                if active
+                else ()
+            )
             actions = AdminRowActions(
                 f"lịch trực của {doctor_name}",
                 self.table,
                 on_edit=(
-                    (lambda schedule=schedule: self.open_edit_dialog(schedule))
-                    if active
-                    else None
+                    (lambda schedule=schedule: self.open_edit_dialog(schedule)) if active else None
                 ),
                 overflow_actions=overflow,
             )
@@ -268,12 +266,8 @@ class ScheduleManagementPage(AdminApiPage):
         duration.setValue(30)
 
         if editing:
-            doctor_display.setText(
-                self._doctor_names.get(int(schedule["DoctorID"]), "—")
-            )
-            day_combo.setCurrentIndex(
-                max(0, day_combo.findData(schedule.get("DayOfWeek")))
-            )
+            doctor_display.setText(self._doctor_names.get(int(schedule["DoctorID"]), "—"))
+            day_combo.setCurrentIndex(max(0, day_combo.findData(schedule.get("DayOfWeek"))))
             start.setTime(_qtime(schedule.get("StartTime"), QTime(8, 0)))
             end.setTime(_qtime(schedule.get("EndTime"), QTime(17, 0)))
             duration.setValue(int(schedule.get("SlotDuration") or 30))

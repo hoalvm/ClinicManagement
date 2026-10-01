@@ -42,9 +42,7 @@ class ClinicManagementPage(AdminApiPage):
         layout.addWidget(self.header)
         self.add_request_feedback(layout)
 
-        self.search = AdminSearchBar(
-            "Tìm theo tên phòng khám, địa chỉ hoặc số điện thoại…"
-        )
+        self.search = AdminSearchBar("Tìm theo tên phòng khám, địa chỉ hoặc số điện thoại…")
         self.search.search_changed.connect(self._apply_filter)
         layout.addWidget(self.search)
 
@@ -119,7 +117,6 @@ class ClinicManagementPage(AdminApiPage):
             on_empty_action=self.open_create_dialog,
         )
         layout.addWidget(self.table_state, 1)
-        self.load_data()
 
     def load_data(self, *, clear_feedback: bool = True):
         return self.run_admin_task(
@@ -207,9 +204,7 @@ class ClinicManagementPage(AdminApiPage):
         def submit() -> None:
             clinic_name = name.text().strip()
             if not clinic_name:
-                dialog.show_request_error(
-                    "Thiếu thông tin", "Vui lòng nhập tên phòng khám."
-                )
+                dialog.show_request_error("Thiếu thông tin", "Vui lòng nhập tên phòng khám.")
                 return
             payload = {
                 "ClinicName": clinic_name,
@@ -236,9 +231,7 @@ class ClinicManagementPage(AdminApiPage):
         def submit() -> None:
             clinic_name = name.text().strip()
             if not clinic_name:
-                dialog.show_request_error(
-                    "Thiếu thông tin", "Vui lòng nhập tên phòng khám."
-                )
+                dialog.show_request_error("Thiếu thông tin", "Vui lòng nhập tên phòng khám.")
                 return
             payload = {
                 "ClinicName": clinic_name,

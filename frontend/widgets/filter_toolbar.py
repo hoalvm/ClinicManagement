@@ -114,12 +114,15 @@ class FilterToolbar(QWidget):
         combo = ChevronComboBox()
         combo.setObjectName("filterCombo")
         combo.setAccessibleName(accessible_name or key)
+        uses_item_data = False
         for option in options:
             if isinstance(option, tuple):
                 label, value = option
                 combo.addItem(label, value)
+                uses_item_data = True
             else:
                 combo.addItem(option, option)
+        combo.setProperty("filterUsesItemData", uses_item_data)
         if not 0 <= default_index < max(1, combo.count()):
             raise ValueError("default_index is outside the available options")
         if combo.count():
@@ -236,7 +239,7 @@ class FilterToolbar(QWidget):
         # A conventional "All" option intentionally carries ``None`` while
         # later options have backend codes. Only fall back to display text for
         # combos whose entire model was created without item data.
-        uses_item_data = any(
+        uses_item_data = bool(combo.property("filterUsesItemData")) or any(
             combo.itemData(index) is not None for index in range(combo.count())
         )
         return combo.currentData() if uses_item_data else combo.currentText()

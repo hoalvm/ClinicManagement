@@ -142,8 +142,6 @@ class StatisticsPage(AdminApiPage):
         )
         self.main_layout.addWidget(self.statistics_state, 1)
 
-        self.load_data()
-
     def load_data(self, *, clear_feedback: bool = True):
         return self.run_admin_task(
             "load-statistics",
@@ -192,15 +190,11 @@ class StatisticsPage(AdminApiPage):
                 card._title_label.setMinimumWidth(0)
                 self._stat_cards.append(card)
         else:
-            for card, (title, value, _color) in zip(
-                self._stat_cards, cards_data, strict=True
-            ):
+            for card, (title, value, _color) in zip(self._stat_cards, cards_data, strict=True):
                 card.set_title(title)
                 card.set_value(value)
 
-        for card, (title, value, _color) in zip(
-            self._stat_cards, cards_data, strict=True
-        ):
+        for card, (title, value, _color) in zip(self._stat_cards, cards_data, strict=True):
             card.setToolTip(f"{title}: {value}")
         self._relayout_cards()
 

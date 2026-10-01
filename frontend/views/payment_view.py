@@ -206,7 +206,11 @@ class PaymentView(BaseApiView):
     def _fetch_invoice(self) -> None:
         inv_text = self.inv_input.text().strip()
         if not inv_text:
-            self.feedback.show_message("Thiếu thông tin", "Vui lòng nhập mã hóa đơn hoặc số điện thoại bệnh nhân.", severity="info")
+            self.feedback.show_message(
+                "Thiếu thông tin",
+                "Vui lòng nhập mã hóa đơn hoặc số điện thoại bệnh nhân.",
+                severity="info",
+            )
             return
 
         clean_id = inv_text.lstrip("#").upper().replace("INV-", "").replace("INV", "").strip()
@@ -221,7 +225,9 @@ class PaymentView(BaseApiView):
         else:
             self.run_api_task(
                 f"search_inv_{inv_text}",
-                lambda: self.api_client.get("/api/v1/reception/invoices", params={"keyword": inv_text}),
+                lambda: self.api_client.get(
+                    "/api/v1/reception/invoices", params={"keyword": inv_text}
+                ),
                 self._on_invoice_search_loaded,
                 loading_text="Đang tìm kiếm hóa đơn...",
             )
@@ -229,7 +235,9 @@ class PaymentView(BaseApiView):
     def _on_invoice_search_loaded(self, data: dict[str, Any]) -> None:
         items = data.get("items", [])
         if not items:
-            self.feedback.show_message("Không tìm thấy", "Không tìm thấy hóa đơn phù hợp với từ khóa.", severity="error")
+            self.feedback.show_message(
+                "Không tìm thấy", "Không tìm thấy hóa đơn phù hợp với từ khóa.", severity="error"
+            )
             self._current_invoice = None
             self.settlement_card.hide()
             self.receipt_card.hide()
@@ -245,7 +253,9 @@ class PaymentView(BaseApiView):
 
         inv_id = matched.get("invoice_id", 0)
         self.lbl_inv_title.setText(f"Hóa đơn INV-{inv_id:04d}")
-        self.lbl_patient.setText(f"{matched.get('patient_name')} ({matched.get('patient_phone') or 'Không có SĐT'})")
+        self.lbl_patient.setText(
+            f"{matched.get('patient_name')} ({matched.get('patient_phone') or 'Không có SĐT'})"
+        )
         self.lbl_doctor.setText(matched.get("doctor_name", ""))
         self.badge_status.set_status(matched.get("status", "UNPAID"))
 
@@ -256,7 +266,9 @@ class PaymentView(BaseApiView):
 
         if matched.get("status") == "PAID":
             self.btn_pay.setEnabled(False)
-            self.feedback.show_message("Đã thanh toán", "Hóa đơn này đã được thanh toán đầy đủ trước đó.", severity="info")
+            self.feedback.show_message(
+                "Đã thanh toán", "Hóa đơn này đã được thanh toán đầy đủ trước đó.", severity="info"
+            )
         else:
             self.btn_pay.setEnabled(True)
             self.feedback.clear()
@@ -313,8 +325,18 @@ class PaymentView(BaseApiView):
         method = res.get("payment_method", "CASH")
         patient_name = res.get("patient_name", "Bệnh nhân")
         method_str = "Tiền mặt" if method == "CASH" else "Thẻ ngân hàng"
+        tendered = total
+        change = 0.0
+        if method == "CASH":
+            tendered_text = self.cash_input.text().replace(",", "").replace(".", "").strip()
+            tendered = float(tendered_text) if tendered_text.isdigit() else total
+            change = max(0.0, tendered - total)
 
-        self.feedback.show_message("Thu tiền thành công", f"Hóa đơn INV-{inv_id:04d} đã được thanh toán thành công ({method_str})!", severity="success")
+        self.feedback.show_message(
+            "Thu tiền thành công",
+            f"Hóa đơn INV-{inv_id:04d} đã được thanh toán thành công ({method_str})!",
+            severity="success",
+        )
         self._current_invoice = None
         self.settlement_card.hide()
         self.empty_prompt.hide()
@@ -327,10 +349,12 @@ class PaymentView(BaseApiView):
 ==================================================
 Mã hóa đơn: INV-{inv_id:04d}
 Bệnh nhân: {patient_name}
-Bác sĩ khám: {res.get('doctor_name')}
+Bác sĩ khám: {res.get("doctor_name")}
 Phương thức: {method_str}
 --------------------------------------------------
 TỔNG THANH TOÁN: {format_money(total)}
+{f"TIỀN KHÁCH ĐƯA: {format_money(tendered)}" if method == "CASH" else ""}
+{f"TIỀN THỪA: {format_money(change)}" if method == "CASH" else ""}
 TRẠNG THÁI: ĐÃ THANH TOÁN
 ==================================================
            Cảm ơn Quý khách & Chúc mau khỏe!

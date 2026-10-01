@@ -100,13 +100,15 @@ class BaseApiView(QWidget):
         on_finished: Callable[[], None] | None = None,
         expire_on_401: bool = True,
         is_current: Callable[[], bool] | None = None,
+        clear_feedback: bool = True,
     ) -> bool:
         generation = self._generation
         task_key = (key, generation)
         if task_key in self._workers:
             return False
 
-        self.feedback.clear()
+        if clear_feedback:
+            self.feedback.clear()
         controlled_widgets = tuple(controls)
         for widget in controlled_widgets:
             widget.setEnabled(False)
@@ -141,6 +143,7 @@ class BaseApiView(QWidget):
             handler.on_success(result)
         except (KeyError, TypeError, ValueError, AttributeError) as exc:
             import logging
+
             logging.getLogger(__name__).exception(
                 "Task %s on_success callback failed with %s: %s",
                 handler.task_key,
@@ -198,8 +201,7 @@ class BaseApiView(QWidget):
             for widget in handler.controls:
                 widget.setEnabled(True)
         if not any(
-            active_handler.generation == handler.generation
-            and active_handler.accepts_result()
+            active_handler.generation == handler.generation and active_handler.accepts_result()
             for active_handler in self._handlers.values()
         ):
             self.loading.stop()
