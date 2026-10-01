@@ -5,9 +5,10 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from PySide6.QtCore import QDate
 from PySide6.QtWidgets import QApplication, QPushButton
 
-from frontend.api.api_client import ApiClient
+from frontend.api.api_client import ApiClient, ApiError
 from frontend.core.i18n import t
 from frontend.core.session import SessionState
 from frontend.main_window import MainWindow
@@ -200,6 +201,36 @@ def test_leaving_registration_clears_credentials_and_personal_data(
     qt_app.processEvents()
 
 
+def test_registration_rules_require_ascii_username_phone_and_current_date_picker(
+    qt_app: QApplication,
+) -> None:
+    view = RegisterView(MagicMock(spec=ApiClient))
+
+    valid_payload = {
+        "username": "patient03",
+        "password": "Password123!",
+        "confirm_password": "Password123!",
+        "full_name": "Patient Three",
+        "phone": "0900000003",
+        "email": None,
+        "address": None,
+    }
+    assert RegisterView._validate(valid_payload) is None
+    assert RegisterView._validate({**valid_payload, "username": "patient 03"}) == t(
+        "err_username_format"
+    )
+    assert RegisterView._validate({**valid_payload, "phone": None}) == t(
+        "err_phone_required"
+    )
+    assert RegisterView._validate(
+        {**valid_payload, "password": "password123!", "confirm_password": "password123!"}
+    ) == t("err_password_complexity")
+    assert view.date_of_birth.calendarWidget().selectedDate() == QDate.currentDate()
+
+    view.deleteLater()
+    qt_app.processEvents()
+
+
 def test_switching_patient_pages_invalidates_page_being_left(qt_app: QApplication) -> None:
     window = MainWindow(MagicMock(spec=ApiClient), SessionState())
     window.page_stack.setCurrentWidget(window.dashboard_view)
@@ -271,6 +302,30 @@ def test_registration_and_profile_addresses_use_tab_for_focus_navigation(
 
     register.deleteLater()
     profile.deleteLater()
+    qt_app.processEvents()
+
+
+def test_registration_rejects_duplicate_username_response(
+    qt_app: QApplication,
+) -> None:
+    client = MagicMock(spec=ApiClient)
+
+    class DuplicateResponse:
+        status_code = 409
+
+        @staticmethod
+        def json() -> dict[str, str]:
+            return {"detail": "Username is already registered."}
+
+    client.post.return_value = DuplicateResponse()
+    view = RegisterView(client)
+
+    with pytest.raises(ApiError) as error:
+        view._submit_registration({"username": "patient03"})
+
+    assert error.value.status_code == 409
+    assert error.value.message == t("err_username_duplicate")
+    view.deleteLater()
     qt_app.processEvents()
 
 

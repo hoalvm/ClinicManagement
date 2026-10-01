@@ -31,13 +31,16 @@ class FeedbackBanner(QFrame):
         self._title = QLabel()
         self._title.setObjectName("feedbackTitle")
         self._title.setWordWrap(True)
+        self._title.setMinimumHeight(18)
         self._message = QLabel()
         self._message.setObjectName("feedbackText")
         self._message.setWordWrap(True)
+        self._message.setMinimumHeight(18)
         text_layout.addWidget(self._title)
         text_layout.addWidget(self._message)
 
         layout.addLayout(text_layout, 1)
+        self.setMinimumHeight(63)
         self.hide()
 
     @property

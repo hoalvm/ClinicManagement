@@ -6,6 +6,7 @@ import re
 
 from PySide6.QtCore import QDate, Qt, Signal
 from PySide6.QtWidgets import (
+    QCalendarWidget,
     QDateEdit,
     QFrame,
     QGridLayout,
@@ -19,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from frontend.api.api_client import ApiClient
+from frontend.api.api_client import ApiClient, ApiError
 from frontend.core.i18n import get_i18n, t
 from frontend.views.common import BaseApiView
 from frontend.widgets.combo_box import ChevronComboBox
@@ -170,6 +171,13 @@ class RegisterView(BaseApiView):
         self.date_of_birth.setMinimumDate(NULL_DATE)
         self.date_of_birth.setMaximumDate(QDate.currentDate())
         self.date_of_birth.setDate(NULL_DATE)
+        calendar = self.date_of_birth.calendarWidget()
+        calendar.setMinimumSize(360, 280)
+        calendar.setGridVisible(True)
+        calendar.setHorizontalHeaderFormat(
+            QCalendarWidget.HorizontalHeaderFormat.ShortDayNames
+        )
+        calendar.setSelectedDate(QDate.currentDate())
         self._add_grid_field(grid_pers, 2, 0, self.dob_label, self.date_of_birth)
 
         self.gender_label = QLabel()
@@ -287,7 +295,7 @@ class RegisterView(BaseApiView):
         self.full_name_label.setText(f"{t('full_name')} *")
         self.full_name.setPlaceholderText(t("full_name_placeholder"))
 
-        self.phone_label.setText(t("phone"))
+        self.phone_label.setText(f"{t('phone')} *")
         self.phone.setPlaceholderText(t("phone_placeholder"))
 
         self.email_label.setText(t("email"))
@@ -318,7 +326,7 @@ class RegisterView(BaseApiView):
         self._clear_errors()
         selected_date = self.date_of_birth.date()
         payload = {
-            "username": self.username.text().strip(),
+            "username": self.username.text().strip().lower(),
             "password": self.password.text(),
             "confirm_password": self.confirm_password.text(),
             "full_name": self.full_name.text().strip(),
@@ -344,18 +352,43 @@ class RegisterView(BaseApiView):
         loading_text = "Đang tạo tài khoản…" if get_i18n().current_language == "vi" else "Creating account…"
         self.run_api_task(
             "register",
-            lambda: self.api_client.post("/api/v1/auth/register", json=payload),
+            lambda: self._submit_registration(payload),
             registered,
             controls=self._form_controls,
             loading_text=loading_text,
             expire_on_401=False,
         )
 
+    def _submit_registration(self, payload: dict[str, object]) -> object:
+        """Treat legacy response objects as failures when registration is rejected."""
+
+        response = self.api_client.post("/api/v1/auth/register", json=payload)
+        status_code = getattr(response, "status_code", None)
+        if isinstance(status_code, int) and not 200 <= status_code < 300:
+            detail = None
+            try:
+                body = response.json()
+                if isinstance(body, dict):
+                    detail = body.get("detail")
+            except (AttributeError, TypeError, ValueError):
+                pass
+            message = (
+                t("err_username_duplicate")
+                if status_code == 409
+                else str(detail or t("error_request_message"))
+            )
+            raise ApiError(message, status_code=status_code, details=detail)
+        return response
+
     def _show_validation(self, message: str) -> None:
         field: QWidget
         if message == t("err_username_required"):
             field = self.username
+        elif message == t("err_username_format"):
+            field = self.username
         elif message == t("err_password_len"):
+            field = self.password
+        elif message == t("err_password_complexity"):
             field = self.password
         elif message == t("err_password_match"):
             field = self.confirm_password
@@ -364,6 +397,8 @@ class RegisterView(BaseApiView):
         elif message == t("err_email_invalid"):
             field = self.email
         elif message == t("err_phone_invalid"):
+            field = self.phone
+        elif message == t("err_phone_required"):
             field = self.phone
         else:
             field = self.address
@@ -393,8 +428,18 @@ class RegisterView(BaseApiView):
     def _validate(payload: dict[str, object]) -> str | None:
         if not payload["username"]:
             return t("err_username_required")
+        if not re.fullmatch(r"[A-Za-z0-9]+", str(payload["username"])):
+            return t("err_username_format")
         if len(str(payload["password"])) < 8:
             return t("err_password_len")
+        if not re.search(r"[A-Z]", str(payload["password"])):
+            return t("err_password_complexity")
+        if not re.search(r"[a-z]", str(payload["password"])):
+            return t("err_password_complexity")
+        if not re.search(r"\d", str(payload["password"])):
+            return t("err_password_complexity")
+        if not re.search(r"[^A-Za-z0-9]", str(payload["password"])):
+            return t("err_password_complexity")
         if payload["password"] != payload["confirm_password"]:
             return t("err_password_match")
         if not payload["full_name"]:
@@ -403,7 +448,9 @@ class RegisterView(BaseApiView):
         if email and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", str(email)):
             return t("err_email_invalid")
         phone = payload["phone"]
-        if phone and not re.fullmatch(r"\+?\d{7,14}", str(phone)):
+        if not phone:
+            return t("err_phone_required")
+        if not re.fullmatch(r"\d{7,14}", str(phone)):
             return t("err_phone_invalid")
         if len(str(payload["address"] or "")) > 255:
             return t("err_address_len")

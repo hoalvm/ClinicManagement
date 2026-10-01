@@ -1,6 +1,6 @@
 """Persistence operations for users."""
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from backend.app.models import User
@@ -15,7 +15,7 @@ class UserRepository:
         return self.session.execute(statement).unique().scalar_one_or_none()
 
     def get_by_username(self, username: str) -> User | None:
-        statement = select(User).where(User.username == username)
+        statement = select(User).where(func.lower(User.username) == username.strip().lower())
         return self.session.execute(statement).scalar_one_or_none()
 
     def add(self, user: User) -> User:

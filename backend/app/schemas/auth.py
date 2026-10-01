@@ -2,6 +2,8 @@
 
 from datetime import date
 
+import re
+
 from pydantic import EmailStr, Field, field_validator, model_validator
 
 from backend.app.core.clock import clinic_today
@@ -20,7 +22,7 @@ class RegisterRequest(APIModel):
     password: str = Field(min_length=8, max_length=128)
     confirm_password: str = Field(min_length=8, max_length=128)
     full_name: str = Field(min_length=1, max_length=100)
-    phone: str | None = Field(default=None, max_length=15)
+    phone: str = Field(min_length=7, max_length=14)
     email: EmailStr | None = Field(default=None, max_length=100)
     date_of_birth: date | None = None
     gender: str | None = Field(default=None, max_length=10)
@@ -29,22 +31,38 @@ class RegisterRequest(APIModel):
     @field_validator("username")
     @classmethod
     def validate_username(cls, value: str) -> str:
-        return _clean_required(value, "Username")
+        cleaned = _clean_required(value, "Username")
+        if not re.fullmatch(r"[A-Za-z0-9]+", cleaned):
+            raise ValueError("Username may contain only letters and numbers")
+        return cleaned.lower()
 
     @field_validator("full_name")
     @classmethod
     def validate_full_name(cls, value: str) -> str:
         return _clean_required(value, "Full name")
 
+    @field_validator("password")
+    @classmethod
+    def validate_password_complexity(cls, value: str) -> str:
+        requirements = (
+            r"[A-Z]",
+            r"[a-z]",
+            r"\d",
+            r"[^A-Za-z0-9]",
+        )
+        if any(re.search(pattern, value) is None for pattern in requirements):
+            raise ValueError(
+                "Password must contain an uppercase letter, a lowercase letter, "
+                "a number, and a special character"
+            )
+        return value
+
     @field_validator("phone")
     @classmethod
-    def validate_phone(cls, value: str | None) -> str | None:
-        if value is None or not value.strip():
-            return None
+    def validate_phone(cls, value: str) -> str:
         cleaned = value.strip()
-        normalized = cleaned[1:] if cleaned.startswith("+") else cleaned
-        if not normalized.isdigit() or not 7 <= len(normalized) <= 14:
-            raise ValueError("Phone must contain 7 to 14 digits, optionally prefixed by +")
+        if not cleaned.isdigit() or not 7 <= len(cleaned) <= 14:
+            raise ValueError("Phone must contain 7 to 14 digits")
         return cleaned
 
     @field_validator("date_of_birth")
@@ -75,7 +93,7 @@ class LoginRequest(APIModel):
     @field_validator("username")
     @classmethod
     def validate_username(cls, value: str) -> str:
-        return _clean_required(value, "Username")
+        return _clean_required(value, "Username").lower()
 
 
 class TokenResponse(APIModel):
