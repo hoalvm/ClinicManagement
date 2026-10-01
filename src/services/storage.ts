@@ -555,12 +555,14 @@ class ClinicStorageService {
     }
     if (params.keyword && params.keyword.trim()) {
       const q = params.keyword.toLowerCase().trim();
+      const normalizedPhone = q.replace(/\s+/g, '');
       list = list.filter(
         (a) =>
           a.patient_name.toLowerCase().includes(q) ||
-          a.patient_phone.includes(q) ||
+          a.patient_phone.replace(/\s+/g, '').includes(normalizedPhone) ||
           a.reason.toLowerCase().includes(q) ||
-          a.doctor.full_name.toLowerCase().includes(q)
+          a.doctor.full_name.toLowerCase().includes(q) ||
+          String(a.appointment_id).includes(q.replace(/^#/, ''))
       );
     }
 
@@ -581,6 +583,9 @@ class ClinicStorageService {
   confirmAppointmentStaff(appointmentId: number): ReceptionAppointment {
     const idx = this.appointments.findIndex((a) => a.appointment_id === appointmentId);
     if (idx === -1) throw new Error('Appointment not found');
+    if (this.appointments[idx].status !== 'PENDING') {
+      throw new Error('Chỉ có thể xác nhận lịch đang chờ xác nhận');
+    }
     this.appointments[idx] = {
       ...this.appointments[idx],
       status: 'CONFIRMED',
@@ -593,6 +598,9 @@ class ClinicStorageService {
     const idx = this.appointments.findIndex((a) => a.appointment_id === appointmentId);
     if (idx === -1) throw new Error('Appointment not found');
     const existing = this.appointments[idx];
+    if (existing.status !== 'PENDING' && existing.status !== 'CONFIRMED') {
+      throw new Error('Chỉ có thể tiếp nhận lịch đang chờ xác nhận hoặc đã xác nhận');
+    }
     const newReason = notes ? `${existing.reason} [Check-in note: ${notes}]` : existing.reason;
 
     this.appointments[idx] = {
@@ -608,6 +616,9 @@ class ClinicStorageService {
     const idx = this.appointments.findIndex((a) => a.appointment_id === appointmentId);
     if (idx === -1) throw new Error('Appointment not found');
     const existing = this.appointments[idx];
+    if (existing.status === 'COMPLETED' || existing.status === 'CANCELLED') {
+      throw new Error('Không thể hủy lịch đã hoàn tất hoặc đã hủy');
+    }
     this.appointments[idx] = {
       ...existing,
       status: 'CANCELLED',
@@ -626,10 +637,19 @@ class ClinicStorageService {
     const idx = this.appointments.findIndex((a) => a.appointment_id === appointmentId);
     if (idx === -1) throw new Error('Appointment not found');
     const existing = this.appointments[idx];
+    const today = new Date().toISOString().split('T')[0];
+    if (existing.status === 'COMPLETED' || existing.status === 'CANCELLED') {
+      throw new Error('Không thể đổi lịch đã hoàn tất hoặc đã hủy');
+    }
+    if (newDate < today) throw new Error('Không thể đổi lịch sang ngày trong quá khứ');
+    const [hours, minutes] = newTime.split(':').map(Number);
+    const endMinutes = hours * 60 + minutes + 30;
+    const endTime = `${String(Math.floor(endMinutes / 60) % 24).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}:00`;
     this.appointments[idx] = {
       ...existing,
       appointment_date: newDate,
       start_time: newTime,
+      end_time: endTime,
       status: 'CONFIRMED',
       reason: reason || existing.reason,
     };
@@ -652,17 +672,24 @@ class ClinicStorageService {
     auto_confirm?: boolean;
   }): ReceptionAppointment {
     let patientId = data.patient_id;
+    const normalizedPhone = data.phone.replace(/\s+/g, '');
+    const today = new Date().toISOString().split('T')[0];
+    if (data.appointment_date < today) {
+      throw new Error('Không thể đặt lịch khám trong quá khứ');
+    }
 
     if (!patientId) {
       // Find or create user
-      let user = this.users.find((u) => u.phone === data.phone);
+      let user = this.users.find(
+        (u) => (u.phone || '').replace(/\s+/g, '') === normalizedPhone
+      );
       if (!user) {
         const newUid = Math.max(...this.users.map((u) => u.user_id), 0) + 1;
         user = {
           user_id: newUid,
-          username: `pt_${data.phone.slice(-6)}`,
+          username: `pt_${normalizedPhone.slice(-6)}`,
           full_name: data.full_name,
-          phone: data.phone,
+          phone: normalizedPhone,
           role: 'PATIENT',
           is_active: true,
         };
@@ -767,6 +794,9 @@ class ClinicStorageService {
   ): Invoice {
     const appt = this.appointments.find((a) => a.appointment_id === appointmentId);
     if (!appt) throw new Error('Appointment not found');
+    if (this.invoices.some((invoice) => invoice.appointment_id === appointmentId)) {
+      throw new Error('Lịch hẹn này đã có hóa đơn');
+    }
 
     const total_amount = items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
     const newInvoiceId = Math.max(...this.invoices.map((i) => i.invoice_id), 0) + 1;
@@ -901,6 +931,7 @@ class ClinicStorageService {
   }> {
     if (!query || query.trim().length < 2) return [];
     const q = query.toLowerCase().trim();
+    const normalizedPhone = q.replace(/\s+/g, '');
 
     return this.patients
       .map((p) => {
@@ -913,7 +944,12 @@ class ClinicStorageService {
           date_of_birth: p.date_of_birth || '',
         };
       })
-      .filter((p) => p.full_name.toLowerCase().includes(q) || p.phone.includes(q))
+      .filter(
+        (p) =>
+          p.full_name.toLowerCase().includes(q) ||
+          p.phone.replace(/\s+/g, '').includes(normalizedPhone) ||
+          String(p.patient_id).includes(q.replace(/^(pt-?|#)/, ''))
+      )
       .slice(0, 8);
   }
 

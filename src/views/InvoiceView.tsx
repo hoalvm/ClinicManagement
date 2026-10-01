@@ -69,7 +69,9 @@ export const InvoiceView: React.FC<Props> = ({
     // Checked in or confirmed appointments that need billing
     const appts = storageService.getReceptionAppointments({ pageSize: 50 });
     const eligible = appts.items.filter(
-      (a) => a.status === 'CHECKED_IN' || a.status === 'CONFIRMED' || a.status === 'COMPLETED'
+      (a) =>
+        !a.invoice_id &&
+        (a.status === 'CHECKED_IN' || a.status === 'CONFIRMED' || a.status === 'COMPLETED')
     );
     setEligibleAppointments(eligible);
     if (initialAppointmentId) {

@@ -22,28 +22,28 @@ export const CheckIn: React.FC<Props> = ({ onNavigate }) => {
   const [confirmedQueue, setConfirmedQueue] = useState<ReceptionAppointment[]>([]);
   const [waitingRoomList, setWaitingRoomList] = useState<ReceptionAppointment[]>([]);
   const [selectedAppointment, setSelectedAppointment] = useState<ReceptionAppointment | null>(null);
-  const [queueNumber, setQueueNumber] = useState('A-08');
-  const [triageNotes, setTriageNotes] = useState('Đã đo sinh hiệu: HA 120/80, SpO2 99%');
+  const [queueNumber, setQueueNumber] = useState('A-01');
+  const [triageNotes, setTriageNotes] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const loadData = () => {
-    const today = new Date().toISOString().split('T')[0];
-    const resConfirmed = storageService.getReceptionAppointments({
-      status: 'CONFIRMED',
-      pageSize: 50,
-    });
-    setConfirmedQueue(resConfirmed.items);
+    const allAppointments = storageService.getReceptionAppointments({ pageSize: 100 });
+    const candidates = allAppointments.items.filter(
+      (appointment) => appointment.status === 'PENDING' || appointment.status === 'CONFIRMED'
+    );
+    setConfirmedQueue(candidates);
 
     const resWaiting = storageService.getReceptionAppointments({
       status: 'CHECKED_IN',
       pageSize: 50,
     });
     setWaitingRoomList(resWaiting.items);
+    setQueueNumber(`A-${String(resWaiting.items.length + 1).padStart(2, '0')}`);
 
     // Auto select first confirmed if available
-    if (resConfirmed.items.length > 0 && !selectedAppointment) {
-      setSelectedAppointment(resConfirmed.items[0]);
+    if (candidates.length > 0 && !selectedAppointment) {
+      setSelectedAppointment(candidates[0]);
     }
   };
 
@@ -57,7 +57,7 @@ export const CheckIn: React.FC<Props> = ({ onNavigate }) => {
     storageService.checkInPatientStaff(
       selectedAppointment.appointment_id,
       queueNumber,
-      `Số thứ tự: ${queueNumber} - ${triageNotes}`
+      triageNotes ? `Số thứ tự: ${queueNumber} - ${triageNotes}` : `Số thứ tự: ${queueNumber}`
     );
 
     setSuccessMessage(
@@ -74,9 +74,10 @@ export const CheckIn: React.FC<Props> = ({ onNavigate }) => {
   const filteredConfirmed = confirmedQueue.filter((a) => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase().trim();
+    const normalizedPhone = q.replace(/\s+/g, '');
     return (
       a.patient_name.toLowerCase().includes(q) ||
-      a.patient_phone.includes(q) ||
+      a.patient_phone.replace(/\s+/g, '').includes(normalizedPhone) ||
       String(a.appointment_id).includes(q)
     );
   });

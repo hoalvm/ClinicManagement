@@ -438,6 +438,7 @@ export const AppointmentManagement: React.FC<Props> = ({ initialStatus = 'ALL', 
                 <label className="text-xs font-semibold text-slate-700">Ngày hẹn mới:</label>
                 <input
                   type="date"
+                  min={new Date().toISOString().split('T')[0]}
                   value={rescheduleDate}
                   onChange={(e) => setRescheduleDate(e.target.value)}
                   className="w-full mt-1 text-sm p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
