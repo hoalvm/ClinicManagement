@@ -20,7 +20,6 @@ from frontend.api.api_client import ApiClient, ApiError
 from frontend.core.i18n import get_i18n, t
 from frontend.views.common import BaseApiView, require_dict
 from frontend.widgets.form_field import FormField
-from frontend.widgets.language_selector import LanguageSelector
 
 
 class LoginView(BaseApiView):
@@ -34,12 +33,6 @@ class LoginView(BaseApiView):
         root = QVBoxLayout(self)
         root.setContentsMargins(32, 16, 32, 24)
 
-        # Top bar with Language Selector
-        top_bar = QHBoxLayout()
-        top_bar.addStretch()
-        self.lang_selector = LanguageSelector(self, show_label=True)
-        top_bar.addWidget(self.lang_selector)
-        root.addLayout(top_bar)
         root.addStretch()
 
         # Centered auth card

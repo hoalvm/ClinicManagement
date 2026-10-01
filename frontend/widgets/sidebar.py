@@ -54,7 +54,7 @@ class Sidebar(AppSidebar):
             parent,
             brand_subtitle="Cổng bệnh nhân",
             logout_text="Logout",
-            show_language_selector=True,
+            show_language_selector=False,
         )
         self._overview_label = self._section_labels[0]
         self._care_label = self._section_labels[1]
@@ -92,6 +92,11 @@ class Sidebar(AppSidebar):
             self._user_role = t("nav_patient_account")
             self._user_role_label.setText(self._user_role)
         self._update_user_context()
+
+    def set_compact(self, compact: bool) -> None:
+        super().set_compact(compact)
+        if hasattr(self, "_overview_label"):
+            self.retranslate_ui()
 
     @staticmethod
     def _initials(name: str) -> str:

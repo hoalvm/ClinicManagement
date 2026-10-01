@@ -42,6 +42,13 @@ def _set_style_state(widget: QWidget, name: str, value: object) -> None:
     widget.update()
 
 
+class _SpecialtySearchComboBox(ChevronComboBox):
+    """Keep mouse-wheel scrolling from changing the search selection."""
+
+    def wheelEvent(self, event) -> None:  # noqa: N802
+        event.ignore()
+
+
 class BookingView(BaseApiView):
     """Four-step appointment booking wizard: Specialty -> Doctor -> Date/Slot -> Confirm."""
 
@@ -95,7 +102,7 @@ class BookingView(BaseApiView):
         )
         self.cancel_nav_btn = QPushButton("Quay lại danh sách")
         self.cancel_nav_btn.setObjectName("secondaryButton")
-        self.cancel_nav_btn.clicked.connect(self.back_requested.emit)
+        self.cancel_nav_btn.clicked.connect(self._navigate_header_back)
         self.header.add_action(self.cancel_nav_btn)
         root_layout.addWidget(self.header)
 
@@ -172,7 +179,7 @@ class BookingView(BaseApiView):
         search_row = QHBoxLayout()
         search_row.setSpacing(10)
 
-        self.spec_combo = ChevronComboBox()
+        self.spec_combo = _SpecialtySearchComboBox()
         self.spec_combo.setEditable(True)
         self.spec_combo.setInsertPolicy(ChevronComboBox.InsertPolicy.NoInsert)
         self.spec_combo.setMinimumHeight(42)
@@ -1214,6 +1221,11 @@ class BookingView(BaseApiView):
 
     def _submit_booking(self) -> None:
         if not self.selected_doctor or not self.selected_slot:
+            self.feedback.show_message(
+                "Chưa đủ thông tin đặt lịch",
+                "Vui lòng chọn bác sĩ và khung giờ trước khi xác nhận.",
+                severity="warning",
+            )
             return
 
         start_t, end_t = self.selected_slot
@@ -1246,9 +1258,16 @@ class BookingView(BaseApiView):
     # --------------------------------------------------------------------------
     # Wizard Navigation
     # --------------------------------------------------------------------------
+    def _navigate_header_back(self) -> None:
+        if self._current_step_index > 0:
+            self._go_to_step(self._current_step_index - 1)
+            return
+        self.back_requested.emit()
+
     def _go_to_step(self, step_index: int) -> None:
         self._current_step_index = step_index
         self._update_step_indicator()
+        self._update_header_back_label()
         self.step_layout.setCurrentIndex(step_index)
 
         if step_index == 0:
@@ -1270,6 +1289,12 @@ class BookingView(BaseApiView):
             self.step_indicator.set_steps(labels)
         self.step_indicator.set_current_step(self._current_step_index)
 
+    def _update_header_back_label(self) -> None:
+        if self._current_step_index > 0:
+            self.cancel_nav_btn.setText(t("back_to_previous_step"))
+        else:
+            self.cancel_nav_btn.setText(t("back_to_booking_list"))
+
     @staticmethod
     def _step_labels() -> list[str]:
         return [
@@ -1283,7 +1308,7 @@ class BookingView(BaseApiView):
         """Dynamically update all visible text in BookingView."""
         self.header.title_label.setText(t("booking_header_title"))
         self.header.subtitle_label.setText(t("booking_header_subtitle"))
-        self.cancel_nav_btn.setText(t("back_to_appointments"))
+        self._update_header_back_label()
         self._update_step_indicator()
 
         # Step 1

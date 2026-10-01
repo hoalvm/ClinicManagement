@@ -176,8 +176,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Enter your username...",
     },
     "password_placeholder": {
-        "vi": "Nhập mật khẩu (tối thiểu 8 ký tự)...",
-        "en": "Enter password (min 8 characters)...",
+        "vi": "Tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt...",
+        "en": "At least 8 characters with uppercase, lowercase, number, and special character...",
     },
     "confirm_password_placeholder": {
         "vi": "Nhập lại mật khẩu...",
@@ -211,9 +211,21 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "vi": "Tên đăng nhập không được để trống.",
         "en": "Username is required.",
     },
+    "err_username_format": {
+        "vi": "Tên đăng nhập chỉ được gồm chữ cái không dấu và chữ số, không có khoảng trắng hoặc ký tự đặc biệt.",
+        "en": "Username may contain only letters and numbers, without spaces or special characters.",
+    },
+    "err_username_duplicate": {
+        "vi": "Tên đăng nhập đã tồn tại. Vui lòng chọn tên khác.",
+        "en": "Username already exists. Please choose another one.",
+    },
     "err_password_len": {
         "vi": "Mật khẩu phải có ít nhất 8 ký tự.",
         "en": "Password must be at least 8 characters.",
+    },
+    "err_password_complexity": {
+        "vi": "Mật khẩu phải có ít nhất 1 chữ hoa, 1 chữ thường, 1 chữ số và 1 ký tự đặc biệt.",
+        "en": "Password must contain an uppercase letter, a lowercase letter, a number, and a special character.",
     },
     "err_password_match": {
         "vi": "Mật khẩu xác nhận không khớp.",
@@ -230,6 +242,10 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "err_phone_invalid": {
         "vi": "Số điện thoại phải từ 7 đến 14 chữ số.",
         "en": "Phone must contain 7 to 14 digits.",
+    },
+    "err_phone_required": {
+        "vi": "Số điện thoại không được để trống.",
+        "en": "Phone number is required.",
     },
     "err_address_len": {
         "vi": "Địa chỉ không được vượt quá 255 ký tự.",
@@ -305,9 +321,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "vi": "Chọn chuyên khoa, bác sĩ và khung giờ phù hợp để đặt lịch khám",
         "en": "Choose a specialty, doctor, and time slot to book your visit",
     },
-    "back_to_appointments": {
-        "vi": "← Lịch khám của tôi",
-        "en": "← My appointments",
+    "back_to_booking_list": {
+        "vi": "Quay lại danh sách",
+        "en": "Back to list",
+    },
+    "back_to_previous_step": {
+        "vi": "Quay lại bước trước",
+        "en": "Back to previous step",
     },
     "wizard_specialty": {"vi": "Chuyên khoa", "en": "Specialty"},
     "wizard_doctor": {"vi": "Bác sĩ", "en": "Doctor"},
@@ -849,6 +869,25 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Track charges and payment status for your clinic visits.",
     },
     "filter_by_status": {"vi": "Lọc theo trạng thái thanh toán", "en": "Narrow results by payment status"},
+    "filter_by_appointment_date": {
+        "vi": "Ngày khám",
+        "en": "Appointment date",
+    },
+    "filter_by_examination_date": {
+        "vi": "Ngày khám",
+        "en": "Examination date",
+    },
+    "filter_by_specialty": {"vi": "Chuyên khoa", "en": "Specialty"},
+    "filter_by_clinic": {"vi": "Phòng khám", "en": "Clinic"},
+    "filter_all": {"vi": "Tất cả", "en": "All"},
+    "filter_specialty_placeholder": {
+        "vi": "Nhập tên chuyên khoa...",
+        "en": "Enter specialty...",
+    },
+    "filter_clinic_placeholder": {
+        "vi": "Nhập tên phòng khám...",
+        "en": "Enter clinic...",
+    },
     "th_invoice_num": {"vi": "Mã hóa đơn", "en": "Invoice"},
     "th_total_amount": {"vi": "Tổng tiền", "en": "Total Amount"},
     "no_invoices_found": {"vi": "Không tìm thấy hóa đơn", "en": "No invoices found"},

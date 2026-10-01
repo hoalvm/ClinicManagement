@@ -42,6 +42,9 @@ class AppointmentRepository:
         page_size: int,
         keyword: str | None = None,
         status: str | None = None,
+        appointment_date: date | None = None,
+        specialty: str | None = None,
+        clinic: str | None = None,
     ) -> tuple[list[Appointment], int]:
         base = (
             select(Appointment)
@@ -63,6 +66,17 @@ class AppointmentRepository:
         if status:
             base = base.where(Appointment.status == status)
             count_statement = count_statement.where(Appointment.status == status)
+        if appointment_date is not None:
+            base = base.where(Appointment.appointment_date == appointment_date)
+            count_statement = count_statement.where(Appointment.appointment_date == appointment_date)
+        if specialty and specialty.strip():
+            pattern = f"%{specialty.strip()}%"
+            base = base.where(Specialty.specialty_name.ilike(pattern))
+            count_statement = count_statement.where(Specialty.specialty_name.ilike(pattern))
+        if clinic and clinic.strip():
+            pattern = f"%{clinic.strip()}%"
+            base = base.where(Clinic.clinic_name.ilike(pattern))
+            count_statement = count_statement.where(Clinic.clinic_name.ilike(pattern))
         base = self._apply_search(base, keyword)
         count_statement = self._apply_search(count_statement, keyword)
 

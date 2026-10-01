@@ -165,6 +165,50 @@ def test_book_appointment_success():
     service.appointment_repo.add.assert_called_once()
 
 
+def test_book_appointment_ignores_cancelled_previous_appointment():
+    session = MagicMock()
+    service = BookingService(session)
+    doc = _doctor_stub()
+    service.doctor_repo.get_doctor_by_id = MagicMock(return_value=doc)
+
+    target_date = date(2026, 10, 5)
+    schedule = _schedule_stub(day_of_week=1, start_time=time(8, 0), end_time=time(12, 0))
+    service.doctor_repo.get_schedules = MagicMock(return_value=[schedule])
+    cancelled = _appointment_stub(
+        appointment_date=target_date,
+        status="CANCELLED",
+    )
+    service.appointment_repo.get_active_appointments_for_doctor = MagicMock(
+        return_value=[cancelled]
+    )
+    service.appointment_repo.get_active_appointments_for_patient = MagicMock(
+        return_value=[cancelled]
+    )
+    service.appointment_repo.get_active_appointments_for_patient_all = MagicMock(
+        return_value=[cancelled]
+    )
+    service.appointment_repo.add = MagicMock(
+        side_effect=lambda appointment: setattr(appointment, "appointment_id", 1001)
+        or appointment
+    )
+    service.appointment_service.get_detail = MagicMock(
+        return_value={"appointment_id": 1001, "status": "PENDING"}
+    )
+
+    result = service.book_appointment(
+        10,
+        AppointmentCreateRequest(
+            doctor_id=5,
+            appointment_date=target_date,
+            start_time=time(8, 0),
+            end_time=time(8, 30),
+        ),
+    )
+
+    assert result["appointment_id"] == 1001
+    service.appointment_repo.add.assert_called_once()
+
+
 def test_book_appointment_conflict_raises():
     session = MagicMock()
     service = BookingService(session)
