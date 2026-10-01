@@ -1,13 +1,23 @@
-import enum
-from datetime import datetime, date, time
+from datetime import date, datetime
+from enum import StrEnum
+
 from sqlalchemy import (
-    Column, Integer, String, Text, DateTime, ForeignKey, 
-    Enum, Boolean, Date, Time
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Time,
 )
 from sqlalchemy.orm import relationship
+
 from backend.database import Base
 
-class AppointmentStatus(str, enum.Enum):
+
+class AppointmentStatus(StrEnum):
     PENDING = "PENDING"
     CONFIRMED = "CONFIRMED"
     CHECKED_IN = "CHECKED_IN"

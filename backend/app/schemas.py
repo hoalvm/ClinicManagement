@@ -1,25 +1,26 @@
-from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional
 from datetime import datetime, time
+
+from pydantic import BaseModel, ConfigDict, Field
+
 
 # ---------- User ----------
 class UserBase(BaseModel):
     Username: str
     FullName: str
-    Phone: Optional[str] = None
-    Email: Optional[str] = None
+    Phone: str | None = None
+    Email: str | None = None
     Role: str = Field(..., pattern="^(PATIENT|DOCTOR|STAFF|ADMIN)$", description="PATIENT, DOCTOR, STAFF, ADMIN")
 
 class UserCreate(UserBase):
     Password: str
 
 class UserUpdate(BaseModel):
-    Username: Optional[str] = None
-    FullName: Optional[str] = None
-    Phone: Optional[str] = None
-    Email: Optional[str] = None
-    Role: Optional[str] = Field(None, pattern="^(PATIENT|DOCTOR|STAFF|ADMIN)$")
-    IsActive: Optional[bool] = None
+    Username: str | None = None
+    FullName: str | None = None
+    Phone: str | None = None
+    Email: str | None = None
+    Role: str | None = Field(None, pattern="^(PATIENT|DOCTOR|STAFF|ADMIN)$")
+    IsActive: bool | None = None
 
 class UserOut(UserBase):
     UserID: int
@@ -38,37 +39,37 @@ class Token(BaseModel):
 # ---------- Specialty ----------
 class SpecialtyCreate(BaseModel):
     SpecialtyName: str
-    Description: Optional[str] = None
+    Description: str | None = None
 
 class SpecialtyUpdate(BaseModel):
-    SpecialtyName: Optional[str] = None
-    Description: Optional[str] = None
-    IsActive: Optional[bool] = None
+    SpecialtyName: str | None = None
+    Description: str | None = None
+    IsActive: bool | None = None
 
 class SpecialtyOut(BaseModel):
     SpecialtyID: int
     SpecialtyName: str
-    Description: Optional[str] = None
+    Description: str | None = None
     IsActive: bool
     model_config = ConfigDict(from_attributes=True)
 
 # ---------- Clinic ----------
 class ClinicCreate(BaseModel):
     ClinicName: str
-    Address: Optional[str] = None
-    Phone: Optional[str] = None
+    Address: str | None = None
+    Phone: str | None = None
 
 class ClinicUpdate(BaseModel):
-    ClinicName: Optional[str] = None
-    Address: Optional[str] = None
-    Phone: Optional[str] = None
-    IsActive: Optional[bool] = None
+    ClinicName: str | None = None
+    Address: str | None = None
+    Phone: str | None = None
+    IsActive: bool | None = None
 
 class ClinicOut(BaseModel):
     ClinicID: int
     ClinicName: str
-    Address: Optional[str] = None
-    Phone: Optional[str] = None
+    Address: str | None = None
+    Phone: str | None = None
     IsActive: bool
     model_config = ConfigDict(from_attributes=True)
 
@@ -77,27 +78,27 @@ class DoctorCreate(BaseModel):
     Username: str
     Password: str
     FullName: str
-    Phone: Optional[str] = None
-    Email: Optional[str] = None
+    Phone: str | None = None
+    Email: str | None = None
     SpecialtyID: int
-    ClinicID: Optional[int] = None
-    LicenseNumber: Optional[str] = None
+    ClinicID: int | None = None
+    LicenseNumber: str | None = None
 
 class DoctorUpdate(BaseModel):
-    SpecialtyID: Optional[int] = None
-    ClinicID: Optional[int] = None
-    LicenseNumber: Optional[str] = None
-    IsActive: Optional[bool] = None
+    SpecialtyID: int | None = None
+    ClinicID: int | None = None
+    LicenseNumber: str | None = None
+    IsActive: bool | None = None
 
 class DoctorOut(BaseModel):
     DoctorID: int
     UserID: int
     FullName: str
     SpecialtyID: int
-    SpecialtyName: Optional[str] = None
-    ClinicID: Optional[int] = None
-    ClinicName: Optional[str] = None
-    LicenseNumber: Optional[str] = None
+    SpecialtyName: str | None = None
+    ClinicID: int | None = None
+    ClinicName: str | None = None
+    LicenseNumber: str | None = None
     IsActive: bool
     model_config = ConfigDict(from_attributes=True)
 
@@ -110,11 +111,11 @@ class ScheduleCreate(BaseModel):
     SlotDuration: int = Field(30, gt=0, description="Thời lượng ca khám (phút) > 0")
 
 class ScheduleUpdate(BaseModel):
-    DayOfWeek: Optional[int] = Field(None, ge=1, le=7)
-    StartTime: Optional[time] = None
-    EndTime: Optional[time] = None
-    SlotDuration: Optional[int] = Field(None, gt=0)
-    IsActive: Optional[bool] = None
+    DayOfWeek: int | None = Field(None, ge=1, le=7)
+    StartTime: time | None = None
+    EndTime: time | None = None
+    SlotDuration: int | None = Field(None, gt=0)
+    IsActive: bool | None = None
 
 class ScheduleOut(BaseModel):
     ScheduleID: int

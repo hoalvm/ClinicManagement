@@ -1,8 +1,7 @@
 """Authentication request and response schemas."""
 
-from datetime import date
-
 import re
+from datetime import date
 
 from pydantic import EmailStr, Field, field_validator, model_validator
 
@@ -57,10 +56,10 @@ class RegisterRequest(APIModel):
             )
         return value
 
-    @field_validator("phone")
+    @field_validator("phone", mode="before")
     @classmethod
-    def validate_phone(cls, value: str) -> str:
-        cleaned = value.strip()
+    def validate_phone(cls, value: object) -> str:
+        cleaned = re.sub(r"\s+", "", str(value))
         if not cleaned.isdigit() or not 7 <= len(cleaned) <= 14:
             raise ValueError("Phone must contain 7 to 14 digits")
         return cleaned

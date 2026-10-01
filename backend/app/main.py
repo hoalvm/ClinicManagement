@@ -1,16 +1,17 @@
-from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy.orm import Session
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from .database import get_db
-from .auth import verify_password, create_access_token
-from . import schemas
-from .routers import users, doctors, specialties, clinics, schedules, statistics, doctor_portal
-from backend.app.api.routes import api_router
-from backend.app.core.exceptions import register_exception_handlers
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
 
 # Import models so SQLAlchemy can resolve all table mappings
 import backend.app.models  # noqa: F401 – side-effect import
+from backend.app.api.routes import api_router
+from backend.app.core.exceptions import register_exception_handlers
+
+from . import schemas
+from .auth import create_access_token, verify_password
+from .database import get_db
+from .routers import clinics, doctor_portal, doctors, schedules, specialties, statistics, users
 
 app = FastAPI(title="Clinic Management API")
 

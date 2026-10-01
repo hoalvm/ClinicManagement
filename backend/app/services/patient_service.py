@@ -4,6 +4,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from backend.app.core.exceptions import InternalServerError
+from backend.app.core.phone import normalize_phone
 from backend.app.models import Patient
 from backend.app.schemas.patient import PatientProfileResponse, PatientProfileUpdate
 
@@ -37,6 +38,8 @@ class PatientService:
                 value = changes[field_name]
                 if field_name == "email" and value is not None:
                     value = str(value)
+                if field_name == "phone":
+                    value = normalize_phone(value)
                 setattr(patient.user, field_name, value)
         for field_name in ("date_of_birth", "gender", "address"):
             if field_name in changes:

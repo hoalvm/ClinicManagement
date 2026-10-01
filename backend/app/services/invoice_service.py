@@ -30,13 +30,14 @@ class InvoiceService:
         status: str | None,
         appointment_date: date | None = None,
     ) -> InvoicePage:
-        invoices, total = self.repository.list_for_patient(
-            patient_id,
-            page=page,
-            page_size=page_size,
-            status=status,
-            appointment_date=appointment_date,
-        )
+        filters: dict[str, object] = {
+            "page": page,
+            "page_size": page_size,
+            "status": status,
+        }
+        if appointment_date is not None:
+            filters["appointment_date"] = appointment_date
+        invoices, total = self.repository.list_for_patient(patient_id, **filters)
         return InvoicePage(
             items=[
                 InvoiceSummary(

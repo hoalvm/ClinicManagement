@@ -41,7 +41,9 @@ class ConflictError(AppError):
 
 class ValidationError(AppError):
     def __init__(self, detail: str = "Validation error.") -> None:
-        super().__init__(detail, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        # Use the stable numeric status across Starlette versions.  The old
+        # ``HTTP_422_UNPROCESSABLE_ENTITY`` alias is deprecated in newer ones.
+        super().__init__(detail, 422)
 
 
 class InternalServerError(AppError):

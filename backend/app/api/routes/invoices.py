@@ -22,13 +22,14 @@ def list_invoices(
     status: InvoiceStatus | None = None,
     appointment_date: date | None = None,
 ) -> InvoicePage:
-    return InvoiceService(session).list_invoices(
-        current_patient.patient_id,
-        page=page,
-        page_size=page_size,
-        status=status.value if status is not None else None,
-        appointment_date=appointment_date,
-    )
+    filters: dict[str, object] = {
+        "page": page,
+        "page_size": page_size,
+        "status": status.value if status is not None else None,
+    }
+    if appointment_date is not None:
+        filters["appointment_date"] = appointment_date
+    return InvoiceService(session).list_invoices(current_patient.patient_id, **filters)
 
 
 @router.get("/me/{invoice_id}", response_model=InvoiceDetail)

@@ -41,15 +41,18 @@ class MedicalRecordService:
         specialty: str | None = None,
         clinic: str | None = None,
     ) -> MedicalRecordPage:
-        records, total = self.repository.list_for_patient(
-            patient_id,
-            page=page,
-            page_size=page_size,
-            keyword=keyword,
-            examination_date=examination_date,
-            specialty=specialty,
-            clinic=clinic,
-        )
+        filters: dict[str, object] = {
+            "page": page,
+            "page_size": page_size,
+            "keyword": keyword,
+        }
+        if examination_date is not None:
+            filters["examination_date"] = examination_date
+        if specialty is not None:
+            filters["specialty"] = specialty
+        if clinic is not None:
+            filters["clinic"] = clinic
+        records, total = self.repository.list_for_patient(patient_id, **filters)
         return MedicalRecordPage(
             items=[
                 MedicalRecordSummary(

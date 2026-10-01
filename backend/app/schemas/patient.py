@@ -1,5 +1,6 @@
 """Patient profile schemas."""
 
+import re
 from datetime import date
 
 from pydantic import EmailStr, Field, field_validator
@@ -35,12 +36,12 @@ class PatientProfileUpdate(APIModel):
             raise ValueError("Full name cannot be null")
         return _clean_required(value, "Full name")
 
-    @field_validator("phone")
+    @field_validator("phone", mode="before")
     @classmethod
-    def validate_phone(cls, value: str | None) -> str | None:
-        if value is None or not value.strip():
+    def validate_phone(cls, value: object | None) -> str | None:
+        if value is None or not str(value).strip():
             return None
-        cleaned = value.strip()
+        cleaned = re.sub(r"\s+", "", str(value))
         normalized = cleaned[1:] if cleaned.startswith("+") else cleaned
         if not normalized.isdigit() or not 7 <= len(normalized) <= 14:
             raise ValueError("Phone must contain 7 to 14 digits, optionally prefixed by +")

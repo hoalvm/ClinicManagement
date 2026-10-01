@@ -1,14 +1,25 @@
-from fastapi import FastAPI, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import List
 
-from backend.database import engine, Base, get_db
-from backend.models import User, Doctor, Patient, Appointment, AppointmentStatus, MedicalRecord, Prescription, PrescriptionItem
-from backend.schemas import (
-    DoctorLoginRequest, DoctorLoginResponse,
-    AppointmentResponse, CompleteExamRequest, PatientResponse
+from fastapi import Depends, FastAPI, HTTPException, status
+from sqlalchemy.orm import Session
+
+from backend.database import Base, engine, get_db
+from backend.models import (
+    Appointment,
+    AppointmentStatus,
+    Doctor,
+    MedicalRecord,
+    Prescription,
+    PrescriptionItem,
+    User,
 )
-from backend.security import verify_password, create_access_token
+from backend.schemas import (
+    AppointmentResponse,
+    CompleteExamRequest,
+    DoctorLoginRequest,
+    DoctorLoginResponse,
+    PatientResponse,
+)
+from backend.security import create_access_token, verify_password
 
 Base.metadata.create_all(bind=engine)
 
@@ -35,7 +46,7 @@ def login(payload: DoctorLoginRequest, db: Session = Depends(get_db)):
         license_number=doctor.LicenseNumber
     )
 
-@app.get("/api/v1/doctor/schedule", response_model=List[AppointmentResponse])
+@app.get("/api/v1/doctor/schedule", response_model=list[AppointmentResponse])
 def get_schedule(doctor_id: int, db: Session = Depends(get_db)):
     appts = db.query(Appointment).filter(
         Appointment.DoctorID == doctor_id,
@@ -119,4 +130,4 @@ def complete_examination(appointment_id: int, payload: CompleteExamRequest, db: 
 
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Lỗi cơ sở dữ liệu: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Lỗi cơ sở dữ liệu: {str(e)}") from e
