@@ -1,10 +1,13 @@
 """Ownership-scoped medical record queries."""
 
+from datetime import date, datetime, time, timedelta
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from backend.app.models import (
     Appointment,
+    Clinic,
     Doctor,
     MedicalRecord,
     Prescription,
@@ -50,6 +53,9 @@ class MedicalRecordRepository:
         page: int,
         page_size: int,
         keyword: str | None = None,
+        examination_date: date | None = None,
+        specialty: str | None = None,
+        clinic: str | None = None,
     ) -> tuple[list[MedicalRecord], int]:
         base = (
             select(MedicalRecord)
@@ -68,6 +74,27 @@ class MedicalRecordRepository:
             .join(Doctor.specialty)
             .where(Appointment.patient_id == patient_id)
         )
+        if examination_date is not None:
+            start = datetime.combine(examination_date, time.min)
+            end = start + timedelta(days=1)
+            base = base.where(
+                MedicalRecord.examination_date >= start,
+                MedicalRecord.examination_date < end,
+            )
+            count_statement = count_statement.where(
+                MedicalRecord.examination_date >= start,
+                MedicalRecord.examination_date < end,
+            )
+        if specialty and specialty.strip():
+            pattern = f"%{specialty.strip()}%"
+            base = base.where(Specialty.specialty_name.ilike(pattern))
+            count_statement = count_statement.where(Specialty.specialty_name.ilike(pattern))
+        if clinic and clinic.strip():
+            pattern = f"%{clinic.strip()}%"
+            base = base.join(Appointment.clinic).where(Clinic.clinic_name.ilike(pattern))
+            count_statement = count_statement.join(Appointment.clinic).where(
+                Clinic.clinic_name.ilike(pattern)
+            )
         base = self._apply_search(base, keyword)
         count_statement = self._apply_search(count_statement, keyword)
         total = int(self.session.scalar(count_statement) or 0)

@@ -40,6 +40,7 @@ class TableActionMenu(QToolButton):
         self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._menu = QMenu(self)
+        self._menu.setObjectName("tableActionMenu")
         self.setMenu(self._menu)
         self.set_actions(actions)
 

@@ -24,12 +24,12 @@ class AdminDashboard(QMainWindow):
     COMPACT_SIDEBAR_WIDTH = AppSidebar.COMPACT_WIDTH
     COMPACT_BREAKPOINT = 1280
     _NAVIGATION = (
-        NavigationItem("users", "Tài khoản", "user", "CHỨC NĂNG"),
-        NavigationItem("doctors", "Bác sĩ", "medical", "CHỨC NĂNG"),
-        NavigationItem("specialties", "Chuyên khoa", "medical", "CHỨC NĂNG"),
-        NavigationItem("clinics", "Phòng khám", "dashboard", "CHỨC NĂNG"),
-        NavigationItem("schedules", "Lịch trực", "calendar", "CHỨC NĂNG"),
-        NavigationItem("statistics", "Thống kê", "dashboard", "CHỨC NĂNG"),
+        NavigationItem("users", "Tài khoản", "user", "NGƯỜI DÙNG"),
+        NavigationItem("doctors", "Bác sĩ", "medical", "NGƯỜI DÙNG"),
+        NavigationItem("specialties", "Chuyên khoa", "medical", "DANH MỤC"),
+        NavigationItem("clinics", "Phòng khám", "dashboard", "DANH MỤC"),
+        NavigationItem("schedules", "Lịch trực", "calendar", "VẬN HÀNH"),
+        NavigationItem("statistics", "Thống kê", "dashboard", "BÁO CÁO"),
     )
 
     def __init__(self) -> None:
@@ -81,9 +81,7 @@ class AdminDashboard(QMainWindow):
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         if hasattr(self, "shell"):
-            self.shell.set_sidebar_compact(
-                event.size().width() < self.COMPACT_BREAKPOINT
-            )
+            self.shell.set_sidebar_compact(event.size().width() < self.COMPACT_BREAKPOINT)
         super().resizeEvent(event)
 
     def _navigate(self, route: str) -> None:

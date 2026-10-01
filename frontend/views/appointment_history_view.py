@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QModelIndex, Qt, Signal
+from PySide6.QtCore import QDate, QModelIndex, Qt, Signal
 from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
+    QCalendarWidget,
+    QCheckBox,
+    QDateEdit,
     QFrame,
     QGridLayout,
     QLabel,
@@ -66,6 +69,28 @@ class AppointmentHistoryView(BaseApiView):
         self.search.setAccessibleName(t("a11y_search_appointments"))
         filters.addWidget(self.search, 0, 0, 1, 5)
 
+        self.date_filter = QCheckBox(t("filter_by_appointment_date"))
+        self.date_filter.setObjectName("filterCheckBox")
+        self.date_edit = QDateEdit(QDate.currentDate())
+        self.date_edit.setCalendarPopup(True)
+        self.date_edit.setDisplayFormat("dd/MM/yyyy")
+        self.date_edit.setEnabled(False)
+        self.date_edit.calendarWidget().setMinimumSize(360, 280)
+        self.date_edit.calendarWidget().setGridVisible(True)
+        self.date_edit.calendarWidget().setHorizontalHeaderFormat(
+            QCalendarWidget.HorizontalHeaderFormat.ShortDayNames
+        )
+        self.date_edit.setAccessibleName(t("filter_by_appointment_date"))
+        self.specialty_label = QLabel(t("filter_by_specialty"))
+        self.specialty_label.setObjectName("fieldLabel")
+        self.specialty = ChevronComboBox()
+        self.specialty.setMinimumWidth(180)
+        self.clinic_label = QLabel(t("filter_by_clinic"))
+        self.clinic_label.setObjectName("fieldLabel")
+        self.clinic = ChevronComboBox()
+        self.clinic.setMinimumWidth(180)
+        self._filter_options_loaded = False
+
         self.status_label = QLabel(t("field_status", default="Trạng thái"))
         self.status_label.setObjectName("fieldLabel")
         self.status = ChevronComboBox()
@@ -82,11 +107,16 @@ class AppointmentHistoryView(BaseApiView):
         self.details_button.setAccessibleName(t("btn_view_details"))
         self.details_button.setEnabled(False)
 
-        filters.addWidget(self.status_label, 1, 0)
-        filters.addWidget(self.status, 1, 1)
-        filters.setColumnStretch(2, 1)
-        filters.addWidget(self.refresh_button, 1, 3)
-        filters.addWidget(self.details_button, 1, 4)
+        filters.addWidget(self.date_filter, 1, 0)
+        filters.addWidget(self.date_edit, 1, 1)
+        filters.addWidget(self.status_label, 1, 2)
+        filters.addWidget(self.status, 1, 3)
+        filters.addWidget(self.refresh_button, 1, 4)
+        filters.addWidget(self.specialty_label, 2, 0)
+        filters.addWidget(self.specialty, 2, 1)
+        filters.addWidget(self.clinic_label, 2, 2)
+        filters.addWidget(self.clinic, 2, 3)
+        filters.addWidget(self.details_button, 2, 4)
         root.addWidget(filter_card)
         root.addWidget(self.feedback)
         root.addWidget(self.loading)
@@ -126,6 +156,10 @@ class AppointmentHistoryView(BaseApiView):
 
         self.search.returnPressed.connect(self._search)
         self.status.currentIndexChanged.connect(self._filter_changed)
+        self.date_filter.toggled.connect(self._date_filter_changed)
+        self.date_edit.dateChanged.connect(lambda: self._search() if self.date_filter.isChecked() else None)
+        self.specialty.currentIndexChanged.connect(self._filter_changed)
+        self.clinic.currentIndexChanged.connect(self._filter_changed)
         self.refresh_button.clicked.connect(self._search)
         self.details_button.clicked.connect(self._open_selected)
         self.table.activated.connect(self._open_index)
@@ -169,6 +203,10 @@ class AppointmentHistoryView(BaseApiView):
         self.book_button.setText(t("btn_new_booking", default="Đặt lịch"))
         self.search.setPlaceholderText(t("appointment_search_placeholder"))
         self.status_label.setText(t("field_status", default="Trạng thái"))
+        self.date_filter.setText(t("filter_by_appointment_date"))
+        self.date_edit.setAccessibleName(t("filter_by_appointment_date"))
+        self.specialty_label.setText(t("filter_by_specialty"))
+        self.clinic_label.setText(t("filter_by_clinic"))
         self._populate_status_combo()
         self.refresh_button.setText(t("btn_refresh", default="Làm mới"))
         self.details_button.setText(t("btn_view_details", default="Chi tiết"))
@@ -197,7 +235,41 @@ class AppointmentHistoryView(BaseApiView):
             self.model.setHeaderData(col, Qt.Orientation.Horizontal, h)
 
     def activate(self) -> None:
+        if self._filter_options_loaded:
+            self.load()
+            return
+        self.run_api_task(
+            "appointment-filter-options",
+            lambda: self.api_client.get("/api/v1/catalog/doctors"),
+            self._filter_options_loaded_successfully,
+            loading_text=t("loading"),
+        )
+
+    def _filter_options_loaded_successfully(self, doctors: object) -> None:
+        specialty_names = sorted(
+            {str(item.get("specialty_name")) for item in doctors if item.get("specialty_name")}
+        ) if isinstance(doctors, list) else []
+        clinic_names = sorted(
+            {str(item.get("clinic_name")) for item in doctors if item.get("clinic_name")}
+        ) if isinstance(doctors, list) else []
+        self._populate_filter_combo(self.specialty, specialty_names)
+        self._populate_filter_combo(self.clinic, clinic_names)
+        self._filter_options_loaded = True
         self.load()
+
+    @staticmethod
+    def _populate_filter_combo(combo: ChevronComboBox, values: list[str]) -> None:
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItem(t("filter_all"), "")
+        for value in values:
+            combo.addItem(value, value)
+        combo.setCurrentIndex(0)
+        combo.blockSignals(False)
+
+    def _date_filter_changed(self, enabled: bool) -> None:
+        self.date_edit.setEnabled(enabled)
+        self._search()
 
     def load(self) -> None:
         params: dict[str, object] = {
@@ -210,6 +282,14 @@ class AppointmentHistoryView(BaseApiView):
         status_val = self.status.currentData() or "All"
         if status_val != "All":
             params["status"] = status_val
+        if self.date_filter.isChecked():
+            params["appointment_date"] = self.date_edit.date().toString("yyyy-MM-dd")
+        specialty = str(self.specialty.currentData() or "").strip()
+        clinic = str(self.clinic.currentData() or "").strip()
+        if specialty:
+            params["specialty"] = specialty
+        if clinic:
+            params["clinic"] = clinic
 
         self.details_button.setEnabled(False)
         self.run_api_task(
@@ -319,6 +399,10 @@ class AppointmentHistoryView(BaseApiView):
         self._page = 1
         self._total_appointments = 0
         self.search.clear()
+        self.date_filter.setChecked(False)
+        self.date_edit.setDate(QDate.currentDate())
+        self.specialty.setCurrentIndex(0)
+        self.clinic.setCurrentIndex(0)
         was_blocked = self.status.blockSignals(True)
         try:
             self.status.setCurrentIndex(0)

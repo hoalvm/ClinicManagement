@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QModelIndex, Qt, Signal
+from PySide6.QtCore import QDate, QModelIndex, Qt, Signal
 from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
+    QCalendarWidget,
+    QCheckBox,
+    QDateEdit,
     QFrame,
     QGridLayout,
+    QLabel,
     QLineEdit,
     QPushButton,
     QTableView,
@@ -23,6 +27,7 @@ from frontend.views.common import (
     require_page,
     table_item,
 )
+from frontend.widgets.combo_box import ChevronComboBox
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.pagination import PaginationWidget
 from frontend.widgets.state_host import StateHost
@@ -54,7 +59,29 @@ class MedicalHistoryView(BaseApiView):
         self.search.setPlaceholderText(t("medical_search_placeholder"))
         self.search.setClearButtonEnabled(True)
         self.search.setAccessibleName(t("a11y_search_medical_history"))
-        filters.addWidget(self.search, 0, 0, 1, 3)
+        filters.addWidget(self.search, 0, 0, 1, 5)
+
+        self.date_filter = QCheckBox(t("filter_by_examination_date"))
+        self.date_filter.setObjectName("filterCheckBox")
+        self.date_edit = QDateEdit(QDate.currentDate())
+        self.date_edit.setCalendarPopup(True)
+        self.date_edit.setDisplayFormat("dd/MM/yyyy")
+        self.date_edit.setEnabled(False)
+        self.date_edit.calendarWidget().setMinimumSize(360, 280)
+        self.date_edit.calendarWidget().setGridVisible(True)
+        self.date_edit.calendarWidget().setHorizontalHeaderFormat(
+            QCalendarWidget.HorizontalHeaderFormat.ShortDayNames
+        )
+        self.date_edit.setAccessibleName(t("filter_by_examination_date"))
+        self.specialty_label = QLabel(t("filter_by_specialty"))
+        self.specialty_label.setObjectName("fieldLabel")
+        self.specialty = ChevronComboBox()
+        self.specialty.setMinimumWidth(180)
+        self.clinic_label = QLabel(t("filter_by_clinic"))
+        self.clinic_label.setObjectName("fieldLabel")
+        self.clinic = ChevronComboBox()
+        self.clinic.setMinimumWidth(180)
+        self._filter_options_loaded = False
 
         self.refresh_button = QPushButton(t("btn_refresh"))
         self.refresh_button.setObjectName("secondaryButton")
@@ -64,9 +91,14 @@ class MedicalHistoryView(BaseApiView):
         self.details_button.setAccessibleName(t("btn_view_details"))
         self.details_button.setEnabled(False)
 
-        filters.setColumnStretch(0, 1)
-        filters.addWidget(self.refresh_button, 1, 1)
-        filters.addWidget(self.details_button, 1, 2)
+        filters.addWidget(self.date_filter, 1, 0)
+        filters.addWidget(self.date_edit, 1, 1)
+        filters.addWidget(self.specialty_label, 1, 2)
+        filters.addWidget(self.specialty, 1, 3)
+        filters.addWidget(self.refresh_button, 1, 4)
+        filters.addWidget(self.clinic_label, 2, 0)
+        filters.addWidget(self.clinic, 2, 1, 1, 2)
+        filters.addWidget(self.details_button, 2, 4)
         root.addWidget(filter_card)
         root.addWidget(self.feedback)
         root.addWidget(self.loading)
@@ -96,6 +128,10 @@ class MedicalHistoryView(BaseApiView):
         root.addWidget(self.pagination)
 
         self.search.returnPressed.connect(self._search)
+        self.date_filter.toggled.connect(self._date_filter_changed)
+        self.date_edit.dateChanged.connect(lambda: self._search() if self.date_filter.isChecked() else None)
+        self.specialty.currentIndexChanged.connect(self._filter_changed)
+        self.clinic.currentIndexChanged.connect(self._filter_changed)
         self.refresh_button.clicked.connect(self._search)
         self.details_button.clicked.connect(self._open_selected)
         self.table.activated.connect(self._open_index)
@@ -117,6 +153,10 @@ class MedicalHistoryView(BaseApiView):
         else:
             self.header.set_subtitle(t("medical_history_subtitle"))
         self.search.setPlaceholderText(t("medical_search_placeholder"))
+        self.date_filter.setText(t("filter_by_examination_date"))
+        self.date_edit.setAccessibleName(t("filter_by_examination_date"))
+        self.specialty_label.setText(t("filter_by_specialty"))
+        self.clinic_label.setText(t("filter_by_clinic"))
         self.refresh_button.setText(t("btn_refresh"))
         self.details_button.setText(t("btn_view_details"))
         self.search.setAccessibleName(t("a11y_search_medical_history"))
@@ -134,7 +174,41 @@ class MedicalHistoryView(BaseApiView):
             self.model.setHeaderData(col, Qt.Orientation.Horizontal, h)
 
     def activate(self) -> None:
+        if self._filter_options_loaded:
+            self.load()
+            return
+        self.run_api_task(
+            "medical-filter-options",
+            lambda: self.api_client.get("/api/v1/catalog/doctors"),
+            self._filter_options_loaded_successfully,
+            loading_text=t("loading"),
+        )
+
+    def _filter_options_loaded_successfully(self, doctors: object) -> None:
+        specialty_names = sorted(
+            {str(item.get("specialty_name")) for item in doctors if item.get("specialty_name")}
+        ) if isinstance(doctors, list) else []
+        clinic_names = sorted(
+            {str(item.get("clinic_name")) for item in doctors if item.get("clinic_name")}
+        ) if isinstance(doctors, list) else []
+        self._populate_filter_combo(self.specialty, specialty_names)
+        self._populate_filter_combo(self.clinic, clinic_names)
+        self._filter_options_loaded = True
         self.load()
+
+    @staticmethod
+    def _populate_filter_combo(combo: ChevronComboBox, values: list[str]) -> None:
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItem(t("filter_all"), "")
+        for value in values:
+            combo.addItem(value, value)
+        combo.setCurrentIndex(0)
+        combo.blockSignals(False)
+
+    def _date_filter_changed(self, enabled: bool) -> None:
+        self.date_edit.setEnabled(enabled)
+        self._search()
 
     def load(self) -> None:
         params: dict[str, object] = {
@@ -144,6 +218,14 @@ class MedicalHistoryView(BaseApiView):
         keyword = self.search.text().strip()
         if keyword:
             params["keyword"] = keyword
+        if self.date_filter.isChecked():
+            params["examination_date"] = self.date_edit.date().toString("yyyy-MM-dd")
+        specialty = str(self.specialty.currentData() or "").strip()
+        clinic = str(self.clinic.currentData() or "").strip()
+        if specialty:
+            params["specialty"] = specialty
+        if clinic:
+            params["clinic"] = clinic
 
         self.details_button.setEnabled(False)
         self.run_api_task(
@@ -222,6 +304,9 @@ class MedicalHistoryView(BaseApiView):
         self._page = 1
         self.load()
 
+    def _filter_changed(self, _index: int = 0) -> None:
+        self._search()
+
     def _retry(self) -> None:
         self._page = 1
         self.load()
@@ -242,6 +327,10 @@ class MedicalHistoryView(BaseApiView):
         self._page = 1
         self._total_records = 0
         self.search.clear()
+        self.date_filter.setChecked(False)
+        self.date_edit.setDate(QDate.currentDate())
+        self.specialty.setCurrentIndex(0)
+        self.clinic.setCurrentIndex(0)
         self.model.removeRows(0, self.model.rowCount())
         self.table.clearSelection()
         self.pagination.reset()

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QModelIndex, Qt, Signal
+from PySide6.QtCore import QDate, QModelIndex, Qt, Signal
 from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
+    QCalendarWidget,
+    QCheckBox,
+    QDateEdit,
     QFrame,
     QGridLayout,
     QLabel,
@@ -57,6 +60,19 @@ class InvoiceHistoryView(BaseApiView):
         self.filter_hint.setObjectName("mutedLabel")
         filters.addWidget(self.filter_hint, 0, 0, 1, 5)
 
+        self.date_filter = QCheckBox(t("filter_by_appointment_date"))
+        self.date_filter.setObjectName("filterCheckBox")
+        self.date_edit = QDateEdit(QDate.currentDate())
+        self.date_edit.setCalendarPopup(True)
+        self.date_edit.setDisplayFormat("dd/MM/yyyy")
+        self.date_edit.setEnabled(False)
+        self.date_edit.calendarWidget().setMinimumSize(360, 280)
+        self.date_edit.calendarWidget().setGridVisible(True)
+        self.date_edit.calendarWidget().setHorizontalHeaderFormat(
+            QCalendarWidget.HorizontalHeaderFormat.ShortDayNames
+        )
+        self.date_edit.setAccessibleName(t("filter_by_appointment_date"))
+
         self.status_label = QLabel(t("field_payment_status"))
         self.status_label.setObjectName("fieldLabel")
         self.status = ChevronComboBox()
@@ -75,11 +91,12 @@ class InvoiceHistoryView(BaseApiView):
         self.details_button.setAccessibleName(t("btn_view_details"))
         self.details_button.setEnabled(False)
 
-        filters.addWidget(self.status_label, 1, 0)
-        filters.addWidget(self.status, 1, 1)
-        filters.setColumnStretch(2, 1)
-        filters.addWidget(self.refresh_button, 1, 3)
-        filters.addWidget(self.details_button, 1, 4)
+        filters.addWidget(self.date_filter, 1, 0)
+        filters.addWidget(self.date_edit, 1, 1)
+        filters.addWidget(self.status_label, 1, 2)
+        filters.addWidget(self.status, 1, 3)
+        filters.addWidget(self.refresh_button, 1, 4)
+        filters.addWidget(self.details_button, 2, 4)
         root.addWidget(filter_card)
         root.addWidget(self.feedback)
         root.addWidget(self.loading)
@@ -109,6 +126,8 @@ class InvoiceHistoryView(BaseApiView):
         root.addWidget(self.pagination)
 
         self.status.currentIndexChanged.connect(self._filter_changed)
+        self.date_filter.toggled.connect(self._date_filter_changed)
+        self.date_edit.dateChanged.connect(lambda: self._search() if self.date_filter.isChecked() else None)
         self.refresh_button.clicked.connect(self.load)
         self.details_button.clicked.connect(self._open_selected)
         self.table.activated.connect(self._open_index)
@@ -130,6 +149,8 @@ class InvoiceHistoryView(BaseApiView):
         else:
             self.header.set_subtitle(t("invoice_history_subtitle"))
         self.filter_hint.setText(t("filter_by_status"))
+        self.date_filter.setText(t("filter_by_appointment_date"))
+        self.date_edit.setAccessibleName(t("filter_by_appointment_date"))
         self.status_label.setText(t("field_payment_status"))
 
         curr_data = self.status.currentData()
@@ -170,6 +191,8 @@ class InvoiceHistoryView(BaseApiView):
         status_val = self.status.currentData() or "All"
         if status_val != "All":
             params["status"] = status_val
+        if self.date_filter.isChecked():
+            params["appointment_date"] = self.date_edit.date().toString("yyyy-MM-dd")
 
         self.details_button.setEnabled(False)
         self.run_api_task(
@@ -248,6 +271,10 @@ class InvoiceHistoryView(BaseApiView):
         self._page = 1
         self.load()
 
+    def _date_filter_changed(self, enabled: bool) -> None:
+        self.date_edit.setEnabled(enabled)
+        self._search()
+
     def _retry(self) -> None:
         self._page = 1
         self.load()
@@ -270,6 +297,8 @@ class InvoiceHistoryView(BaseApiView):
         was_blocked = self.status.blockSignals(True)
         try:
             self.status.setCurrentIndex(0)
+            self.date_filter.setChecked(False)
+            self.date_edit.setDate(QDate.currentDate())
         finally:
             self.status.blockSignals(was_blocked)
         self.model.removeRows(0, self.model.rowCount())

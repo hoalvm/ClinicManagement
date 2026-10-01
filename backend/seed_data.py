@@ -1,6 +1,7 @@
-from datetime import datetime, date, time
-from backend.database import SessionLocal, engine, Base
-from backend.models import User, Doctor, Patient, Appointment, AppointmentStatus
+from datetime import date, time
+
+from backend.database import Base, SessionLocal, engine
+from backend.models import Appointment, AppointmentStatus, Doctor, Patient, User
 from backend.security import get_password_hash
 
 Base.metadata.create_all(bind=engine)

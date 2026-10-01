@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
+from backend.app.models import Clinic
+
 from .. import schemas
 from ..database import get_db
 from ..deps import require_admin
-from backend.app.models import Clinic, Doctor
 
 router = APIRouter(prefix="/clinics", tags=["Clinics"])
 

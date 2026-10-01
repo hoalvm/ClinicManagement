@@ -41,6 +41,16 @@ def _add_minutes(t: time, minutes: int) -> time:
     return temp_dt.time()
 
 
+def _active_appointments(appointments: list[Appointment]) -> list[Appointment]:
+    """Defensively exclude cancelled rows from every availability calculation."""
+
+    return [
+        appointment
+        for appointment in appointments
+        if str(getattr(appointment, "status", "")).upper() != "CANCELLED"
+    ]
+
+
 class BookingService:
     def __init__(self, session: Session) -> None:
         self.session = session
@@ -127,6 +137,7 @@ class BookingService:
         doctor_appointments = self.appointment_repo.get_active_appointments_for_doctor(
             doctor_id, appointment_date
         )
+        doctor_appointments = _active_appointments(doctor_appointments)
         if exclude_appointment_id:
             doctor_appointments = [
                 a
@@ -140,6 +151,7 @@ class BookingService:
             if patient_id
             else []
         )
+        patient_appointments = _active_appointments(patient_appointments)
         if exclude_appointment_id:
             patient_appointments = [
                 a
@@ -153,6 +165,7 @@ class BookingService:
             if patient_id and hasattr(self.appointment_repo, "get_active_appointments_for_patient_all")
             else []
         )
+        active_patient_appts = _active_appointments(active_patient_appts)
         if exclude_appointment_id:
             active_patient_appts = [
                 a
@@ -302,6 +315,7 @@ class BookingService:
         doc_appts = self.appointment_repo.get_active_appointments_for_doctor(
             req.doctor_id, req.appointment_date
         )
+        doc_appts = _active_appointments(doc_appts)
         if any(_overlap(req.start_time, req.end_time, a.start_time, a.end_time) for a in doc_appts):
             raise ConflictError("Khung giờ này đã có người đặt. Vui lòng chọn khung giờ khác.")
 
@@ -311,6 +325,7 @@ class BookingService:
             if hasattr(self.appointment_repo, "get_active_appointments_for_patient_all")
             else []
         )
+        active_patient_appts = _active_appointments(active_patient_appts)
         same_spec_appt = next(
             (
                 a
@@ -350,6 +365,7 @@ class BookingService:
         patient_appts = self.appointment_repo.get_active_appointments_for_patient(
             patient_id, req.appointment_date
         )
+        patient_appts = _active_appointments(patient_appts)
         if any(
             _overlap(req.start_time, req.end_time, a.start_time, a.end_time) for a in patient_appts
         ):
@@ -447,6 +463,7 @@ class BookingService:
         doc_appts = self.appointment_repo.get_active_appointments_for_doctor(
             target_doctor_id, req.new_appointment_date
         )
+        doc_appts = _active_appointments(doc_appts)
         doc_conflicts = [
             a
             for a in doc_appts
@@ -460,6 +477,7 @@ class BookingService:
         patient_appts = self.appointment_repo.get_active_appointments_for_patient(
             patient_id, req.new_appointment_date
         )
+        patient_appts = _active_appointments(patient_appts)
         patient_conflicts = [
             a
             for a in patient_appts

@@ -1,5 +1,7 @@
 """Ownership-scoped invoice queries."""
 
+from datetime import date
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -17,6 +19,7 @@ class InvoiceRepository:
         page: int,
         page_size: int,
         status: str | None = None,
+        appointment_date: date | None = None,
     ) -> tuple[list[Invoice], int]:
         base = select(Invoice).join(Invoice.appointment).where(Appointment.patient_id == patient_id)
         count_statement = (
@@ -27,6 +30,9 @@ class InvoiceRepository:
         if status:
             base = base.where(Invoice.status == status)
             count_statement = count_statement.where(Invoice.status == status)
+        if appointment_date is not None:
+            base = base.where(Appointment.appointment_date == appointment_date)
+            count_statement = count_statement.where(Appointment.appointment_date == appointment_date)
         total = int(self.session.scalar(count_statement) or 0)
         statement = (
             base.order_by(Invoice.created_at.desc(), Invoice.invoice_id.desc())

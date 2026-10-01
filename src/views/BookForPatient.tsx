@@ -21,6 +21,13 @@ interface Props {
 }
 
 export const BookForPatient: React.FC<Props> = ({ onNavigate }) => {
+  const today = new Date().toISOString().split('T')[0];
+
+  const addMinutes = (value: string, minutes: number) => {
+    const [hours, mins] = value.split(':').map(Number);
+    const total = hours * 60 + mins + minutes;
+    return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}:00`;
+  };
   // Mode: existing search or manual input
   const [phoneSearch, setPhoneSearch] = useState('');
   const [patientId, setPatientId] = useState<number | undefined>(undefined);
@@ -86,7 +93,7 @@ export const BookForPatient: React.FC<Props> = ({ onNavigate }) => {
 
   const loadPatientHistory = (ptId: number) => {
     try {
-      const allAppts = storageService.getAppointments();
+      const allAppts = storageService.getReceptionAppointments({ page: 1, pageSize: 1000 }).items;
       const patientAppts = allAppts.filter((a) => a.patient_id === ptId);
       setPatientHistory(patientAppts.slice(0, 5));
     } catch {
@@ -118,19 +125,23 @@ export const BookForPatient: React.FC<Props> = ({ onNavigate }) => {
       setStatusMessage({ text: 'Vui lòng chọn ngày khám!', type: 'error' });
       return;
     }
+    if (appointmentDate < today) {
+      setStatusMessage({ text: 'Không thể chọn ngày khám trong quá khứ!', type: 'error' });
+      return;
+    }
 
     try {
       const created = storageService.bookForPatient({
         patient_id: patientId,
         full_name: fullName.trim(),
-        phone: phone.trim(),
+        phone: phone.replace(/\s+/g, ''),
         date_of_birth: dob,
         gender,
         address,
         doctor_id: doctorId,
         appointment_date: appointmentDate,
         start_time: startTime,
-        end_time: startTime.replace(':00', ':30'),
+        end_time: addMinutes(startTime, 30),
         reason,
         auto_confirm: autoConfirm,
       });
@@ -340,6 +351,7 @@ export const BookForPatient: React.FC<Props> = ({ onNavigate }) => {
                   <input
                     type="date"
                     required
+                    min={today}
                     value={appointmentDate}
                     onChange={(e) => setAppointmentDate(e.target.value)}
                     className="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"

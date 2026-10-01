@@ -125,6 +125,7 @@ class AppointmentDetailView(BaseApiView):
         self.reschedule_button.clicked.connect(self._open_reschedule)
         self.cancel_button.clicked.connect(self._open_cancel)
         self._current_appointment_data: dict[str, Any] | None = None
+        self._booking_success_notice_pending = False
 
         get_i18n().language_changed.connect(self.retranslate_ui)
         self.clear_data()
@@ -207,6 +208,9 @@ class AppointmentDetailView(BaseApiView):
         self.header.set_subtitle(f"#{appointment_id:06d}")
         self.load()
 
+    def show_booking_success_notice(self) -> None:
+        self._booking_success_notice_pending = True
+
     def load(self) -> None:
         if self._appointment_id is None:
             return
@@ -267,6 +271,13 @@ class AppointmentDetailView(BaseApiView):
         can_modify = status_val in ("PENDING", "CONFIRMED")
         self.reschedule_button.setVisible(can_modify)
         self.cancel_button.setVisible(can_modify)
+        if self._booking_success_notice_pending:
+            self.feedback.show_message(
+                "Đặt lịch khám thành công!",
+                "Lịch khám của bạn đã được ghi nhận vào hệ thống.",
+                severity="success",
+            )
+            self._booking_success_notice_pending = False
 
     def _open_medical(self) -> None:
         if self._medical_record_id is not None:

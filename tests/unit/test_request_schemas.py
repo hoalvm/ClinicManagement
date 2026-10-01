@@ -28,7 +28,7 @@ def valid_registration(**overrides: object) -> dict[str, object]:
 
 def test_registration_normalizes_required_text() -> None:
     request = RegisterRequest.model_validate(
-        valid_registration(username="  patient03  ", full_name="  Nguyen Van C  ")
+        valid_registration(username="  Patient03  ", full_name="  Nguyen Van C ")
     )
 
     assert request.username == "patient03"
@@ -41,9 +41,16 @@ def test_registration_normalizes_required_text() -> None:
     [
         {"confirm_password": "Different123!"},
         {"password": "short", "confirm_password": "short"},
+        {"password": "password123!", "confirm_password": "password123!"},
+        {"password": "PASSWORD123!", "confirm_password": "PASSWORD123!"},
+        {"password": "Passwordabc!", "confirm_password": "Passwordabc!"},
+        {"password": "Password123", "confirm_password": "Password123"},
         {"username": "   "},
+        {"username": "patient 03"},
+        {"username": "bệnhnhân03"},
         {"full_name": "   "},
         {"email": "not-an-email"},
+        {"phone": None},
         {"phone": "12-ab"},
         {"date_of_birth": clinic_today() + timedelta(days=1)},
     ],

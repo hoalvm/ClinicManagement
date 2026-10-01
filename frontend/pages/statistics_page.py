@@ -4,7 +4,6 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
-    QHBoxLayout,
     QLabel,
     QVBoxLayout,
     QWidget,
@@ -12,7 +11,7 @@ from PySide6.QtWidgets import (
 
 from frontend.api_client import api_client
 from frontend.pages.admin_ui import AdminApiPage, require_success
-from frontend.ui.design_system import ColumnPriority, ColumnSpec
+from frontend.ui.design_system import ColumnDisplayMode, ColumnPriority, ColumnSpec
 from frontend.widgets.adaptive_data_table import AdaptiveDataTable
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.stat_card import ModernStatCard
@@ -49,8 +48,12 @@ class StatisticsPage(AdminApiPage):
         self._stat_cards: list[ModernStatCard] = []
 
         # ------------------- 2 Sub Tables -------------------
-        sub_layout = QHBoxLayout()
-        sub_layout.setSpacing(16)
+        # Tables are placed in a grid that reflows from two-column to one-column
+        # at narrow widths.  Each card is a top-level widget so the grid can
+        # reposition them without reparenting.
+        self._dist_grid = QGridLayout()
+        self._dist_grid.setHorizontalSpacing(16)
+        self._dist_grid.setVerticalSpacing(16)
 
         # Table 1: Doctors by Specialty
         card_sp = QFrame()
@@ -89,7 +92,7 @@ class StatisticsPage(AdminApiPage):
             accessible_name="Phân bổ bác sĩ theo chuyên khoa",
         )
         layout_sp.addWidget(self.specialty_table)
-        sub_layout.addWidget(card_sp)
+        self._dist_grid.addWidget(card_sp, 0, 0)
 
         # Table 2: Doctors by Clinic
         card_cl = QFrame()
@@ -113,6 +116,7 @@ class StatisticsPage(AdminApiPage):
                     grow_weight=1,
                     line_limit=2,
                     wrap=True,
+                    display_mode=ColumnDisplayMode.WRAP_2,
                 ),
                 ColumnSpec(
                     "Số bác sĩ",
@@ -128,9 +132,9 @@ class StatisticsPage(AdminApiPage):
             accessible_name="Phân bổ bác sĩ theo phòng khám",
         )
         layout_cl.addWidget(self.clinic_table)
-        sub_layout.addWidget(card_cl)
+        self._dist_grid.addWidget(card_cl, 0, 1)
 
-        content_layout.addLayout(sub_layout, 1)
+        content_layout.addLayout(self._dist_grid, 1)
 
         self.statistics_state = self.bind_state_host(
             self.statistics_content,
@@ -141,8 +145,6 @@ class StatisticsPage(AdminApiPage):
             on_empty_action=self.load_data,
         )
         self.main_layout.addWidget(self.statistics_state, 1)
-
-        self.load_data()
 
     def load_data(self, *, clear_feedback: bool = True):
         return self.run_admin_task(
@@ -174,11 +176,11 @@ class StatisticsPage(AdminApiPage):
     def _populate_statistics(self, d):
 
         cards_data = [
-            ("TỔNG TÀI KHOẢN", d.get("total_users", 0), "#0284c7"),
-            ("BÁC SĨ HOẠT ĐỘNG", d.get("total_doctors", 0), "#0f766e"),
-            ("PHÒNG KHÁM", d.get("total_clinics", 0), "#d97706"),
-            ("CHUYÊN KHOA", d.get("total_specialties", 0), "#7c3aed"),
-            ("CA LỊCH TRỰC", d.get("total_schedules", 0), "#059669"),
+            ("Tổng tài khoản", d.get("total_users", 0), "#0284c7"),
+            ("Bác sĩ đang hoạt động", d.get("total_doctors", 0), "#0f766e"),
+            ("Phòng khám đang hoạt động", d.get("total_clinics", 0), "#d97706"),
+            ("Chuyên khoa đang hoạt động", d.get("total_specialties", 0), "#7c3aed"),
+            ("Lịch trực đang mở", d.get("total_schedules", 0), "#059669"),
         ]
 
         if not self._stat_cards:
@@ -192,15 +194,11 @@ class StatisticsPage(AdminApiPage):
                 card._title_label.setMinimumWidth(0)
                 self._stat_cards.append(card)
         else:
-            for card, (title, value, _color) in zip(
-                self._stat_cards, cards_data, strict=True
-            ):
+            for card, (title, value, _color) in zip(self._stat_cards, cards_data, strict=True):
                 card.set_title(title)
                 card.set_value(value)
 
-        for card, (title, value, _color) in zip(
-            self._stat_cards, cards_data, strict=True
-        ):
+        for card, (title, value, _color) in zip(self._stat_cards, cards_data, strict=True):
             card.setToolTip(f"{title}: {value}")
         self._relayout_cards()
 
@@ -238,3 +236,28 @@ class StatisticsPage(AdminApiPage):
     def resizeEvent(self, event):  # noqa: N802
         super().resizeEvent(event)
         self._relayout_cards()
+        self._relayout_dist_tables()
+
+    def _relayout_dist_tables(self) -> None:
+        """Stack distribution tables in two columns or one depending on width."""
+        wide = self.width() >= 900
+        card_sp = self._dist_grid.itemAtPosition(0, 0)
+        card_cl = self._dist_grid.itemAtPosition(0, 1) or self._dist_grid.itemAtPosition(1, 0)
+        if card_sp is None or card_cl is None:
+            return
+        card_sp.widget()
+        w_cl = card_cl.widget()
+        if wide:
+            # Two-column layout
+            if self._dist_grid.itemAtPosition(0, 1) is None:
+                self._dist_grid.removeWidget(w_cl)
+                self._dist_grid.addWidget(w_cl, 0, 1)
+            self._dist_grid.setColumnStretch(0, 1)
+            self._dist_grid.setColumnStretch(1, 1)
+        else:
+            # Single-column stacked layout
+            if self._dist_grid.itemAtPosition(1, 0) is None:
+                self._dist_grid.removeWidget(w_cl)
+                self._dist_grid.addWidget(w_cl, 1, 0)
+            self._dist_grid.setColumnStretch(0, 1)
+            self._dist_grid.setColumnStretch(1, 0)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from typing import Any
 
@@ -67,9 +68,7 @@ class BookForPatientView(BaseApiView):
         self.scroll_area = QScrollArea(self)
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
-        self.scroll_area.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         container = QWidget()
         container.setSizePolicy(
@@ -300,6 +299,13 @@ class BookForPatientView(BaseApiView):
         fields = QGridLayout()
         fields.setHorizontalSpacing(12)
         fields.setVerticalSpacing(8)
+        self.specialty_combo = ChevronComboBox()
+        self.specialty_combo.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Fixed,
+        )
+        self.specialty_combo.addItem("Tất cả chuyên khoa", None)
+        self.specialty_combo.currentIndexChanged.connect(self._on_specialty_changed)
         self.doctor_combo = ChevronComboBox()
         self.doctor_combo.setSizePolicy(
             QSizePolicy.Policy.Ignored,
@@ -320,7 +326,8 @@ class BookForPatientView(BaseApiView):
         self.time_combo.addItem("Chọn bác sĩ và ngày khám", None)
         self.time_combo.setEnabled(False)
         self.time_combo.currentIndexChanged.connect(self._update_booking_preview)
-        self._add_top_field(fields, 0, 0, "Bác sĩ *", self.doctor_combo)
+        self._add_top_field(fields, 0, 0, "Chuyên khoa", self.specialty_combo)
+        self._add_top_field(fields, 0, 1, "Bác sĩ *", self.doctor_combo)
         self._add_top_field(fields, 1, 0, "Ngày khám *", self.date_edit)
         self._add_top_field(fields, 1, 1, "Khung giờ *", self.time_combo)
         fields.setColumnStretch(0, 1)
@@ -530,20 +537,51 @@ class BookForPatientView(BaseApiView):
 
     def _on_doctors_loaded(self, docs: list[dict[str, Any]]) -> None:
         self._doctors_cache = [doc for doc in docs if doc.get("doctor_id")]
+        current_specialty = self.specialty_combo.currentData()
+        specialties: dict[int, str] = {}
+        for doctor in self._doctors_cache:
+            specialty_id = doctor.get("specialty_id")
+            if specialty_id is not None:
+                specialties[int(specialty_id)] = str(
+                    doctor.get("specialty_name") or "Chưa rõ chuyên khoa"
+                )
+        self.specialty_combo.blockSignals(True)
+        self.specialty_combo.clear()
+        self.specialty_combo.addItem("Tất cả chuyên khoa", None)
+        for specialty_id, specialty_name in sorted(
+            specialties.items(), key=lambda item: item[1].casefold()
+        ):
+            self.specialty_combo.addItem(specialty_name, specialty_id)
+        selected_index = self.specialty_combo.findData(current_specialty)
+        self.specialty_combo.setCurrentIndex(max(0, selected_index))
+        self.specialty_combo.blockSignals(False)
+        self._populate_doctor_combo()
+
+    def _on_specialty_changed(self) -> None:
+        self._populate_doctor_combo()
+
+    def _populate_doctor_combo(self) -> None:
+        selected_specialty = self.specialty_combo.currentData()
+        current_doctor = self.doctor_combo.currentData()
+        doctors = [
+            doctor
+            for doctor in self._doctors_cache
+            if selected_specialty is None or doctor.get("specialty_id") == selected_specialty
+        ]
         self.doctor_combo.blockSignals(True)
         self.doctor_combo.clear()
         self.doctor_combo.addItem("Chọn bác sĩ", None)
-        for doctor in self._doctors_cache:
+        for doctor in doctors:
             name = str(doctor.get("full_name", "")).strip()
             specialty = str(doctor.get("specialty_name", "")).strip()
             label = f"{name} · {specialty}" if specialty else name
             self.doctor_combo.addItem(label, doctor.get("doctor_id"))
+        doctor_index = self.doctor_combo.findData(current_doctor)
+        self.doctor_combo.setCurrentIndex(max(0, doctor_index))
         self.doctor_combo.blockSignals(False)
         self.time_combo.clear()
         self.time_combo.addItem(
-            "Không có bác sĩ đang hoạt động"
-            if not self._doctors_cache
-            else "Chọn bác sĩ và ngày khám",
+            "Không có bác sĩ phù hợp" if not doctors else "Chọn bác sĩ và ngày khám",
             None,
         )
         self.time_combo.setEnabled(False)
@@ -577,8 +615,7 @@ class BookForPatientView(BaseApiView):
             is_current=lambda: (
                 request_version == self._slot_request_version
                 and self.doctor_combo.currentData() == doctor_id
-                and self.date_edit.date().toString(Qt.DateFormat.ISODate)
-                == date_string
+                and self.date_edit.date().toString(Qt.DateFormat.ISODate) == date_string
             ),
         )
 
@@ -613,11 +650,12 @@ class BookForPatientView(BaseApiView):
                 severity="info",
             )
             return
+        compact_query = re.sub(r"\s+", "", query)
+        if compact_query.lstrip("+").isdigit():
+            query = compact_query
         self.run_api_task(
             "lookup_patient",
-            lambda: self.api_client.get(
-                "/api/v1/reception/patients/search", params={"q": query}
-            ),
+            lambda: self.api_client.get("/api/v1/reception/patients/search", params={"q": query}),
             self._on_patient_search_results,
             controls=(self.pt_search_input, self.btn_lookup),
             loading_text="Đang tìm hồ sơ bệnh nhân...",
@@ -721,9 +759,7 @@ class BookForPatientView(BaseApiView):
         self.profile_empty_box.hide()
         self.profile_info_box.show()
         patient_id = int(patient.get("patient_id") or 0)
-        self.badge_profile_status.setText(
-            f"#{patient_id:04d}" if patient_id else "Hồ sơ mới"
-        )
+        self.badge_profile_status.setText(f"#{patient_id:04d}" if patient_id else "Hồ sơ mới")
         _set_style_state(
             self.badge_profile_status,
             "patientState",
@@ -740,9 +776,7 @@ class BookForPatientView(BaseApiView):
                 pass
         self.val_p_dob.setText(f"{format_date(dob)}{age}" if dob else "—")
         gender = str(patient.get("gender", "") or "").upper()
-        self.val_p_gender.setText(
-            {"MALE": "Nam", "FEMALE": "Nữ", "OTHER": "Khác"}.get(gender, "—")
-        )
+        self.val_p_gender.setText({"MALE": "Nam", "FEMALE": "Nữ", "OTHER": "Khác"}.get(gender, "—"))
         self.val_p_address.setText(str(patient.get("address", "") or "Chưa cập nhật"))
         for label in (
             self.val_p_name,
@@ -801,8 +835,7 @@ class BookForPatientView(BaseApiView):
         self.history_table.set_rows(
             {
                 "appointment_date": appointment.get("appointment_date"),
-                "doctor_name": appointment.get("doctor", {}).get("full_name", "")
-                or "—",
+                "doctor_name": appointment.get("doctor", {}).get("full_name", "") or "—",
                 "status": appointment.get("status", ""),
             }
             for appointment in items
@@ -816,17 +849,11 @@ class BookForPatientView(BaseApiView):
         self.lbl_no_history.show()
 
     def _update_booking_preview(self) -> None:
-        doctor = (
-            self.doctor_combo.currentText()
-            if self.doctor_combo.currentData()
-            else "Chưa chọn"
-        )
+        doctor = self.doctor_combo.currentText() if self.doctor_combo.currentData() else "Chưa chọn"
         self.lbl_prev_doctor.setText(doctor)
         selected_slot = self.time_combo.currentData()
         date_text = self.date_edit.date().toString("dd/MM/yyyy")
-        time_text = (
-            self.time_combo.currentText() if selected_slot else "Chưa chọn khung giờ"
-        )
+        time_text = self.time_combo.currentText() if selected_slot else "Chưa chọn khung giờ"
         self.lbl_prev_time.setText(f"{time_text} · {date_text}")
         patient_name = self.name_input.text().strip()
         self.lbl_prev_patient.setText(patient_name or "Chưa nhập thông tin")
@@ -853,6 +880,7 @@ class BookForPatientView(BaseApiView):
         self.dob_edit.setDate(self.NULL_DATE)
         self.reason_input.clear()
         self.date_edit.setDate(QDate.currentDate())
+        self.specialty_combo.setCurrentIndex(0)
         self.doctor_combo.setCurrentIndex(0)
         self.chk_autoconfirm.setChecked(True)
         if not preserve_feedback:
@@ -861,11 +889,18 @@ class BookForPatientView(BaseApiView):
 
     def _submit_booking(self) -> None:
         full_name = self.name_input.text().strip()
-        phone = self.phone_input.text().strip()
+        phone = re.sub(r"\s+", "", self.phone_input.text())
         if not full_name or not phone:
             self.feedback.show_message(
                 "Thiếu thông tin bắt buộc",
                 "Nhập họ tên và số điện thoại bệnh nhân.",
+                severity="error",
+            )
+            return
+        if self.date_edit.date() < QDate.currentDate():
+            self.feedback.show_message(
+                "Ngày khám không hợp lệ",
+                "Không thể đặt lịch khám trong quá khứ.",
                 severity="error",
             )
             return
@@ -884,8 +919,7 @@ class BookForPatientView(BaseApiView):
             "appointment_date": self.date_edit.date().toString(Qt.DateFormat.ISODate),
             "start_time": f"{start}:00",
             "end_time": f"{end}:00",
-            "reason": self.reason_input.toPlainText().strip()
-            or "Đặt lịch khám tại quầy tiếp đón",
+            "reason": self.reason_input.toPlainText().strip() or "Đặt lịch khám tại quầy tiếp đón",
             "auto_confirm": self.chk_autoconfirm.isChecked(),
         }
         if self._selected_patient_id:
@@ -906,9 +940,7 @@ class BookForPatientView(BaseApiView):
             )
         self.run_api_task(
             "book_for_patient",
-            lambda: self.api_client.post(
-                "/api/v1/reception/appointments/book", json=payload
-            ),
+            lambda: self.api_client.post("/api/v1/reception/appointments/book", json=payload),
             self._on_booking_success,
             controls=(self.btn_submit, self.btn_reset),
             loading_text="Đang tạo lịch hẹn...",

@@ -29,6 +29,21 @@ from frontend.widgets.state_host import StateHost
 from frontend.widgets.table_actions import RowAction, TableActionMenu
 
 
+def connect_action(
+    signal: object,
+    callback: Callable[[], None],
+) -> None:
+    """Connect a Qt signal that may emit a ``checked: bool`` to a zero-arg callback.
+
+    ``QPushButton.clicked``, ``QToolButton.clicked``, and ``QAction.triggered``
+    all pass an extra boolean argument.  Wrapping the callback here ensures the
+    value is discarded unconditionally, so lambdas that capture a row dictionary
+    via ``lambda item=item: ...`` never receive ``False`` as their first argument.
+    """
+    signal.connect(lambda _checked=False, _cb=callback: _cb())
+
+
+
 class AdminApiError(RuntimeError):
     """A normalized failure returned by the legacy Admin API adapter."""
 
@@ -328,9 +343,7 @@ class AdminFormDialog(QDialog):
         root.addWidget(self.feedback)
         self.form_scroll = QScrollArea()
         self.form_scroll.setWidgetResizable(True)
-        self.form_scroll.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
+        self.form_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.form_scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.form_scroll.setProperty("uiSurface", "transparent")
         self.form_content = QWidget()
@@ -345,8 +358,7 @@ class AdminFormDialog(QDialog):
         root.addWidget(self.form_scroll, 1)
 
         self.buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Save
-            | QDialogButtonBox.StandardButton.Cancel
+            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
         )
         self.save_button = self.buttons.button(QDialogButtonBox.StandardButton.Save)
         self.cancel_button = self.buttons.button(QDialogButtonBox.StandardButton.Cancel)
@@ -392,9 +404,7 @@ class AdminFormDialog(QDialog):
             for row, field in enumerate(self.fields):
                 self.fields_layout.addWidget(field, row, 0, 1, 2)
         else:
-            for field, (row, column, span) in zip(
-                self.fields, self._field_positions, strict=True
-            ):
+            for field, (row, column, span) in zip(self.fields, self._field_positions, strict=True):
                 self.fields_layout.addWidget(field, row, column, 1, span)
         self._compact_fields = compact
 
@@ -402,9 +412,7 @@ class AdminFormDialog(QDialog):
         controls = [field.control for field in self.fields]
         controls.extend((self.save_button, self.cancel_button))
         if busy:
-            self._enabled_before_busy = {
-                control: control.isEnabled() for control in controls
-            }
+            self._enabled_before_busy = {control: control.isEnabled() for control in controls}
             for control in controls:
                 control.setEnabled(False)
             return
@@ -440,7 +448,10 @@ class AdminRowActions(QWidget):
             self.edit_button = QPushButton("Sửa")
             self.edit_button.setObjectName("actionEditBtn")
             self.edit_button.setAccessibleName(f"Sửa {accessible_name}")
-            self.edit_button.clicked.connect(on_edit)
+            # QPushButton.clicked emits ``checked: bool``.  Calling the
+            # captured zero-argument callback explicitly prevents that value
+            # from replacing a row object captured by ``lambda item=item``.
+            self.edit_button.clicked.connect(lambda _checked=False, callback=on_edit: callback())
             layout.addWidget(self.edit_button)
         else:
             self.edit_button = None
@@ -486,6 +497,7 @@ __all__ = [
     "AdminApiPage",
     "AdminRowActions",
     "AdminSearchBar",
+    "connect_action",
     "matches_search",
     "require_success",
     "set_row_actions",

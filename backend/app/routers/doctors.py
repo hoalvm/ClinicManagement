@@ -1,9 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from .. import schemas, auth
+
+from backend.app.core.phone import normalize_phone
+from backend.app.models import Clinic, Doctor, Specialty, User
+
+from .. import auth, schemas
 from ..database import get_db
 from ..deps import require_admin
-from backend.app.models import User, Doctor, Specialty, Clinic
 
 router = APIRouter(prefix="/doctors", tags=["Doctors"])
 
@@ -12,7 +15,7 @@ def _to_doctor_out(d: Doctor) -> dict:
     return {
         "DoctorID": d.doctor_id,
         "UserID": d.user_id,
-        "FullName": d.user.full_name if d.user else "",
+        "FullName": getattr(d.user, "full_name", "") if d.user else "",
         "SpecialtyID": d.specialty_id,
         "SpecialtyName": d.specialty.specialty_name if d.specialty else None,
         "ClinicID": d.clinic_id,
@@ -29,21 +32,26 @@ def get_doctors(db: Session = Depends(get_db), admin=Depends(require_admin)):
 
 
 @router.post("/", response_model=schemas.DoctorOut)
-def create_doctor(data: schemas.DoctorCreate, db: Session = Depends(get_db), admin=Depends(require_admin)):
+def create_doctor(
+    data: schemas.DoctorCreate, db: Session = Depends(get_db), admin=Depends(require_admin)
+):
     if db.query(User).filter(User.username == data.Username).first():
         raise HTTPException(400, "Username đã tồn tại")
     if not db.query(Specialty).filter(Specialty.specialty_id == data.SpecialtyID).first():
         raise HTTPException(400, "Chuyên khoa không tồn tại")
     if data.ClinicID and not db.query(Clinic).filter(Clinic.clinic_id == data.ClinicID).first():
         raise HTTPException(400, "Phòng khám không tồn tại")
-    if data.LicenseNumber and db.query(Doctor).filter(Doctor.license_number == data.LicenseNumber).first():
+    if (
+        data.LicenseNumber
+        and db.query(Doctor).filter(Doctor.license_number == data.LicenseNumber).first()
+    ):
         raise HTTPException(400, "Số chứng chỉ hành nghề đã tồn tại")
 
     new_user = User(
         username=data.Username,
         password_hash=auth.hash_password(data.Password),
         full_name=data.FullName,
-        phone=data.Phone,
+        phone=normalize_phone(data.Phone),
         email=data.Email,
         role="DOCTOR",
     )
@@ -61,34 +69,46 @@ def create_doctor(data: schemas.DoctorCreate, db: Session = Depends(get_db), adm
         db.commit()
     except Exception as e:
         db.rollback()
-        raise HTTPException(400, f"Không thể tạo hồ sơ bác sĩ: {str(e)}")
+        raise HTTPException(400, f"Không thể tạo hồ sơ bác sĩ: {str(e)}") from e
     db.refresh(new_doctor)
     return _to_doctor_out(new_doctor)
 
 
 @router.put("/{doctor_id}", response_model=schemas.DoctorOut)
-def update_doctor(doctor_id: int, data: schemas.DoctorUpdate, db: Session = Depends(get_db), admin=Depends(require_admin)):
+def update_doctor(
+    doctor_id: int,
+    data: schemas.DoctorUpdate,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),
+):
     doctor = db.query(Doctor).filter(Doctor.doctor_id == doctor_id).first()
     if not doctor:
         raise HTTPException(404, "Không tìm thấy bác sĩ")
 
-    if data.LicenseNumber and db.query(Doctor).filter(
-        Doctor.license_number == data.LicenseNumber, Doctor.doctor_id != doctor_id
-    ).first():
+    if (
+        data.LicenseNumber
+        and db.query(Doctor)
+        .filter(Doctor.license_number == data.LicenseNumber, Doctor.doctor_id != doctor_id)
+        .first()
+    ):
         raise HTTPException(400, "Số chứng chỉ hành nghề đã được sử dụng bởi bác sĩ khác")
 
     mapping = {
-        "SpecialtyID": "specialty_id", "ClinicID": "clinic_id",
-        "LicenseNumber": "license_number", "IsActive": "is_active",
+        "SpecialtyID": "specialty_id",
+        "ClinicID": "clinic_id",
+        "LicenseNumber": "license_number",
+        "IsActive": "is_active",
     }
     for field, value in data.dict(exclude_unset=True).items():
         setattr(doctor, mapping.get(field, field), value)
+        if field == "IsActive" and doctor.user:
+            doctor.user.is_active = bool(value)
 
     try:
         db.commit()
     except Exception as e:
         db.rollback()
-        raise HTTPException(400, f"Không thể cập nhật hồ sơ bác sĩ: {str(e)}")
+        raise HTTPException(400, f"Không thể cập nhật hồ sơ bác sĩ: {str(e)}") from e
     db.refresh(doctor)
     return _to_doctor_out(doctor)
 

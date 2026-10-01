@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QDate, Qt, Signal
 from PySide6.QtWidgets import (
     QDateEdit,
     QDialog,
@@ -179,9 +179,7 @@ class AppointmentManagementView(BaseApiView):
         self.bind_state_host(self.state_host)
         self.empty_state = self.state_host.empty
         self.empty_state.set_title("Không tìm thấy lịch hẹn")
-        self.empty_state.set_description(
-            "Thử thay đổi điều kiện tìm kiếm hoặc tạo lịch hẹn mới."
-        )
+        self.empty_state.set_description("Thử thay đổi điều kiện tìm kiếm hoặc tạo lịch hẹn mới.")
         self.empty_state.set_action("Làm mới")
         self.state_host.empty_action_requested.connect(self._retry)
         self.state_host.retry_requested.connect(self._retry)
@@ -212,7 +210,7 @@ class AppointmentManagementView(BaseApiView):
         self._current_page = page
         self.load_appointments()
 
-    def load_appointments(self) -> None:
+    def load_appointments(self, *, clear_feedback: bool = True) -> None:
         status_param = self.status_combo.currentData() or None
         keyword_param = self.search_input.text().strip() or None
 
@@ -236,6 +234,7 @@ class AppointmentManagementView(BaseApiView):
                 self.pagination,
             ),
             loading_text="Đang tải danh sách lịch hẹn...",
+            clear_feedback=clear_feedback,
         )
 
     def _on_appointments_loaded(self, data: dict[str, Any]) -> None:
@@ -293,9 +292,7 @@ class AppointmentManagementView(BaseApiView):
                 primary.setCursor(Qt.PointingHandCursor)
                 primary.setAccessibleName(f"{primary_label} lịch hẹn #{appt_id}")
                 if status == "PENDING":
-                    primary.clicked.connect(
-                        lambda _, a_id=appt_id: self._confirm_appointment(a_id)
-                    )
+                    primary.clicked.connect(lambda _, a_id=appt_id: self._confirm_appointment(a_id))
                 else:
                     primary.clicked.connect(
                         lambda _, a_id=appt_id: self._check_in_appointment(a_id)
@@ -358,7 +355,7 @@ class AppointmentManagementView(BaseApiView):
 
     def _on_action_success(self, msg: str) -> None:
         self.feedback.show_message("Thành công", msg, severity="success")
-        self.load_appointments()
+        self.load_appointments(clear_feedback=False)
 
     def _cancel_dialog(self, appt_id: int) -> None:
         dialog = QDialog(self)
@@ -408,6 +405,13 @@ class AppointmentManagementView(BaseApiView):
         date_edit = QDateEdit()
         date_edit.setCalendarPopup(True)
         date_edit.setDisplayFormat("dd/MM/yyyy")
+        date_edit.setMinimumDate(QDate.currentDate())
+        current_date = QDate.fromString(str(appt.get("appointment_date") or "")[:10], "yyyy-MM-dd")
+        date_edit.setDate(
+            current_date
+            if current_date.isValid() and current_date >= QDate.currentDate()
+            else QDate.currentDate()
+        )
         form.addRow("Ngày khám mới:", date_edit)
 
         time_edit = QTimeEdit()
@@ -446,7 +450,9 @@ class AppointmentManagementView(BaseApiView):
                     f"/api/v1/reception/appointments/{appt_id}/reschedule",
                     json=payload,
                 ),
-                lambda _: self._on_action_success(f"Đã đổi lịch hẹn #{appt_id} sang ngày {new_date}!"),
+                lambda _: self._on_action_success(
+                    f"Đã đổi lịch hẹn #{appt_id} sang ngày {new_date}!"
+                ),
                 controls=(self.table,),
                 loading_text="Đang cập nhật lịch hẹn...",
             )

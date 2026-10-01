@@ -1,5 +1,7 @@
 """Medical history and result business logic."""
 
+from datetime import date
+
 from sqlalchemy.orm import Session
 
 from backend.app.core.exceptions import NotFoundError
@@ -35,10 +37,22 @@ class MedicalRecordService:
         page: int,
         page_size: int,
         keyword: str | None,
+        examination_date: date | None = None,
+        specialty: str | None = None,
+        clinic: str | None = None,
     ) -> MedicalRecordPage:
-        records, total = self.repository.list_for_patient(
-            patient_id, page=page, page_size=page_size, keyword=keyword
-        )
+        filters: dict[str, object] = {
+            "page": page,
+            "page_size": page_size,
+            "keyword": keyword,
+        }
+        if examination_date is not None:
+            filters["examination_date"] = examination_date
+        if specialty is not None:
+            filters["specialty"] = specialty
+        if clinic is not None:
+            filters["clinic"] = clinic
+        records, total = self.repository.list_for_patient(patient_id, **filters)
         return MedicalRecordPage(
             items=[
                 MedicalRecordSummary(

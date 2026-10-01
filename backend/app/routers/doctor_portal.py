@@ -1,22 +1,21 @@
 """API router for Doctor Portal operations: schedule, examination, prescription."""
 
-from typing import List, Optional, Tuple
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from backend.app.auth import create_access_token, verify_password
 from backend.app.database import get_db
 from backend.app.deps import get_current_user
 from backend.app.models import (
     Appointment,
     Doctor,
     MedicalRecord,
-    Patient,
     Prescription,
     PrescriptionItem,
     User,
 )
-from backend.app.auth import verify_password, create_access_token
 
 router = APIRouter(prefix="/api/v1/doctor", tags=["Doctor Portal"])
 
@@ -24,16 +23,16 @@ router = APIRouter(prefix="/api/v1/doctor", tags=["Doctor Portal"])
 # ------------------- Schemas -------------------
 class PrescriptionItemIn(BaseModel):
     medicine_name: str = Field(..., min_length=1, max_length=150)
-    dosage: Optional[str] = Field(None, max_length=255)
+    dosage: str | None = Field(None, max_length=255)
     quantity: int = Field(..., gt=0, description="Số lượng thuốc phải lớn hơn 0")
-    instructions: Optional[str] = Field(None, max_length=500)
+    instructions: str | None = Field(None, max_length=500)
 
 
 class CompleteExamRequest(BaseModel):
     symptoms: str = Field(..., min_length=1, max_length=1000)
     diagnosis: str = Field(..., min_length=1, max_length=1000)
-    notes: Optional[str] = Field(None, max_length=2000)
-    prescription_items: Optional[List[PrescriptionItemIn]] = []
+    notes: str | None = Field(None, max_length=2000)
+    prescription_items: list[PrescriptionItemIn] | None = []
 
 
 class DoctorLoginRequest(BaseModel):
@@ -46,13 +45,13 @@ class DoctorLoginResponse(BaseModel):
     token_type: str = "bearer"
     doctor_id: int
     doctor_name: str
-    license_number: Optional[str] = "N/A"
+    license_number: str | None = "N/A"
 
 
 # ------------------- RBAC Dependency -------------------
 def require_doctor(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
-) -> Tuple[User, Optional[Doctor]]:
+) -> tuple[User, Doctor | None]:
     """Enforce that current_user has role DOCTOR or ADMIN."""
     if current_user.role not in ("DOCTOR", "ADMIN"):
         raise HTTPException(
@@ -118,8 +117,8 @@ def get_doctor_profile(
 
 @router.get("/schedule")
 def get_schedule(
-    doctor_id: Optional[int] = Query(None, description="Doctor ID"),
-    auth_info: Tuple[User, Optional[Doctor]] = Depends(require_doctor),
+    doctor_id: int | None = Query(None, description="Doctor ID"),
+    auth_info: tuple[User, Doctor | None] = Depends(require_doctor),
     db: Session = Depends(get_db),
 ):
     current_user, current_doctor = auth_info
@@ -178,8 +177,8 @@ def get_schedule(
 @router.put("/appointments/{appointment_id}/accept")
 def accept_patient(
     appointment_id: int,
-    doctor_id: Optional[int] = None,
-    auth_info: Tuple[User, Optional[Doctor]] = Depends(require_doctor),
+    doctor_id: int | None = None,
+    auth_info: tuple[User, Doctor | None] = Depends(require_doctor),
     db: Session = Depends(get_db),
 ):
     current_user, current_doctor = auth_info
@@ -211,7 +210,7 @@ def accept_patient(
 def complete_examination(
     appointment_id: int,
     payload: CompleteExamRequest,
-    auth_info: Tuple[User, Optional[Doctor]] = Depends(require_doctor),
+    auth_info: tuple[User, Doctor | None] = Depends(require_doctor),
     db: Session = Depends(get_db),
 ):
     current_user, current_doctor = auth_info
@@ -299,4 +298,4 @@ def complete_examination(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Lỗi cơ sở dữ liệu: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Lỗi cơ sở dữ liệu: {str(e)}") from e

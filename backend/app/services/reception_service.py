@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, aliased, joinedload
 
 from backend.app.core.clock import clinic_now
 from backend.app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from backend.app.core.phone import normalize_phone
 from backend.app.models import (
     Appointment,
     Doctor,
@@ -55,7 +56,9 @@ class ReceptionService:
             patient=ReceptionPatientSummary(
                 patient_id=patient.patient_id if patient else 0,
                 user_id=patient.user_id if patient else 0,
-                full_name=patient_user.full_name if patient_user else (f"Patient #{patient.patient_id}" if patient else "Patient"),
+                full_name=patient_user.full_name
+                if patient_user
+                else (f"Patient #{patient.patient_id}" if patient else "Patient"),
                 phone=patient_user.phone if patient_user else None,
                 email=patient_user.email if patient_user else None,
                 date_of_birth=patient.date_of_birth if patient else None,
@@ -192,9 +195,14 @@ class ReceptionService:
         if keyword and keyword.strip():
             raw_kw = keyword.strip()
             pat = f"%{raw_kw}%"
+            normalized_phone = normalize_phone(raw_kw) or raw_kw
+            normalized_phone_column = func.replace(
+                func.replace(func.replace(pu.phone, " ", ""), "-", ""), ".", ""
+            )
             conds = [
                 pu.full_name.ilike(pat),
                 pu.phone.ilike(pat),
+                normalized_phone_column.ilike(f"%{normalized_phone}%"),
                 du.full_name.ilike(pat),
                 Appointment.reason.ilike(pat),
             ]
@@ -228,8 +236,10 @@ class ReceptionService:
         appt = self.session.get(Appointment, appointment_id)
         if not appt:
             raise NotFoundError("Appointment not found.")
-        if appt.status == "CANCELLED":
-            raise ConflictError("Cannot confirm a cancelled appointment.")
+        if appt.status != "PENDING":
+            raise ConflictError(
+                f"Only pending appointments can be confirmed (current status: {appt.status})."
+            )
         appt.status = "CONFIRMED"
         self.session.commit()
         return self._to_appointment_item(appt)
@@ -240,7 +250,7 @@ class ReceptionService:
         appt = self.session.get(Appointment, appointment_id)
         if not appt:
             raise NotFoundError("Appointment not found.")
-        if appt.status in ("COMPLETED", "CANCELLED"):
+        if appt.status not in ("PENDING", "CONFIRMED"):
             raise ConflictError(f"Cannot check in appointment with status {appt.status}.")
         appt.status = "CHECKED_IN"
         if notes:
@@ -252,8 +262,8 @@ class ReceptionService:
         appt = self.session.get(Appointment, appointment_id)
         if not appt:
             raise NotFoundError("Appointment not found.")
-        if appt.status == "COMPLETED":
-            raise ConflictError("Cannot cancel an already completed appointment.")
+        if appt.status in ("COMPLETED", "CANCELLED"):
+            raise ConflictError(f"Cannot cancel an appointment with status {appt.status}.")
         appt.status = "CANCELLED"
         appt.reason = f"{appt.reason or ''} [Cancelled: {reason}]".strip()
         self.session.commit()
@@ -273,6 +283,15 @@ class ReceptionService:
             raise NotFoundError("Appointment not found.")
         if appt.status in ("COMPLETED", "CANCELLED"):
             raise ConflictError(f"Cannot reschedule an appointment with status {appt.status}.")
+        if appointment_date < clinic_now().date():
+            raise ValidationError("Cannot reschedule an appointment to a past date.")
+        if (
+            appointment_date == clinic_now().date()
+            and start_time <= clinic_now().time().replace(tzinfo=None)
+        ):
+            raise ValidationError("Cannot reschedule an appointment to a past time.")
+        if start_time >= end_time:
+            raise ValidationError("Start time must be earlier than end time.")
         appt.appointment_date = appointment_date
         appt.start_time = start_time
         appt.end_time = end_time
@@ -287,23 +306,38 @@ class ReceptionService:
     def book_for_patient(self, req: BookForPatientRequest) -> ReceptionAppointmentItem:
         patient_id = req.patient_id
 
+        if req.appointment_date < clinic_now().date():
+            raise ValidationError("Cannot book an appointment in the past.")
+        if (
+            req.appointment_date == clinic_now().date()
+            and req.start_time <= clinic_now().time().replace(tzinfo=None)
+        ):
+            raise ValidationError("Cannot book an appointment in a past time slot.")
+        if req.start_time >= req.end_time:
+            raise ValidationError("Start time must be earlier than end time.")
+
         # If patient_id not supplied, locate or create a new user & patient record
         if not patient_id:
             if not req.full_name or not req.phone:
-                raise ValidationError("Full name and phone number are required for walk-in patient booking.")
-            
+                raise ValidationError(
+                    "Full name and phone number are required for walk-in patient booking."
+                )
+
             # Check if user already exists with this phone
-            existing_user = self.session.scalar(select(User).where(User.phone == req.phone))
+            normalized_phone = normalize_phone(req.phone)
+            if not normalized_phone:
+                raise ValidationError("A valid phone number is required.")
+            existing_user = self.session.scalar(select(User).where(User.phone == normalized_phone))
             if existing_user and existing_user.patient:
                 patient_id = existing_user.patient.patient_id
             else:
                 # Create user & patient
-                username = f"pt_{req.phone.replace('+', '')[-8:]}_{int(datetime.now().timestamp()) % 10000}"
+                username = f"pt_{normalized_phone.replace('+', '')[-8:]}_{int(datetime.now().timestamp()) % 10000}"
                 new_user = User(
                     username=username,
                     password_hash="argon2id$v=19$m=65536,t=3,p=4$defaultwalkin$placeholder",
                     full_name=req.full_name,
-                    phone=req.phone,
+                    phone=normalized_phone,
                     role="PATIENT",
                     is_active=True,
                 )
@@ -322,8 +356,11 @@ class ReceptionService:
 
         # Verify doctor exists
         doctor = self.session.get(Doctor, req.doctor_id)
-        if not doctor:
+        if not doctor or not doctor.is_active:
             raise NotFoundError("Doctor not found.")
+
+        if patient_id and not self.session.get(Patient, patient_id):
+            raise NotFoundError("Patient not found.")
 
         clinic_id = req.clinic_id or doctor.clinic_id
 
@@ -447,8 +484,12 @@ class ReceptionService:
             select(Invoice)
             .where(Invoice.invoice_id == invoice_id)
             .options(
-                joinedload(Invoice.appointment).joinedload(Appointment.patient).joinedload(Patient.user),
-                joinedload(Invoice.appointment).joinedload(Appointment.doctor).joinedload(Doctor.user),
+                joinedload(Invoice.appointment)
+                .joinedload(Appointment.patient)
+                .joinedload(Patient.user),
+                joinedload(Invoice.appointment)
+                .joinedload(Appointment.doctor)
+                .joinedload(Doctor.user),
                 joinedload(Invoice.payment),
             )
         )
@@ -486,9 +527,7 @@ class ReceptionService:
         if existing_invoice:
             raise ConflictError("An invoice already exists for this appointment.")
 
-        total_amount = sum(
-            Decimal(item.unit_price) * Decimal(item.quantity) for item in req.items
-        )
+        total_amount = sum(Decimal(item.unit_price) * Decimal(item.quantity) for item in req.items)
 
         new_invoice = Invoice(
             appointment_id=req.appointment_id,
@@ -535,11 +574,17 @@ class ReceptionService:
             raise NotFoundError("Invoice not found.")
         if invoice.status == "PAID":
             raise ConflictError("This invoice has already been paid.")
+        total = Decimal(invoice.total_amount)
+        tendered = Decimal(req.amount)
+        if tendered < total:
+            raise ValidationError("The received amount is less than the invoice total.")
+        if req.payment_method == "CARD" and tendered != total:
+            raise ValidationError("Card payments must match the invoice total.")
 
         # Create payment
         payment = Payment(
             invoice_id=invoice_id,
-            amount=req.amount,
+            amount=total,
             payment_method=req.payment_method,
             payment_date=clinic_now(),
         )
@@ -618,7 +663,14 @@ class ReceptionService:
                 pu.phone.ilike(pat),
                 du.full_name.ilike(pat),
             ]
-            clean_digits = raw_kw.lstrip("#").upper().replace("INV-", "").replace("INV", "").replace("PAY-", "").strip()
+            clean_digits = (
+                raw_kw.lstrip("#")
+                .upper()
+                .replace("INV-", "")
+                .replace("INV", "")
+                .replace("PAY-", "")
+                .strip()
+            )
             if clean_digits.isdigit():
                 num_val = int(clean_digits)
                 conds.append(Payment.payment_id == num_val)
@@ -669,18 +721,28 @@ class ReceptionService:
     def search_patients(self, query: str) -> list[ReceptionPatientSummary]:
         if not query or len(query.strip()) < 2:
             return []
-        pat = f"%{query.strip()}%"
+        raw_query = query.strip()
+        pat = f"%{raw_query}%"
+        normalized_phone = normalize_phone(raw_query) or raw_query
+        normalized_phone_column = func.replace(
+            func.replace(func.replace(User.phone, " ", ""), "-", ""), ".", ""
+        )
+        conditions = [
+            User.full_name.ilike(pat),
+            User.phone.ilike(pat),
+            normalized_phone_column.ilike(f"%{normalized_phone}%"),
+            User.email.ilike(pat),
+        ]
+        patient_code = raw_query.upper().removeprefix("PT-").lstrip("#")
+        if patient_code.isdigit():
+            conditions.extend(
+                (Patient.patient_id == int(patient_code), User.user_id == int(patient_code))
+            )
         stmt = (
             select(Patient)
             .join(Patient.user)
             .options(joinedload(Patient.user))
-            .where(
-                or_(
-                    User.full_name.ilike(pat),
-                    User.phone.ilike(pat),
-                    User.email.ilike(pat),
-                )
-            )
+            .where(or_(*conditions))
             .limit(10)
         )
         patients = self.session.execute(stmt).unique().scalars().all()

@@ -1,5 +1,6 @@
 """Current patient's appointment endpoints, booking, and schedule changes."""
 
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Query, status
@@ -29,14 +30,23 @@ def list_appointments(
     page_size: Annotated[int, Query(ge=1, le=100)] = 10,
     keyword: Annotated[str | None, Query(max_length=200)] = None,
     status: AppointmentStatus | None = None,
+    appointment_date: date | None = None,
+    specialty: Annotated[str | None, Query(max_length=100)] = None,
+    clinic: Annotated[str | None, Query(max_length=150)] = None,
 ) -> AppointmentPage:
-    return AppointmentService(session).list_appointments(
-        current_patient.patient_id,
-        page=page,
-        page_size=page_size,
-        keyword=keyword,
-        status=status.value if status is not None else None,
-    )
+    filters: dict[str, object] = {
+        "page": page,
+        "page_size": page_size,
+        "keyword": keyword,
+        "status": status.value if status is not None else None,
+    }
+    if appointment_date is not None:
+        filters["appointment_date"] = appointment_date
+    if specialty is not None:
+        filters["specialty"] = specialty
+    if clinic is not None:
+        filters["clinic"] = clinic
+    return AppointmentService(session).list_appointments(current_patient.patient_id, **filters)
 
 
 @router.get("/me/upcoming", response_model=AppointmentSummary | None)

@@ -1,5 +1,6 @@
 """Current patient's read-only medical record endpoints."""
 
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Query
@@ -18,13 +19,22 @@ def list_medical_records(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 10,
     keyword: Annotated[str | None, Query(max_length=200)] = None,
+    examination_date: date | None = None,
+    specialty: Annotated[str | None, Query(max_length=100)] = None,
+    clinic: Annotated[str | None, Query(max_length=150)] = None,
 ) -> MedicalRecordPage:
-    return MedicalRecordService(session).list_records(
-        current_patient.patient_id,
-        page=page,
-        page_size=page_size,
-        keyword=keyword,
-    )
+    filters: dict[str, object] = {
+        "page": page,
+        "page_size": page_size,
+        "keyword": keyword,
+    }
+    if examination_date is not None:
+        filters["examination_date"] = examination_date
+    if specialty is not None:
+        filters["specialty"] = specialty
+    if clinic is not None:
+        filters["clinic"] = clinic
+    return MedicalRecordService(session).list_records(current_patient.patient_id, **filters)
 
 
 @router.get("/me/{medical_record_id}", response_model=MedicalRecordDetail)

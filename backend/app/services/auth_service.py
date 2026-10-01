@@ -9,6 +9,7 @@ from backend.app.core.exceptions import (
     ConflictError,
     InternalServerError,
 )
+from backend.app.core.phone import normalize_phone
 from backend.app.core.security import create_access_token, hash_password, verify_password
 from backend.app.models import Patient, User
 from backend.app.repositories import PatientRepository, UserRepository
@@ -37,7 +38,7 @@ class AuthService:
             username=payload.username,
             password_hash=hash_password(payload.password),
             full_name=payload.full_name,
-            phone=payload.phone,
+            phone=normalize_phone(payload.phone),
             email=str(payload.email) if payload.email is not None else None,
             role="PATIENT",
             is_active=True,

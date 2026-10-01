@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QApplication
 
 from frontend.api.api_client import ApiClient
 from frontend.core.i18n import get_i18n
-from frontend.views.booking_view import BookingView
+from frontend.views.booking_view import BookingView, _SpecialtySearchComboBox
 from frontend.views.common import BaseApiView
 from frontend.widgets.wizard_stepper import WizardStepper
 
@@ -74,14 +74,48 @@ def test_step_two_has_context_chip_segmented_mode_and_one_date_affordance(
     assert booking_view.s2_open_cal_btn.text() == "Ngày khác…"
 
 
+def test_header_back_button_returns_to_previous_booking_step(
+    booking_view: BookingView,
+) -> None:
+    booking_view._go_to_step(2)
+
+    assert booking_view.cancel_nav_btn.text() == "Quay lại bước trước"
+
+    booking_view._navigate_header_back()
+
+    assert booking_view._current_step_index == 1
+    assert booking_view.cancel_nav_btn.text() == "Quay lại bước trước"
+
+
+def test_specialty_search_ignores_mouse_wheel_selection(
+    qt_app: QApplication,
+) -> None:
+    combo = _SpecialtySearchComboBox()
+    event = MagicMock()
+
+    combo.wheelEvent(event)
+
+    event.ignore.assert_called_once_with()
+    combo.deleteLater()
+    qt_app.processEvents()
+
+
 def test_date_selection_updates_results_without_confirmation_button(
     booking_view: BookingView,
 ) -> None:
-    target = QDate(2026, 9, 28)
+    booking_view.selected_specialty = {
+        "specialty_id": 5,
+        "specialty_name": "Cơ Xương Khớp",
+    }
+    target = QDate.currentDate().addDays(1)
+    while target.dayOfWeek() != 1:
+        target = target.addDays(1)
     booking_view.step2_date_edit.blockSignals(True)
     booking_view.step2_date_edit.setDate(target)
     booking_view.step2_date_edit.blockSignals(False)
     booking_view._load_doctors_for_date()
 
-    assert booking_view.by_date_doc_header.text() == "Bác sĩ làm việc Thứ Hai, 28/09/2026"
+    assert booking_view.by_date_doc_header.text() == (
+        f"Bác sĩ làm việc Thứ Hai, {target.toString('dd/MM/yyyy')}"
+    )
     assert booking_view.s2_open_cal_btn.objectName() == "bookingDateChip"

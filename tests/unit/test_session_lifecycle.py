@@ -86,6 +86,19 @@ def test_login_password_is_cleared_and_routing_lock_survives_worker_cleanup(
     qt_app.processEvents()
 
 
+def test_central_login_exposes_patient_registration_entry_point(
+    qt_app: QApplication,
+) -> None:
+    window = LoginWindow(on_success=lambda: None)
+
+    assert window.register_btn.text() == "Đăng ký tài khoản bệnh nhân"
+    assert window.register_btn.isEnabled()
+
+    window.close()
+    window.deleteLater()
+    qt_app.processEvents()
+
+
 def test_doctor_routing_uses_token_snapshot_and_ignores_stale_result(
     qt_app: QApplication,
     monkeypatch: pytest.MonkeyPatch,

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QDate, Qt, Signal
 from PySide6.QtWidgets import (
+    QApplication,
+    QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -36,6 +38,9 @@ class CheckInView(BaseApiView):
 
     def __init__(self, api_client: ApiClient, parent: QWidget | None = None) -> None:
         super().__init__(api_client, parent)
+        self._candidate_items: list[dict[str, Any]] = []
+        self._last_ticket: dict[str, Any] | None = None
+        self._print_dialog: QDialog | None = None
 
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
@@ -82,6 +87,8 @@ class CheckInView(BaseApiView):
         self.queue_num_input.setPlaceholderText("Số thứ tự")
         self.queue_num_input.setAccessibleName("Số thứ tự khám")
         self.queue_num_input.setMaximumWidth(140)
+        self.queue_num_input.setReadOnly(True)
+        self.queue_num_input.setText("A-01")
         search_row.addWidget(self.queue_num_input, 1)
 
         self.btn_search = QPushButton("Tìm kiếm")
@@ -91,6 +98,25 @@ class CheckInView(BaseApiView):
 
         intake_layout.addLayout(search_row)
         layout.addWidget(intake_card)
+
+        self.ticket_card = QFrame()
+        self.ticket_card.setObjectName("contentCard")
+        ticket_layout = QHBoxLayout(self.ticket_card)
+        ticket_layout.setContentsMargins(16, 12, 16, 12)
+        self.ticket_summary = QLabel()
+        self.ticket_summary.setWordWrap(True)
+        self.ticket_summary.setObjectName("sectionTitle")
+        ticket_layout.addWidget(self.ticket_summary, 1)
+        self.btn_call = QPushButton("Gọi số")
+        self.btn_call.setObjectName("secondaryButton")
+        self.btn_call.clicked.connect(self._call_current_number)
+        ticket_layout.addWidget(self.btn_call)
+        self.btn_print = QPushButton("In phiếu")
+        self.btn_print.setObjectName("secondaryButton")
+        self.btn_print.clicked.connect(self._show_print_preview)
+        ticket_layout.addWidget(self.btn_print)
+        self.ticket_card.hide()
+        layout.addWidget(self.ticket_card)
 
         # Results table for check-in
         results_label = QLabel("Lịch hẹn chờ tiếp nhận")
@@ -199,10 +225,18 @@ class CheckInView(BaseApiView):
     def refresh(self) -> None:
         self.search_and_load()
 
-    def search_and_load(self) -> None:
-        keyword = self.search_input.text().strip() or None
+    def search_and_load(self, *, clear_feedback: bool = True) -> None:
+        raw_keyword = self.search_input.text().strip()
+        compact_keyword = "".join(raw_keyword.split())
+        keyword = (
+            compact_keyword if compact_keyword.lstrip("+").isdigit() else raw_keyword
+        ) or None
         # We look for PENDING and CONFIRMED appointments
-        params = {"page": 1, "page_size": 25}
+        params = {
+            "page": 1,
+            "page_size": 100,
+            "appointment_date": QDate.currentDate().toString(Qt.DateFormat.ISODate),
+        }
         if keyword:
             params["keyword"] = keyword
 
@@ -216,10 +250,14 @@ class CheckInView(BaseApiView):
                 self.btn_search,
             ),
             loading_text="Đang tìm lịch hẹn...",
+            clear_feedback=clear_feedback,
         )
 
     def _on_candidates_loaded(self, data: dict[str, Any]) -> None:
         all_items = data.get("items", [])
+        self._candidate_items = list(all_items)
+        checked_in = [i for i in all_items if i.get("status") == "CHECKED_IN"]
+        self.queue_num_input.setText(f"A-{len(checked_in) + 1:02d}")
         # Filter for check-in candidates (PENDING or CONFIRMED)
         items = [i for i in all_items if i.get("status") in ("CONFIRMED", "PENDING")]
 
@@ -251,7 +289,6 @@ class CheckInView(BaseApiView):
                 "Tìm kiếm theo SĐT, họ tên hoặc mã hẹn.",
                 action_text="Làm mới",
             )
-            checked_in = [i for i in all_items if i.get("status") == "CHECKED_IN"]
             if checked_in:
                 self.feedback.show_message(
                     "Đã tiếp nhận",
@@ -294,7 +331,7 @@ class CheckInView(BaseApiView):
                 f"/api/v1/reception/appointments/{appt_id}/check-in",
                 json=payload,
             ),
-            lambda res: self._on_check_in_success(appt_id, queue_no),
+            lambda res: self._on_check_in_success(res, queue_no),
             controls=(
                 self.results_table,
                 self.search_input,
@@ -304,11 +341,72 @@ class CheckInView(BaseApiView):
             loading_text="Đang xác nhận tiếp nhận...",
         )
 
-    def _on_check_in_success(self, appt_id: int, queue_no: str | None) -> None:
+    def _on_check_in_success(self, result: dict[str, Any], queue_no: str | None) -> None:
+        appt_id = int(result.get("appointment_id") or 0)
+        resolved_queue = queue_no or self.queue_num_input.text().strip() or "A-01"
+        self._last_ticket = {**result, "queue_number": resolved_queue}
         msg = f"Tiếp nhận bệnh nhân cho lịch hẹn #{appt_id} thành công!"
-        if queue_no:
-            msg += f" (Số thứ tự: {queue_no})"
+        if resolved_queue:
+            msg += f" (Số thứ tự: {resolved_queue})"
         self.feedback.show_message("Tiếp nhận thành công", msg, severity="success")
-        self.queue_num_input.clear()
+        patient_name = str(result.get("patient", {}).get("full_name") or "Bệnh nhân")
+        self.ticket_summary.setText(f"{resolved_queue} · {patient_name} · Hẹn #{appt_id}")
+        self.ticket_card.show()
         self.appointment_checked_in.emit(appt_id)
-        self.refresh()
+        self.search_and_load(clear_feedback=False)
+
+    def _call_current_number(self) -> None:
+        if not self._last_ticket:
+            return
+        queue_number = str(self._last_ticket.get("queue_number") or "")
+        patient_name = str(self._last_ticket.get("patient", {}).get("full_name") or "Bệnh nhân")
+        QApplication.beep()
+        self.feedback.show_message(
+            f"Đang gọi số {queue_number}",
+            f"Mời bệnh nhân {patient_name} đến quầy tiếp nhận.",
+            severity="info",
+        )
+
+    def _ticket_text(self) -> str:
+        if not self._last_ticket:
+            return ""
+        ticket = self._last_ticket
+        patient = ticket.get("patient", {})
+        doctor = ticket.get("doctor", {})
+        clinic = ticket.get("clinic") or {}
+        return "\n".join(
+            (
+                "PHIẾU TIẾP NHẬN",
+                f"Số thứ tự: {ticket.get('queue_number', '—')}",
+                f"Mã lịch hẹn: #{ticket.get('appointment_id', '—')}",
+                f"Bệnh nhân: {patient.get('full_name') or '—'}",
+                f"Số điện thoại: {patient.get('phone') or '—'}",
+                f"Bác sĩ: {doctor.get('full_name') or '—'}",
+                f"Thời gian: {format_date(ticket.get('appointment_date'))} · {format_time(ticket.get('start_time'))}",
+                f"Phòng khám: {clinic.get('clinic_name') or '—'}",
+            )
+        )
+
+    def _show_print_preview(self) -> None:
+        text = self._ticket_text()
+        if not text:
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Xem trước phiếu tiếp nhận")
+        dialog.resize(460, 340)
+        layout = QVBoxLayout(dialog)
+        title = QLabel("Xem trước phiếu tiếp nhận")
+        title.setObjectName("sectionTitle")
+        layout.addWidget(title)
+        content = QLabel(text)
+        content.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        content.setWordWrap(True)
+        content.setAccessibleName(text)
+        layout.addWidget(content, 1)
+        close_button = QPushButton("Đóng")
+        close_button.setObjectName("secondaryButton")
+        close_button.clicked.connect(dialog.accept)
+        layout.addWidget(close_button, 0, Qt.AlignmentFlag.AlignRight)
+        self._print_dialog = dialog
+        dialog.finished.connect(lambda _result: setattr(self, "_print_dialog", None))
+        dialog.open()

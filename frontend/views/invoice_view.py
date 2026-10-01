@@ -92,7 +92,7 @@ class InvoiceManagementView(BaseApiView):
                 ColumnSpec(
                     "Mã hóa đơn",
                     "reference",
-                    minimum_width=130,
+                    minimum_width=100,
                     preferred_width=140,
                     maximum_width=150,
                     priority=ColumnPriority.HIGH,
@@ -102,7 +102,7 @@ class InvoiceManagementView(BaseApiView):
                 ColumnSpec(
                     "Bệnh nhân",
                     "patient",
-                    minimum_width=120,
+                    minimum_width=104,
                     preferred_width=166,
                     maximum_width=270,
                     priority=ColumnPriority.CRITICAL,
@@ -114,7 +114,7 @@ class InvoiceManagementView(BaseApiView):
                 ColumnSpec(
                     "Bác sĩ",
                     "doctor_name",
-                    minimum_width=110,
+                    minimum_width=92,
                     preferred_width=146,
                     maximum_width=230,
                     priority=ColumnPriority.NORMAL,
@@ -131,13 +131,12 @@ class InvoiceManagementView(BaseApiView):
                     priority=ColumnPriority.CRITICAL,
                     formatter=format_money,
                     display_mode=ColumnDisplayMode.FULL,
-                    alignment=Qt.AlignmentFlag.AlignRight
-                    | Qt.AlignmentFlag.AlignVCenter,
+                    alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
                 ),
                 ColumnSpec(
                     "Hình thức",
                     "payment_method",
-                    minimum_width=110,
+                    minimum_width=88,
                     preferred_width=110,
                     maximum_width=118,
                     priority=ColumnPriority.HIGH,
@@ -162,7 +161,7 @@ class InvoiceManagementView(BaseApiView):
                 ColumnSpec(
                     "Xử lý",
                     "_actions",
-                    minimum_width=120,
+                    minimum_width=104,
                     preferred_width=124,
                     maximum_width=132,
                     priority=ColumnPriority.CRITICAL,
@@ -181,9 +180,7 @@ class InvoiceManagementView(BaseApiView):
         self.bind_state_host(self.state_host)
         self.empty_state = self.state_host.empty
         self.empty_state.set_title("Không tìm thấy hóa đơn")
-        self.empty_state.set_description(
-            "Hóa đơn viện phí được lập sẽ hiển thị tại danh sách này."
-        )
+        self.empty_state.set_description("Hóa đơn viện phí được lập sẽ hiển thị tại danh sách này.")
         self.empty_state.set_action("Làm mới")
         self.state_host.empty_action_requested.connect(self._retry)
         self.state_host.retry_requested.connect(self._retry)
@@ -213,7 +210,7 @@ class InvoiceManagementView(BaseApiView):
         self._current_page = page
         self.load_invoices()
 
-    def load_invoices(self) -> None:
+    def load_invoices(self, *, clear_feedback: bool = True) -> None:
         status_param = self.status_combo.currentData() or None
         keyword_param = self.search_input.text().strip() or None
 
@@ -237,6 +234,7 @@ class InvoiceManagementView(BaseApiView):
                 self.pagination,
             ),
             loading_text="Đang tải hóa đơn...",
+            clear_feedback=clear_feedback,
         )
 
     def _on_invoices_loaded(self, data: dict[str, Any]) -> None:
@@ -284,17 +282,13 @@ class InvoiceManagementView(BaseApiView):
                 action.setObjectName("tableActionPrimary")
                 action.setCursor(Qt.PointingHandCursor)
                 action.setAccessibleName(f"Thu phí hóa đơn INV-{inv_id:04d}")
-                action.clicked.connect(
-                    lambda _, i_id=inv_id: self.pay_invoice_requested.emit(i_id)
-                )
+                action.clicked.connect(lambda _, i_id=inv_id: self.pay_invoice_requested.emit(i_id))
             else:
                 action = QPushButton("Xem thông tin")
                 action.setObjectName("tableActionSecondary")
                 action.setCursor(Qt.PointingHandCursor)
                 action.setAccessibleName(f"Xem hóa đơn INV-{inv_id:04d}")
-                action.clicked.connect(
-                    lambda _, invoice=inv: self._show_invoice_details(invoice)
-                )
+                action.clicked.connect(lambda _, invoice=inv: self._show_invoice_details(invoice))
             action_widget = table_action_cell(
                 action,
                 accessible_name=f"Thao tác hóa đơn INV-{inv_id:04d}",
@@ -383,10 +377,12 @@ class InvoiceManagementView(BaseApiView):
         items_label.setObjectName("fieldLabel")
         d_layout.addWidget(items_label)
 
-        # Simple pre-defined line items for quick billing
+        # Editable line items with explicit add/remove controls and a live total.
         item_table = QTableWidget()
-        item_table.setColumnCount(3)
-        item_table.setHorizontalHeaderLabels(["Tên dịch vụ / Thuốc", "Số lượng", "Đơn giá (₫)"])
+        item_table.setColumnCount(4)
+        item_table.setHorizontalHeaderLabels(
+            ["Tên dịch vụ / Thuốc", "Số lượng", "Đơn giá (₫)", "Xóa"]
+        )
         item_table.setRowCount(3)
 
         default_items = [
@@ -402,6 +398,63 @@ class InvoiceManagementView(BaseApiView):
 
         item_table.horizontalHeader().setStretchLastSection(True)
         d_layout.addWidget(item_table)
+
+        item_actions = QHBoxLayout()
+        btn_add_item = QPushButton("Thêm khoản mục")
+        btn_add_item.setObjectName("secondaryButton")
+        item_actions.addWidget(btn_add_item)
+        item_actions.addStretch(1)
+        total_label = QLabel("Tổng cộng: 0 ₫")
+        total_label.setObjectName("sectionTitle")
+        item_actions.addWidget(total_label)
+        d_layout.addLayout(item_actions)
+
+        def update_total() -> None:
+            total = Decimal("0")
+            for row in range(item_table.rowCount()):
+                quantity_item = item_table.item(row, 1)
+                price_item = item_table.item(row, 2)
+                try:
+                    quantity = Decimal(quantity_item.text().strip()) if quantity_item else 0
+                    price = Decimal(price_item.text().strip()) if price_item else 0
+                    if quantity > 0 and price >= 0:
+                        total += quantity * price
+                except InvalidOperation:
+                    continue
+            total_label.setText(f"Tổng cộng: {format_money(total)}")
+
+        def remove_item(button: QPushButton) -> None:
+            for row in range(item_table.rowCount()):
+                if item_table.cellWidget(row, 3) is button:
+                    item_table.removeRow(row)
+                    break
+            if item_table.rowCount() == 0:
+                add_item()
+            update_total()
+
+        def install_remove_button(row: int) -> None:
+            button = QPushButton("Xóa")
+            button.setObjectName("tableActionDanger")
+            button.setAccessibleName(f"Xóa khoản mục dòng {row + 1}")
+            button.clicked.connect(lambda _checked=False, target=button: remove_item(target))
+            item_table.setCellWidget(row, 3, button)
+
+        def add_item() -> None:
+            row = item_table.rowCount()
+            item_table.insertRow(row)
+            item_table.setItem(row, 0, QTableWidgetItem(""))
+            item_table.setItem(row, 1, QTableWidgetItem("1"))
+            item_table.setItem(row, 2, QTableWidgetItem("0"))
+            install_remove_button(row)
+            item_table.setCurrentCell(row, 0)
+            item_table.editItem(item_table.item(row, 0))
+            update_total()
+
+        for row in range(item_table.rowCount()):
+            install_remove_button(row)
+        item_table.itemChanged.connect(lambda _item: update_total())
+        btn_add_item.clicked.connect(add_item)
+        update_total()
 
         btn_row = QHBoxLayout()
         btn_cancel = QPushButton("Hủy")
@@ -419,7 +472,9 @@ class InvoiceManagementView(BaseApiView):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             appt_id_text = appt_input.text().strip()
             if not appt_id_text.isdigit():
-                self.feedback.show_message("Sai thông tin", "Vui lòng nhập mã lịch hẹn hợp lệ dạng số.", severity="error")
+                self.feedback.show_message(
+                    "Sai thông tin", "Vui lòng nhập mã lịch hẹn hợp lệ dạng số.", severity="error"
+                )
                 return
 
             try:
@@ -449,4 +504,4 @@ class InvoiceManagementView(BaseApiView):
             f"Đã lập hóa đơn INV-{inv_id:04d} với số tiền {format_money(total)}.",
             severity="success",
         )
-        self.load_invoices()
+        self.load_invoices(clear_feedback=False)

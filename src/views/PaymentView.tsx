@@ -30,6 +30,7 @@ export const PaymentView: React.FC<Props> = ({ initialInvoiceId, onNavigate }) =
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD'>('CASH');
   const [cashTendered, setCashTendered] = useState<number>(0);
   const [paidSuccessInvoice, setPaidSuccessInvoice] = useState<Invoice | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   const loadInvoices = () => {
     const res = storageService.getReceptionInvoices({ status: 'UNPAID', pageSize: 50 });
@@ -63,7 +64,12 @@ export const PaymentView: React.FC<Props> = ({ initialInvoiceId, onNavigate }) =
 
   const handleProcessPayment = () => {
     if (!selectedInvoice) return;
+    if (paymentMethod === 'CASH' && cashTendered < selectedInvoice.total_amount) {
+      setPaymentError('Tiền khách đưa chưa đủ để thanh toán hóa đơn.');
+      return;
+    }
 
+    setPaymentError(null);
     const paid = storageService.payInvoiceStaff(selectedInvoice.invoice_id, paymentMethod);
     setPaidSuccessInvoice(paid);
     loadInvoices();
@@ -274,6 +280,12 @@ export const PaymentView: React.FC<Props> = ({ initialInvoiceId, onNavigate }) =
                       {formatVND(Math.max(0, cashTendered - selectedInvoice.total_amount))}
                     </span>
                   </div>
+                </div>
+              )}
+
+              {paymentError && (
+                <div className="p-3 rounded-lg border border-rose-200 bg-rose-50 text-sm font-semibold text-rose-700">
+                  {paymentError}
                 </div>
               )}
 

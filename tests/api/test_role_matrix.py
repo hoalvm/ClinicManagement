@@ -16,6 +16,8 @@ from fastapi.testclient import TestClient
 
 from backend.app.api.deps import (
     get_current_patient,
+)
+from backend.app.api.deps import (
     get_current_user as api_get_current_user,
 )
 from backend.app.db.session import get_db
@@ -25,13 +27,12 @@ from backend.app.models import (
     Appointment,
     Clinic,
     Doctor,
+    DoctorSchedule,
     MedicalRecord,
     Patient,
     Specialty,
     User,
 )
-
-
 
 # ==============================================================================
 # 1. ADMIN ROLE TESTS (/users, /doctors, /specialties, /clinics, /schedules, /statistics)
@@ -257,6 +258,114 @@ def test_admin_create_schedule_time_validation_rejected(client: TestClient) -> N
     )
     assert res.status_code == 400
     assert "Giờ bắt đầu phải nhỏ hơn giờ kết thúc" in res.json()["detail"]
+
+
+def test_admin_can_deactivate_specialty_after_all_doctors_are_inactive(
+    client: TestClient,
+) -> None:
+    admin_user = SimpleNamespace(user_id=999, username="admin", role="ADMIN", is_active=True)
+    specialty = SimpleNamespace(
+        specialty_id=7,
+        specialty_name="Cardiology",
+        description="",
+        is_active=True,
+    )
+    mock_db = MagicMock()
+
+    def query_mock(model):
+        query = MagicMock()
+        query.filter.return_value.first.return_value = specialty if model == Specialty else None
+        query.filter.return_value.count.return_value = 0
+        return query
+
+    mock_db.query.side_effect = query_mock
+    app.dependency_overrides[legacy_get_current_user] = lambda: admin_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    response = client.delete("/specialties/7")
+
+    assert response.status_code == 200
+    assert specialty.is_active is False
+    mock_db.commit.assert_called_once_with()
+
+
+def test_admin_cannot_deactivate_specialty_with_active_doctors(
+    client: TestClient,
+) -> None:
+    admin_user = SimpleNamespace(user_id=999, username="admin", role="ADMIN", is_active=True)
+    specialty = SimpleNamespace(
+        specialty_id=7,
+        specialty_name="Cardiology",
+        description="",
+        is_active=True,
+    )
+    mock_db = MagicMock()
+
+    def query_mock(model):
+        query = MagicMock()
+        query.filter.return_value.first.return_value = specialty if model == Specialty else None
+        query.filter.return_value.count.return_value = 2
+        return query
+
+    mock_db.query.side_effect = query_mock
+    app.dependency_overrides[legacy_get_current_user] = lambda: admin_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    response = client.delete("/specialties/7")
+
+    assert response.status_code == 400
+    assert "2 bác sĩ đang hoạt động" in response.json()["detail"]
+    assert specialty.is_active is True
+
+
+def test_admin_readding_deleted_schedule_reactivates_existing_row(
+    client: TestClient,
+) -> None:
+    admin_user = SimpleNamespace(user_id=999, username="admin", role="ADMIN", is_active=True)
+    inactive = SimpleNamespace(
+        schedule_id=41,
+        doctor_id=3,
+        day_of_week=2,
+        start_time="08:00:00",
+        end_time="12:00:00",
+        slot_duration=15,
+        is_active=False,
+    )
+    mock_db = MagicMock()
+    schedule_query_count = 0
+
+    def query_mock(model):
+        nonlocal schedule_query_count
+        query = MagicMock()
+        if model == Doctor:
+            query.filter.return_value.first.return_value = SimpleNamespace(doctor_id=3)
+        elif model == DoctorSchedule:
+            schedule_query_count += 1
+            query.filter.return_value.first.return_value = (
+                None if schedule_query_count == 1 else inactive
+            )
+        return query
+
+    mock_db.query.side_effect = query_mock
+    app.dependency_overrides[legacy_get_current_user] = lambda: admin_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    response = client.post(
+        "/schedules/",
+        json={
+            "DoctorID": 3,
+            "DayOfWeek": 2,
+            "StartTime": "08:00:00",
+            "EndTime": "12:00:00",
+            "SlotDuration": 30,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert inactive.is_active is True
+    assert inactive.slot_duration == 30
+    mock_db.add.assert_not_called()
+    mock_db.commit.assert_called_once_with()
 
 
 def test_admin_statistics_overview_success(client: TestClient) -> None:
@@ -571,6 +680,7 @@ def test_staff_get_invoice_by_id(client: TestClient, monkeypatch: pytest.MonkeyP
     """TC-REC-16: Staff can fetch single invoice by ID directly."""
     from datetime import date, datetime
     from decimal import Decimal
+
     from backend.app.api.routes import reception
     from backend.app.schemas.reception import ReceptionInvoiceItem
 
@@ -597,4 +707,58 @@ def test_staff_get_invoice_by_id(client: TestClient, monkeypatch: pytest.MonkeyP
     assert data["invoice_id"] == 300
     assert data["patient_name"] == "Tran Van A"
     assert data["status"] == "UNPAID"
+
+
+def test_admin_cannot_deactivate_self_or_system_admin(client: TestClient) -> None:
+    admin_user = SimpleNamespace(user_id=1, username="admin", role="ADMIN", is_active=True)
+    target_admin = SimpleNamespace(user_id=1, username="admin", role="ADMIN", is_active=True, doctor=None)
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.first.return_value = target_admin
+
+    app.dependency_overrides[legacy_get_current_user] = lambda: admin_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    # Attempt to delete own admin account
+    res = client.delete("/users/1")
+    assert res.status_code == 400
+    assert "Không thể khóa tài khoản quản trị viên" in res.json()["detail"]
+
+    # Attempt to update IsActive=False on own admin account
+    res = client.put("/users/1", json={"IsActive": False})
+    assert res.status_code == 400
+    assert "Không thể khóa tài khoản quản trị viên" in res.json()["detail"]
+
+
+def test_doctor_user_sync_on_activation_toggle(client: TestClient) -> None:
+    admin_user = SimpleNamespace(user_id=999, username="admin", role="ADMIN", is_active=True)
+    doc_user = SimpleNamespace(user_id=4, username="doctor01", full_name="Dr. One", is_active=True)
+    doctor = SimpleNamespace(
+        doctor_id=1,
+        user_id=4,
+        specialty_id=1,
+        clinic_id=1,
+        license_number="LIC-001",
+        is_active=True,
+        user=doc_user,
+        specialty=SimpleNamespace(specialty_name="Cardiology"),
+        clinic=SimpleNamespace(clinic_name="Clinic 1"),
+    )
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.first.return_value = doctor
+
+    app.dependency_overrides[legacy_get_current_user] = lambda: admin_user
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    # Deactivate doctor
+    res = client.delete("/doctors/1")
+    assert res.status_code == 200
+    assert doctor.is_active is False
+    assert doc_user.is_active is False
+
+    # Reactivate doctor via PUT
+    res = client.put("/doctors/1", json={"IsActive": True})
+    assert res.status_code == 200
+    assert doctor.is_active is True
+    assert doc_user.is_active is True
+
 
