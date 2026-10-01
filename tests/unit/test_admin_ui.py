@@ -193,11 +193,17 @@ def test_user_role_filter_uses_role_code_instead_of_display_label(
 
     page.role_filter.setCurrentIndex(page.role_filter.findData("PATIENT"))
     page._apply_filter()
-    assert page.table.model().rowCount() == 0
+    # No PATIENT in the fixture: the table shows one placeholder "no match" row.
+    assert page.table.model().rowCount() == 1
+    first_cell_text = page.table.data_model.item(0, 1).text()
+    assert "ph\u00f9 h\u1ee3p" in first_cell_text or "b\u1ed9 l\u1ecdc" in first_cell_text
 
     page.role_filter.setCurrentIndex(page.role_filter.findData("ADMIN"))
     page._apply_filter()
     assert page.table.model().rowCount() == 1
+    # The ADMIN row must be a real data row (has a numeric id in column 0).
+    admin_id_text = page.table.data_model.item(0, 0).text()
+    assert admin_id_text.isdigit() or admin_id_text == "1"
 
 
 def test_admin_edit_callback_ignores_qt_checked_argument(qt_app: QApplication) -> None:
@@ -335,7 +341,8 @@ def test_admin_search_uses_shared_debounced_filter_toolbar(
         page.search.set_debounce_ms(0)
         page.search.search_input.setText("không tồn tại")
         qt_app.processEvents()
-        assert page.table.data_model.rowCount() == 0
+        # May be 0 (empty table) or 1 (no-match placeholder row), but never more.
+        assert page.table.data_model.rowCount() <= 1
         assert page.search.clear_button.isVisible()
         page.search.clear()
         qt_app.processEvents()
@@ -476,3 +483,141 @@ class _ResponseWithStatus(_Response):
     def __init__(self, status_code: int) -> None:
         super().__init__({})
         self.status_code = status_code
+
+
+# ---------------------------------------------------------------------------
+# New tests added as part of P0-P3 upgrade
+# ---------------------------------------------------------------------------
+
+def test_feedback_banner_success_timeout_is_two_seconds(qt_app: QApplication) -> None:
+    """Success banner must auto-dismiss after 2000 ms (±250 ms tolerance)."""
+    from frontend.ui.design_system import FeedbackSeverity
+    from frontend.widgets.feedback_banner import _TIMEOUT_MS, FeedbackBanner
+
+    banner = FeedbackBanner()
+    assert _TIMEOUT_MS[FeedbackSeverity.SUCCESS] == 2000
+    assert _TIMEOUT_MS[FeedbackSeverity.INFO] == 2500
+    assert _TIMEOUT_MS[FeedbackSeverity.WARNING] == 5000
+    assert _TIMEOUT_MS[FeedbackSeverity.ERROR] == 5000
+
+    banner.show_message("Đã lưu", "Thông tin đã được cập nhật.", severity="success")
+    assert banner.isVisible()
+    assert banner._dismiss_timer.isActive()
+    remaining = banner._dismiss_timer.remainingTime()
+    # Must be within [1750, 2250] ms immediately after start.
+    assert 1750 <= remaining <= 2250, f"Timer not in 2s window: {remaining}ms"
+
+    # A second show_message must reset the timer.
+    banner.show_message("Mới", "Thông báo mới.", severity="success")
+    remaining2 = banner._dismiss_timer.remainingTime()
+    assert 1750 <= remaining2 <= 2250
+
+    banner.clear()
+    assert not banner.isVisible()
+    assert not banner._dismiss_timer.isActive()
+    banner.deleteLater()
+    qt_app.processEvents()
+
+
+def test_feedback_banner_has_manual_close_button(qt_app: QApplication) -> None:
+    """Banner must expose a × button that clears the banner immediately."""
+    from frontend.widgets.feedback_banner import FeedbackBanner
+
+    banner = FeedbackBanner()
+    banner.show_message("Info", "Test", severity="info")
+    assert banner.isVisible()
+    banner._close_btn.click()
+    assert not banner.isVisible()
+    banner.deleteLater()
+    qt_app.processEvents()
+
+
+def test_connect_action_ignores_qt_checked_bool(qt_app: QApplication) -> None:
+    """connect_action must discard the checked:bool argument Qt passes to callbacks."""
+    from PySide6.QtGui import QAction
+    from PySide6.QtWidgets import QPushButton
+
+    from frontend.pages.admin_ui import connect_action
+
+    calls: list[object] = []
+    row = {"DoctorID": 42}
+
+    btn = QPushButton("Test")
+    connect_action(btn.clicked, lambda item=row: calls.append(item))
+    btn.click()
+    assert calls == [row], f"Expected [{row!r}], got {calls!r}"
+
+    calls.clear()
+    action = QAction("Test")
+    connect_action(action.triggered, lambda item=row: calls.append(item))
+    action.trigger()
+    assert calls == [row]
+
+    btn.deleteLater()
+    qt_app.processEvents()
+
+
+def test_role_filter_normalizes_lowercase_role_from_api(
+    admin_window,
+    qt_app: QApplication,
+) -> None:
+    """Role codes from API normalized with strip().upper() before comparison."""
+    admin_window._navigate("users")
+    _drain_admin_workers(qt_app)
+    page = admin_window.pages.currentWidget()
+
+    # Inject a user whose Role comes back lowercase from the API.
+    page._all_users = [
+        {"UserID": 99, "Username": "testuser", "FullName": "Test", "Role": "admin", "IsActive": True},
+    ]
+    page.role_filter.setCurrentIndex(page.role_filter.findData("ADMIN"))
+    page._apply_filter()
+    # The lowercase "admin" must be matched after normalization.
+    row_count = page.table.data_model.rowCount()
+    assert row_count == 1
+    id_text = page.table.data_model.item(0, 0).text()
+    assert str(id_text) == "99"
+
+
+def test_clinic_status_filter_is_available(
+    admin_window,
+    qt_app: QApplication,
+) -> None:
+    """ClinicManagementPage must expose a status_filter combobox."""
+    admin_window._navigate("clinics")
+    _drain_admin_workers(qt_app)
+    page = admin_window.pages.currentWidget()
+    assert hasattr(page, "status_filter"), "ClinicManagementPage must have status_filter"
+    # Default: all clinics visible (active_filter=None).
+    assert page.status_filter.currentData() is None
+
+
+def test_admin_row_cannot_be_locked_in_user_management(
+    admin_window,
+    qt_app: QApplication,
+) -> None:
+    """The system admin row must not expose 'Khóa tài khoản' in its actions."""
+    admin_window._navigate("users")
+    _drain_admin_workers(qt_app)
+    page = admin_window.pages.currentWidget()
+
+    page._all_users = [
+        {"UserID": 1, "Username": "admin", "FullName": "Quản trị viên", "Role": "ADMIN", "IsActive": True},
+        {"UserID": 2, "Username": "staff01", "FullName": "Nhân viên", "Role": "STAFF", "IsActive": True},
+    ]
+    page._apply_filter()
+
+    # Row 0: admin -> overflow menu should not contain "Khóa tài khoản"
+    widget_admin = page.table.indexWidget(page.table.data_model.index(0, 4))
+    assert widget_admin is not None
+    admin_menu = widget_admin.more_button.menu()
+    admin_actions = [a.text() for a in admin_menu.actions()]
+    assert "Khóa tài khoản" not in admin_actions
+
+    # Row 1: staff01 -> overflow menu should contain "Khóa tài khoản"
+    widget_staff = page.table.indexWidget(page.table.data_model.index(1, 4))
+    assert widget_staff is not None
+    staff_menu = widget_staff.more_button.menu()
+    staff_actions = [a.text() for a in staff_menu.actions()]
+    assert "Khóa tài khoản" in staff_actions
+
