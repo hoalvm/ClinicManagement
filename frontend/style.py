@@ -1264,6 +1264,62 @@ QToolButton#tableMoreButton:disabled {{
     border-color: {UI_TOKENS.border};
 }}
 
+/* -------------------------------------------------------------------------
+   Table overflow menu (QMenu spawned by TableActionMenu / tableMoreButton)
+   Must override Windows palette completely so text is readable in all themes.
+   ------------------------------------------------------------------------- */
+QMenu#tableActionMenu {{
+    background-color: #ffffff;
+    color: #0f172a;
+    border: 1px solid #D7E0EA;
+    border-radius: 10px;
+    padding: 6px 4px;
+    font-size: 14px;
+    font-weight: 500;
+}}
+
+QMenu#tableActionMenu::item {{
+    background-color: transparent;
+    color: #0f172a;
+    padding: 9px 16px;
+    min-height: 36px;
+    border-radius: 6px;
+    margin: 1px 2px;
+}}
+
+QMenu#tableActionMenu::item:selected {{
+    background-color: #f0fdfa;
+    color: #0f766e;
+    font-weight: 600;
+}}
+
+QMenu#tableActionMenu::item:focus {{
+    background-color: #f0fdfa;
+    color: #0f766e;
+    outline: 2px solid {UI_TOKENS.focus};
+    outline-offset: -2px;
+}}
+
+QMenu#tableActionMenu::item:disabled {{
+    color: #94a3b8;
+    background-color: transparent;
+}}
+
+QMenu#tableActionMenu::item[destructive="true"] {{
+    color: #dc2626;
+}}
+
+QMenu#tableActionMenu::item[destructive="true"]:selected {{
+    background-color: #fef2f2;
+    color: #b91c1c;
+}}
+
+QMenu#tableActionMenu::separator {{
+    height: 1px;
+    background-color: #E6EDF3;
+    margin: 4px 8px;
+}}
+
 QLabel#fieldValueStrong {{
     color: {UI_TOKENS.text};
     font-weight: 600;

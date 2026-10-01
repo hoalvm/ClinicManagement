@@ -29,6 +29,21 @@ from frontend.widgets.state_host import StateHost
 from frontend.widgets.table_actions import RowAction, TableActionMenu
 
 
+def connect_action(
+    signal: object,
+    callback: Callable[[], None],
+) -> None:
+    """Connect a Qt signal that may emit a ``checked: bool`` to a zero-arg callback.
+
+    ``QPushButton.clicked``, ``QToolButton.clicked``, and ``QAction.triggered``
+    all pass an extra boolean argument.  Wrapping the callback here ensures the
+    value is discarded unconditionally, so lambdas that capture a row dictionary
+    via ``lambda item=item: ...`` never receive ``False`` as their first argument.
+    """
+    signal.connect(lambda _checked=False, _cb=callback: _cb())
+
+
+
 class AdminApiError(RuntimeError):
     """A normalized failure returned by the legacy Admin API adapter."""
 
@@ -482,6 +497,7 @@ __all__ = [
     "AdminApiPage",
     "AdminRowActions",
     "AdminSearchBar",
+    "connect_action",
     "matches_search",
     "require_success",
     "set_row_actions",

@@ -25,6 +25,40 @@ from frontend.widgets.adaptive_data_table import AdaptiveDataTable
 from frontend.widgets.page_header import PageHeader
 
 
+def _parse_address(address: str) -> tuple[str, str]:
+    """Extract (district_city, full_address) from a Vietnamese address string.
+
+    Returns ("Q.5 · TP. Hồ Chí Minh", "123 Đường ...") or ("Địa chỉ chưa xác định", address)
+    if the address cannot be parsed.
+    """
+    if not address or not address.strip():
+        return ("Địa chỉ chưa xác định", "")
+    import re
+    # Scan right-to-left for district / province tokens.
+    province_pat = re.compile(
+        r"(Thành phố|TP\.?|Tỉnh)\s+[\w\s\u00c0-\u1ef9]+",
+        re.IGNORECASE | re.UNICODE,
+    )
+    district_pat = re.compile(
+        r"(Quận|Huyện|Phường|Thị xã|Thị trấn)\s+[\w\s\u00c0-\u1ef9]+",
+        re.IGNORECASE | re.UNICODE,
+    )
+    parts = [p.strip().rstrip(",") for p in address.split(",")]
+    province = ""
+    district = ""
+    for part in reversed(parts):
+        if not province and province_pat.match(part.strip()):
+            province = part.strip()
+        elif not district and district_pat.match(part.strip()):
+            district = part.strip()
+        if province and district:
+            break
+    if district or province:
+        location = " · ".join(filter(None, [district, province]))
+        return location, address
+    return ("Địa chỉ chưa xác định", address)
+
+
 class ClinicManagementPage(AdminApiPage):
     def __init__(self) -> None:
         super().__init__()
@@ -43,7 +77,19 @@ class ClinicManagementPage(AdminApiPage):
         self.add_request_feedback(layout)
 
         self.search = AdminSearchBar("Tìm theo tên phòng khám, địa chỉ hoặc số điện thoại…")
-        self.search.search_changed.connect(self._apply_filter)
+        self.status_filter = self.search.add_filter(
+            "status",
+            (
+                ("Tất cả trạng thái", None),
+                ("Hoạt động", True),
+                ("Ngừng hoạt động", False),
+            ),
+            accessible_name="Lọc phòng khám theo trạng thái",
+        )
+        self.search.filters_changed.connect(self._apply_filter)
+        self.search.search_changed.connect(
+            lambda _q: self._apply_filter(self.search.values())
+        )
         layout.addWidget(self.search)
 
         table_card = QFrame()
@@ -134,19 +180,30 @@ class ClinicManagementPage(AdminApiPage):
 
     def _clinics_loaded(self, clinics: list[dict]) -> None:
         self._all_clinics = list(clinics)
-        self._apply_filter(self.search.text)
+        self._apply_filter(self.search.values())
 
-    def _apply_filter(self, query: str) -> None:
+    def _apply_filter(self, values: object | None = None) -> None:
+        if isinstance(values, str):
+            # Called from search_changed signal with query string.
+            filters: dict = {"search": values}
+        elif isinstance(values, dict):
+            filters = values
+        else:
+            filters = self.search.values()
+        query = str(filters.get("search") or "")
+        active_filter = filters.get("status")
         clinics = [
             clinic
             for clinic in self._all_clinics
             if matches_search(clinic, query, "ClinicName", "Address", "Phone")
+            and (active_filter is None or bool(clinic.get("IsActive")) is bool(active_filter))
         ]
         rows = []
         for clinic in clinics:
             name = str(clinic.get("ClinicName") or "Chưa đặt tên")
             phone = str(clinic.get("Phone") or "Chưa có số điện thoại")
-            address = str(clinic.get("Address") or "Chưa cập nhật địa chỉ")
+            full_address = str(clinic.get("Address") or "")
+            location_label, full_addr_display = _parse_address(full_address)
             rows.append(
                 {
                     "id": clinic.get("ClinicID"),
@@ -155,7 +212,11 @@ class ClinicManagementPage(AdminApiPage):
                         phone,
                         accessible_text=f"{name}, số điện thoại {phone}",
                     ),
-                    "address": CellValue(address, accessible_text=address),
+                    "address": CellValue(
+                        location_label,
+                        full_addr_display if full_addr_display != location_label else "",
+                        accessible_text=full_address or location_label,
+                    ),
                     "status": "ACTIVE" if clinic.get("IsActive") else "INACTIVE",
                     "actions": "",
                 }

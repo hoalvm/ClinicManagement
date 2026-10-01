@@ -3,13 +3,34 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 from frontend.ui.design_system import FeedbackSeverity
 
+# Default auto-dismiss delays (milliseconds).
+_TIMEOUT_MS: dict[FeedbackSeverity, int] = {
+    FeedbackSeverity.SUCCESS: 2000,
+    FeedbackSeverity.INFO: 2500,
+    FeedbackSeverity.WARNING: 5000,
+    FeedbackSeverity.ERROR: 5000,
+}
+
 
 class FeedbackBanner(QFrame):
-    """A compact error, success, or informational message."""
+    """A compact error, success, or informational message.
+
+    - ``show_message`` replaces any existing banner and restarts the timer.
+    - A manual × button lets users dismiss immediately.
+    - Pass ``timeout_ms=0`` to disable auto-dismiss.
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -43,6 +64,16 @@ class FeedbackBanner(QFrame):
         text_layout.addWidget(self._message)
 
         layout.addLayout(text_layout, 1)
+
+        self._close_btn = QPushButton("×")
+        self._close_btn.setObjectName("ghostButton")
+        self._close_btn.setFixedSize(28, 28)
+        self._close_btn.setToolTip("Đóng thông báo")
+        self._close_btn.setAccessibleName("Đóng thông báo")
+        self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._close_btn.clicked.connect(self.clear)
+        layout.addWidget(self._close_btn, 0, Qt.AlignmentFlag.AlignTop)
+
         self.setMinimumHeight(63)
         self.hide()
 
@@ -78,13 +109,13 @@ class FeedbackBanner(QFrame):
             label.style().unpolish(label)
             label.style().polish(label)
         self.show()
+        # Always stop the previous timer before resolving the new delay so a
+        # rapid-fire sequence cannot let the old countdown expire mid-message.
         self._dismiss_timer.stop()
         resolved_timeout = (
             timeout_ms
             if timeout_ms is not None
-            else (
-                6500 if normalized in (FeedbackSeverity.INFO, FeedbackSeverity.SUCCESS) else 10000
-            )
+            else _TIMEOUT_MS.get(normalized, 2500)
         )
         if resolved_timeout > 0:
             self._dismiss_timer.start(resolved_timeout)

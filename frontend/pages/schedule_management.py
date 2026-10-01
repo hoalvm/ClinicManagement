@@ -55,6 +55,7 @@ class ScheduleManagementPage(AdminApiPage):
     def __init__(self) -> None:
         super().__init__()
         self._doctors: list[dict] = []
+        self._specialties: list[dict] = []
         self._doctor_names: dict[int, str] = {}
 
         layout = QVBoxLayout(self)
@@ -152,18 +153,30 @@ class ScheduleManagementPage(AdminApiPage):
     def load_doctors(self):
         return self.run_admin_task(
             "load-schedule-doctors",
-            lambda: require_success(
-                api_client.get("/doctors/"),
-                "Không thể tải danh sách bác sĩ.",
-            ).json(),
-            self._doctors_loaded,
-            loading_text="Đang tải danh sách bác sĩ…",
+            self._fetch_doctors_and_specialties,
+            self._doctors_and_specialties_loaded,
+            loading_text="Đang tải danh sách bác sĩ và chuyên khoa…",
         )
 
-    def _doctors_loaded(self, doctors: list[dict]) -> None:
-        self._doctors = [doctor for doctor in doctors if doctor.get("IsActive")]
+    @staticmethod
+    def _fetch_doctors_and_specialties():
+        from frontend.api_client import api_client as _client
+        doctors = require_success(
+            _client.get("/doctors/"),
+            "Không thể tải danh sách bác sĩ.",
+        ).json()
+        specialties = require_success(
+            _client.get("/specialties/"),
+            "Không thể tải danh sách chuyên khoa.",
+        ).json()
+        return doctors, specialties
+
+    def _doctors_and_specialties_loaded(self, result) -> None:
+        doctors, specialties = result
+        self._doctors = [d for d in doctors if d.get("IsActive")]
+        self._specialties = [s for s in specialties if s.get("IsActive")]
         self._doctor_names = {
-            int(doctor["DoctorID"]): str(doctor.get("FullName") or "—") for doctor in doctors
+            int(d["DoctorID"]): str(d.get("FullName") or "—") for d in doctors
         }
 
     def load_data(self, *, clear_feedback: bool = True):
@@ -242,17 +255,85 @@ class ScheduleManagementPage(AdminApiPage):
         editing = schedule is not None
         dialog = AdminFormDialog(
             "Chỉnh sửa lịch trực" if editing else "Thêm lịch trực",
-            "Chọn ngày làm việc, khoảng giờ và thời lượng mỗi lượt khám.",
+            "Chọn chuyên khoa, bác sĩ, ngày làm việc và khung giờ.",
             self,
             save_text="Lưu thay đổi" if editing else "Thêm lịch trực",
         )
+
+        if editing:
+            # Read-only display for doctor and specialty when editing.
+            doctor_name = self._doctor_names.get(int(schedule["DoctorID"]), "—")
+            doctor_display = QLineEdit(doctor_name)
+            doctor_display.setReadOnly(True)
+            dialog.add_field("Bác sĩ", doctor_display, 0, 0, column_span=2)
+            day_combo = ChevronComboBox()
+            for day_id, day_name in DAYS_VN.items():
+                day_combo.addItem(day_name, day_id)
+            day_combo.setCurrentIndex(max(0, day_combo.findData(schedule.get("DayOfWeek"))))
+            start = QTimeEdit(_qtime(schedule.get("StartTime"), QTime(8, 0)))
+            start.setDisplayFormat("HH:mm")
+            end = QTimeEdit(_qtime(schedule.get("EndTime"), QTime(17, 0)))
+            end.setDisplayFormat("HH:mm")
+            duration = QSpinBox()
+            duration.setRange(5, 240)
+            duration.setSuffix(" phút")
+            duration.setValue(int(schedule.get("SlotDuration") or 30))
+            dialog.add_field("Ngày trong tuần", day_combo, 1, 0, required=True)
+            dialog.add_field("Thời lượng mỗi lượt", duration, 1, 1, required=True)
+            dialog.add_field("Giờ bắt đầu", start, 2, 0, required=True)
+            dialog.add_field("Giờ kết thúc", end, 2, 1, required=True)
+            return dialog, None, None, day_combo, start, end, duration
+
+        # --- CREATE mode: specialty → doctor cascade ---
+        specialty_combo = ChevronComboBox()
+        for sp in self._specialties:
+            specialty_combo.addItem(sp["SpecialtyName"], sp["SpecialtyID"])
+
         doctor_combo = ChevronComboBox()
-        for doctor in self._doctors:
-            label = str(doctor.get("FullName") or "—")
-            specialty = str(doctor.get("SpecialtyName") or "Chưa phân chuyên khoa")
-            doctor_combo.addItem(f"{label} · {specialty}", doctor["DoctorID"])
-        doctor_display = QLineEdit()
-        doctor_display.setReadOnly(True)
+        clinic_display = QLineEdit()
+        clinic_display.setReadOnly(True)
+        clinic_display.setPlaceholderText("Tự động điền khi chọn bác sĩ")
+
+        def _populate_doctors(specialty_id: int | None = None) -> None:
+            doctor_combo.blockSignals(True)
+            doctor_combo.clear()
+            eligible = [
+                d for d in self._doctors
+                if (specialty_id is None or d.get("SpecialtyID") == specialty_id)
+                and d.get("ClinicID") is not None
+            ]
+            for d in eligible:
+                doctor_combo.addItem(str(d.get("FullName") or "—"), d["DoctorID"])
+            doctor_combo.blockSignals(False)
+            _on_doctor_changed()
+            has_doctors = bool(eligible)
+            dialog.save_button.setEnabled(has_doctors)
+            if not has_doctors:
+                clinic_display.setText("Chuyên khoa này chưa có bác sĩ hợp lệ")
+
+        def _on_specialty_changed() -> None:
+            sid = specialty_combo.currentData()
+            _populate_doctors(sid)
+
+        def _on_doctor_changed() -> None:
+            did = doctor_combo.currentData()
+            clinic_name = ""
+            if did is not None:
+                for d in self._doctors:
+                    if d.get("DoctorID") == did:
+                        clinic_name = str(d.get("ClinicName") or "Chưa phân phòng khám")
+                        break
+            clinic_display.setText(clinic_name)
+
+        specialty_combo.currentIndexChanged.connect(lambda _: _on_specialty_changed())
+        doctor_combo.currentIndexChanged.connect(lambda _: _on_doctor_changed())
+
+        # Trigger initial population.
+        if specialty_combo.count():
+            _populate_doctors(specialty_combo.currentData())
+        else:
+            dialog.save_button.setEnabled(False)
+
         day_combo = ChevronComboBox()
         for day_id, day_name in DAYS_VN.items():
             day_combo.addItem(day_name, day_id)
@@ -265,20 +346,14 @@ class ScheduleManagementPage(AdminApiPage):
         duration.setSuffix(" phút")
         duration.setValue(30)
 
-        if editing:
-            doctor_display.setText(self._doctor_names.get(int(schedule["DoctorID"]), "—"))
-            day_combo.setCurrentIndex(max(0, day_combo.findData(schedule.get("DayOfWeek"))))
-            start.setTime(_qtime(schedule.get("StartTime"), QTime(8, 0)))
-            end.setTime(_qtime(schedule.get("EndTime"), QTime(17, 0)))
-            duration.setValue(int(schedule.get("SlotDuration") or 30))
-            dialog.add_field("Bác sĩ", doctor_display, 0, 0, column_span=2)
-        else:
-            dialog.add_field("Bác sĩ", doctor_combo, 0, 0, required=True, column_span=2)
-        dialog.add_field("Ngày trong tuần", day_combo, 1, 0, required=True)
-        dialog.add_field("Thời lượng mỗi lượt", duration, 1, 1, required=True)
-        dialog.add_field("Giờ bắt đầu", start, 2, 0, required=True)
-        dialog.add_field("Giờ kết thúc", end, 2, 1, required=True)
-        return dialog, doctor_combo, day_combo, start, end, duration
+        dialog.add_field("Chuyên khoa", specialty_combo, 0, 0, required=True, column_span=2)
+        dialog.add_field("Bác sĩ", doctor_combo, 1, 0, required=True, column_span=2)
+        dialog.add_field("Phòng khám", clinic_display, 2, 0, column_span=2)
+        dialog.add_field("Ngày trong tuần", day_combo, 3, 0, required=True)
+        dialog.add_field("Thời lượng mỗi lượt", duration, 3, 1, required=True)
+        dialog.add_field("Giờ bắt đầu", start, 4, 0, required=True)
+        dialog.add_field("Giờ kết thúc", end, 4, 1, required=True)
+        return dialog, specialty_combo, doctor_combo, day_combo, start, end, duration
 
     def open_create_dialog(self) -> None:
         if not self._doctors:
@@ -288,13 +363,26 @@ class ScheduleManagementPage(AdminApiPage):
                 "Hãy tạo ít nhất một bác sĩ đang hoạt động trước khi thêm lịch trực.",
             )
             return
-        dialog, doctor, day, start, end, duration = self._build_dialog()
+        if not self._specialties:
+            QMessageBox.information(
+                self,
+                "Chưa có chuyên khoa",
+                "Hãy tạo ít nhất một chuyên khoa đang hoạt động trước khi thêm lịch trực.",
+            )
+            return
+        dialog, _specialty, doctor, day, start, end, duration = self._build_dialog()
 
         def submit() -> None:
             if start.time() >= end.time():
                 dialog.show_request_error(
                     "Khoảng giờ chưa hợp lệ",
                     "Giờ kết thúc phải muộn hơn giờ bắt đầu.",
+                )
+                return
+            if doctor is None or doctor.currentData() is None:
+                dialog.show_request_error(
+                    "Chưa chọn bác sĩ",
+                    "Vui lòng chọn chuyên khoa và bác sĩ trước khi lưu.",
                 )
                 return
             payload = {
@@ -318,7 +406,7 @@ class ScheduleManagementPage(AdminApiPage):
         dialog.exec()
 
     def open_edit_dialog(self, schedule: dict) -> None:
-        dialog, _doctor, day, start, end, duration = self._build_dialog(schedule)
+        dialog, _sp, _doc, day, start, end, duration = self._build_dialog(schedule)
         schedule_id = schedule["ScheduleID"]
 
         def submit() -> None:

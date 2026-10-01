@@ -161,7 +161,10 @@ class UserManagementPage(AdminApiPage):
             user
             for user in self._all_users
             if matches_search(user, query, "Username", "FullName", "Role")
-            and (not selected_role or user.get("Role") == selected_role)
+            and (
+                not selected_role
+                or str(user.get("Role") or "").strip().upper() == selected_role
+            )
         ]
         rows = []
         for user in users:
@@ -180,20 +183,38 @@ class UserManagementPage(AdminApiPage):
                     "actions": "",
                 }
             )
+        if not users and self._all_users:
+            self.table.set_rows([
+                {
+                    "id": "",
+                    "identity": "Không có tài khoản phù hợp với bộ lọc",
+                    "role": "",
+                    "status": "",
+                    "actions": "",
+                }
+            ])
+            return
         self.table.set_rows(rows)
         for row, user in enumerate(users):
             username = str(user.get("Username") or "tài khoản")
             active = bool(user.get("IsActive"))
+            is_protected_admin = (
+                username.lower() == "admin"
+                or (api_client.username and username.lower() == str(api_client.username).lower())
+            )
+            overflow_actions = []
+            if not (is_protected_admin and active):
+                overflow_actions.append(
+                    (
+                        "Khóa tài khoản" if active else "Mở khóa tài khoản",
+                        lambda user=user: self._confirm_toggle(user),
+                    )
+                )
             actions = AdminRowActions(
                 f"tài khoản {username}",
                 self.table,
                 on_edit=lambda user=user: self.open_edit_dialog(user),
-                overflow_actions=(
-                    (
-                        "Khóa tài khoản" if active else "Mở khóa tài khoản",
-                        lambda user=user: self._confirm_toggle(user),
-                    ),
-                ),
+                overflow_actions=tuple(overflow_actions),
             )
             set_row_actions(self.table, row, 4, actions)
 
@@ -329,8 +350,19 @@ class UserManagementPage(AdminApiPage):
 
     def _confirm_toggle(self, user: dict) -> None:
         active = bool(user.get("IsActive"))
-        verb = "khóa" if active else "mở khóa"
         username = str(user.get("Username") or "tài khoản này")
+        is_protected_admin = (
+            username.lower() == "admin"
+            or (api_client.username and username.lower() == str(api_client.username).lower())
+        )
+        if active and is_protected_admin:
+            self.feedback.show_message(
+                "Không thể thực hiện",
+                "Không thể khóa tài khoản quản trị viên hiện tại hoặc tài khoản admin hệ thống.",
+                severity="warning",
+            )
+            return
+        verb = "khóa" if active else "mở khóa"
         answer = QMessageBox.question(
             self,
             f"Xác nhận {verb} tài khoản",
