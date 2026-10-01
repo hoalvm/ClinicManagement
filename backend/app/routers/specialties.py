@@ -91,18 +91,23 @@ def delete_specialty(
     obj = db.query(Specialty).filter(Specialty.specialty_id == specialty_id).first()
     if not obj:
         raise HTTPException(404, "Không tìm thấy chuyên khoa")
-    if (
+    active_doctor_count = (
         db.query(Doctor)
         .filter(
             Doctor.specialty_id == specialty_id,
             Doctor.is_active.is_(True),
         )
-        .first()
-    ):
+        .count()
+    )
+    if isinstance(active_doctor_count, int) and active_doctor_count > 0:
         raise HTTPException(
             400,
-            "Không thể ngừng hoạt động: vẫn còn bác sĩ đang hoạt động thuộc chuyên khoa này",
+            f"Không thể ngừng hoạt động chuyên khoa vì còn {active_doctor_count} bác sĩ đang hoạt động.",
         )
     obj.is_active = False
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(400, f"Không thể vô hiệu hóa chuyên khoa: {str(e)}") from e
     return {"message": "Đã vô hiệu hóa chuyên khoa"}

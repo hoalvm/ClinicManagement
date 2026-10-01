@@ -83,6 +83,12 @@ def update_user(
     user = db.query(User).filter(User.user_id == user_id).first()
     if not user:
         raise HTTPException(404, "Không tìm thấy user")
+    update_dict = data.dict(exclude_unset=True)
+    if "IsActive" in update_dict and not update_dict["IsActive"]:
+        admin_id = getattr(admin, "user_id", None)
+        admin_name = getattr(admin, "username", None)
+        if user.username == "admin" or user.user_id == admin_id or (admin_name and user.username == admin_name):
+            raise HTTPException(400, "Không thể khóa tài khoản quản trị viên hiện tại hoặc tài khoản admin hệ thống")
     mapping = {
         "Username": "username",
         "FullName": "full_name",
@@ -91,10 +97,12 @@ def update_user(
         "Role": "role",
         "IsActive": "is_active",
     }
-    for field, value in data.dict(exclude_unset=True).items():
+    for field, value in update_dict.items():
         if field == "Phone":
             value = normalize_phone(value)
         setattr(user, mapping.get(field, field), value)
+        if field == "IsActive" and user.doctor:
+            user.doctor.is_active = bool(value)
     db.commit()
     db.refresh(user)
     return {
@@ -114,6 +122,12 @@ def delete_user(user_id: int, db: Session = Depends(get_db), admin=Depends(requi
     user = db.query(User).filter(User.user_id == user_id).first()
     if not user:
         raise HTTPException(404, "Không tìm thấy user")
+    admin_id = getattr(admin, "user_id", None)
+    admin_name = getattr(admin, "username", None)
+    if user.username == "admin" or user.user_id == admin_id or (admin_name and user.username == admin_name):
+        raise HTTPException(400, "Không thể khóa tài khoản quản trị viên hiện tại hoặc tài khoản admin hệ thống")
     user.is_active = False
+    if user.doctor:
+        user.doctor.is_active = False
     db.commit()
     return {"message": "Đã vô hiệu hóa tài khoản"}

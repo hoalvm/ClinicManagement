@@ -15,7 +15,7 @@ def _to_doctor_out(d: Doctor) -> dict:
     return {
         "DoctorID": d.doctor_id,
         "UserID": d.user_id,
-        "FullName": d.user.full_name if d.user else "",
+        "FullName": getattr(d.user, "full_name", "") if d.user else "",
         "SpecialtyID": d.specialty_id,
         "SpecialtyName": d.specialty.specialty_name if d.specialty else None,
         "ClinicID": d.clinic_id,
@@ -101,6 +101,8 @@ def update_doctor(
     }
     for field, value in data.dict(exclude_unset=True).items():
         setattr(doctor, mapping.get(field, field), value)
+        if field == "IsActive" and doctor.user:
+            doctor.user.is_active = bool(value)
 
     try:
         db.commit()

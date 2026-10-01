@@ -33,7 +33,7 @@ def login(payload: DoctorLoginRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Tên đăng nhập hoặc mật khẩu Bác sĩ không chính xác!"
         )
-    
+
     doctor = db.query(Doctor).filter(Doctor.UserID == user.UserID).first()
     if not doctor:
         raise HTTPException(status_code=404, detail="Không tìm thấy hồ sơ bác sĩ của tài khoản này")
