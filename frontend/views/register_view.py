@@ -24,7 +24,6 @@ from frontend.api.api_client import ApiClient, ApiError
 from frontend.core.i18n import get_i18n, t
 from frontend.views.common import BaseApiView
 from frontend.widgets.combo_box import ChevronComboBox
-from frontend.widgets.language_selector import LanguageSelector
 
 NULL_DATE = QDate(1752, 9, 14)
 
@@ -40,14 +39,7 @@ class RegisterView(BaseApiView):
         root = QVBoxLayout(self)
         root.setContentsMargins(32, 8, 32, 10)
 
-        # 1. Top bar with Language Selector
-        top_bar = QHBoxLayout()
-        top_bar.addStretch()
-        self.lang_selector = LanguageSelector(self, show_label=True)
-        top_bar.addWidget(self.lang_selector)
-        root.addLayout(top_bar)
-
-        # 2. Scroll area containing the centered card
+        # Scroll area containing the centered card
         scroll = QScrollArea()
         scroll.setObjectName("authScroll")
         scroll.setAccessibleName("Patient registration form")

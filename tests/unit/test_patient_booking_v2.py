@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QApplication
 
 from frontend.api.api_client import ApiClient
 from frontend.core.i18n import get_i18n
-from frontend.views.booking_view import BookingView
+from frontend.views.booking_view import BookingView, _SpecialtySearchComboBox
 from frontend.views.common import BaseApiView
 from frontend.widgets.wizard_stepper import WizardStepper
 
@@ -72,6 +72,32 @@ def test_step_two_has_context_chip_segmented_mode_and_one_date_affordance(
     assert booking_view.mode_by_doctor_btn.parentWidget() is booking_view.mode_segment
     assert booking_view.step2_date_edit.isHidden()
     assert booking_view.s2_open_cal_btn.text() == "Ngày khác…"
+
+
+def test_header_back_button_returns_to_previous_booking_step(
+    booking_view: BookingView,
+) -> None:
+    booking_view._go_to_step(2)
+
+    assert booking_view.cancel_nav_btn.text() == "Quay lại bước trước"
+
+    booking_view._navigate_header_back()
+
+    assert booking_view._current_step_index == 1
+    assert booking_view.cancel_nav_btn.text() == "Quay lại bước trước"
+
+
+def test_specialty_search_ignores_mouse_wheel_selection(
+    qt_app: QApplication,
+) -> None:
+    combo = _SpecialtySearchComboBox()
+    event = MagicMock()
+
+    combo.wheelEvent(event)
+
+    event.ignore.assert_called_once_with()
+    combo.deleteLater()
+    qt_app.processEvents()
 
 
 def test_date_selection_updates_results_without_confirmation_button(

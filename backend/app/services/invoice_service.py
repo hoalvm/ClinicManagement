@@ -1,5 +1,7 @@
 """Invoice history and detail business logic."""
 
+from datetime import date
+
 from sqlalchemy.orm import Session
 
 from backend.app.core.exceptions import NotFoundError
@@ -26,9 +28,14 @@ class InvoiceService:
         page: int,
         page_size: int,
         status: str | None,
+        appointment_date: date | None = None,
     ) -> InvoicePage:
         invoices, total = self.repository.list_for_patient(
-            patient_id, page=page, page_size=page_size, status=status
+            patient_id,
+            page=page,
+            page_size=page_size,
+            status=status,
+            appointment_date=appointment_date,
         )
         return InvoicePage(
             items=[

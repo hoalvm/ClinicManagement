@@ -1,5 +1,6 @@
 """Current patient's read-only invoice endpoints."""
 
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Query
@@ -19,12 +20,14 @@ def list_invoices(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 10,
     status: InvoiceStatus | None = None,
+    appointment_date: date | None = None,
 ) -> InvoicePage:
     return InvoiceService(session).list_invoices(
         current_patient.patient_id,
         page=page,
         page_size=page_size,
         status=status.value if status is not None else None,
+        appointment_date=appointment_date,
     )
 
 

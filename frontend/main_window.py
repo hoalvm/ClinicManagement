@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient
+from frontend.core.i18n import get_i18n
 from frontend.core.session import SessionState
 from frontend.views.appointment_detail_view import AppointmentDetailView
 from frontend.views.appointment_history_view import AppointmentHistoryView
@@ -47,6 +48,7 @@ class MainWindow(QMainWindow):
         self.api_client = api_client
         self.session = session
         self.central_auth = central_auth
+        get_i18n().set_language("vi")
         self._history: list[str] = []
         self._handling_expiry = False
         self.setWindowTitle("ClinicCare Patient Portal")
@@ -111,7 +113,7 @@ class MainWindow(QMainWindow):
         self.appointments_view.appointment_requested.connect(self.show_appointment)
         self.appointments_view.book_requested.connect(self.show_booking)
         self.booking_view.back_requested.connect(lambda: self.navigate("appointments", push=True))
-        self.booking_view.appointment_booked.connect(self.show_appointment)
+        self.booking_view.appointment_booked.connect(self._booking_completed)
         self.appointment_detail_view.back_requested.connect(self.go_back)
         self.appointment_detail_view.medical_record_requested.connect(self.show_medical_result)
         self.appointment_detail_view.invoice_requested.connect(self.show_invoice)
@@ -205,6 +207,10 @@ class MainWindow(QMainWindow):
         self._show_patient_page(self.appointment_detail_view)
         self.sidebar.set_active("appointments")
         self.appointment_detail_view.activate(appointment_id)
+
+    def _booking_completed(self, appointment_id: int) -> None:
+        self.appointment_detail_view.show_booking_success_notice()
+        self.show_appointment(appointment_id)
 
     def show_medical_result(self, medical_record_id: int) -> None:
         self._history.append("medical_result")

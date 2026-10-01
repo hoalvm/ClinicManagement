@@ -166,3 +166,15 @@ def test_focus_visible_marks_managed_composite_not_its_inner_child(
     assert wrapper.property("focusVisible") is False
     wrapper.deleteLater()
     qt_app.processEvents()
+
+
+def test_focus_visible_cleanup_ignores_deleted_owner(qt_app: QApplication) -> None:
+    manager = install_focus_visible(qt_app)
+    owner = QLineEdit()
+    manager._visible_owner = owner
+
+    owner.deleteLater()
+    qt_app.processEvents()
+    manager._clear_visible_owner()
+
+    assert manager.visible_owner is None

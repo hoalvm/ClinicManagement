@@ -1,6 +1,6 @@
 """Appointment history, upcoming, and detail business logic."""
 
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy.orm import Session
 
@@ -54,6 +54,9 @@ class AppointmentService:
         page_size: int,
         keyword: str | None,
         status: str | None,
+        appointment_date: date | None = None,
+        specialty: str | None = None,
+        clinic: str | None = None,
     ) -> AppointmentPage:
         appointments, total = self.repository.list_for_patient(
             patient_id,
@@ -61,6 +64,9 @@ class AppointmentService:
             page_size=page_size,
             keyword=keyword,
             status=status,
+            appointment_date=appointment_date,
+            specialty=specialty,
+            clinic=clinic,
         )
         return AppointmentPage(
             items=[self.to_summary(item) for item in appointments],

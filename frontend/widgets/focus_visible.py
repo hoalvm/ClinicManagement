@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QWidget,
 )
+from shiboken6 import isValid
 
 _MANAGER_OBJECT_NAME = "clinicCareFocusVisibleManager"
 
@@ -28,11 +29,17 @@ def _refresh_style(widget: QWidget) -> None:
 def set_focus_visible(widget: QWidget, visible: bool) -> None:
     """Set the styling hook on an entire control and refresh its Qt style."""
 
-    resolved = bool(visible)
-    if widget.property("focusVisible") is resolved:
+    if not isValid(widget):
         return
-    widget.setProperty("focusVisible", resolved)
-    _refresh_style(widget)
+    resolved = bool(visible)
+    try:
+        if widget.property("focusVisible") is resolved:
+            return
+        widget.setProperty("focusVisible", resolved)
+        _refresh_style(widget)
+    except RuntimeError:
+        # Qt can delete a transient wizard control while an event is queued.
+        return
 
 
 class FocusVisibleManager(QObject):
@@ -150,10 +157,11 @@ class FocusVisibleManager(QObject):
             self._visible_owner = owner
 
     def _clear_visible_owner(self) -> None:
-        if self._visible_owner is None:
+        owner = self._visible_owner
+        if owner is None:
             return
-        set_focus_visible(self._visible_owner, False)
         self._visible_owner = None
+        set_focus_visible(owner, False)
 
 
 def install_focus_visible(

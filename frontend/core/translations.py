@@ -321,9 +321,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "vi": "Chọn chuyên khoa, bác sĩ và khung giờ phù hợp để đặt lịch khám",
         "en": "Choose a specialty, doctor, and time slot to book your visit",
     },
-    "back_to_appointments": {
-        "vi": "← Lịch khám của tôi",
-        "en": "← My appointments",
+    "back_to_booking_list": {
+        "vi": "Quay lại danh sách",
+        "en": "Back to list",
+    },
+    "back_to_previous_step": {
+        "vi": "Quay lại bước trước",
+        "en": "Back to previous step",
     },
     "wizard_specialty": {"vi": "Chuyên khoa", "en": "Specialty"},
     "wizard_doctor": {"vi": "Bác sĩ", "en": "Doctor"},
@@ -865,6 +869,25 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Track charges and payment status for your clinic visits.",
     },
     "filter_by_status": {"vi": "Lọc theo trạng thái thanh toán", "en": "Narrow results by payment status"},
+    "filter_by_appointment_date": {
+        "vi": "Ngày khám",
+        "en": "Appointment date",
+    },
+    "filter_by_examination_date": {
+        "vi": "Ngày khám",
+        "en": "Examination date",
+    },
+    "filter_by_specialty": {"vi": "Chuyên khoa", "en": "Specialty"},
+    "filter_by_clinic": {"vi": "Phòng khám", "en": "Clinic"},
+    "filter_all": {"vi": "Tất cả", "en": "All"},
+    "filter_specialty_placeholder": {
+        "vi": "Nhập tên chuyên khoa...",
+        "en": "Enter specialty...",
+    },
+    "filter_clinic_placeholder": {
+        "vi": "Nhập tên phòng khám...",
+        "en": "Enter clinic...",
+    },
     "th_invoice_num": {"vi": "Mã hóa đơn", "en": "Invoice"},
     "th_total_amount": {"vi": "Tổng tiền", "en": "Total Amount"},
     "no_invoices_found": {"vi": "Không tìm thấy hóa đơn", "en": "No invoices found"},

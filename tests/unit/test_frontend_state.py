@@ -79,6 +79,38 @@ def test_profile_renders_null_demographics_and_merges_session(
     qt_app.processEvents()
 
 
+def test_booking_success_notice_survives_navigation_to_appointment_detail(
+    qt_app: QApplication,
+) -> None:
+    view = AppointmentDetailView(MagicMock(spec=ApiClient))
+    view.show_booking_success_notice()
+    view._render(
+        {
+            "appointment_id": 101,
+            "appointment_date": "2026-10-05",
+            "start_time": "08:00:00",
+            "end_time": "08:30:00",
+            "status": "PENDING",
+            "reason": None,
+            "doctor": {
+                "full_name": "Dr. Test",
+                "specialty": "Nội khoa",
+                "license_number": "LIC-101",
+                "phone": None,
+                "email": None,
+            },
+            "clinic": None,
+            "medical_record_id": None,
+            "invoice_id": None,
+        }
+    )
+
+    assert view.feedback.title == "Đặt lịch khám thành công!"
+    assert not view._booking_success_notice_pending
+    view.deleteLater()
+    qt_app.processEvents()
+
+
 def test_invalidating_pending_task_restores_disabled_controls(
     qt_app: QApplication,
 ) -> None:
@@ -472,29 +504,33 @@ def test_sidebar_compact_mode_preserves_icon_navigation_accessibility(
 
     assert sidebar.width() == Sidebar.EXPANDED_WIDTH
     assert not sidebar.is_compact
-    for route, label in Sidebar._ITEMS:
+    for route, _label in Sidebar._ITEMS:
         button = sidebar._buttons[route]
-        assert button.text() == label
-        assert button.accessibleName() == label
+        translated_label = t(Sidebar._ROUTE_TO_KEY[route])
+        assert button.text() == translated_label
+        assert button.accessibleName() == translated_label
         assert not button.icon().isNull()
 
     sidebar.set_compact(True)
 
     assert sidebar.width() == Sidebar.COMPACT_WIDTH
     assert sidebar.is_compact
-    for route, label in Sidebar._ITEMS:
+    for route, _label in Sidebar._ITEMS:
         button = sidebar._buttons[route]
         assert button.text() == ""
-        assert button.accessibleName() == label
-        assert button.toolTip() == label
+        assert button.accessibleName() == t(Sidebar._ROUTE_TO_KEY[route])
+        assert button.toolTip() == t(Sidebar._ROUTE_TO_KEY[route])
         assert not button.icon().isNull()
-    assert sidebar.logout_button.accessibleName() == "Log out"
+    assert sidebar.logout_button.accessibleName() == t("nav_logout")
 
     sidebar.set_compact(False)
 
     assert sidebar.width() == Sidebar.EXPANDED_WIDTH
     assert not sidebar.is_compact
-    assert all(sidebar._buttons[route].text() == label for route, label in Sidebar._ITEMS)
+    assert all(
+        sidebar._buttons[route].text() == t(Sidebar._ROUTE_TO_KEY[route])
+        for route, _label in Sidebar._ITEMS
+    )
     sidebar.deleteLater()
     qt_app.processEvents()
 
