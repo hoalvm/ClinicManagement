@@ -26,7 +26,7 @@ def _check_overlap(db: Session, doctor_id: int, day: int, start, end, exclude_id
     query = db.query(DoctorSchedule).filter(
         DoctorSchedule.doctor_id == doctor_id,
         DoctorSchedule.day_of_week == day,
-        DoctorSchedule.is_active.is_(True),
+        DoctorSchedule.is_active,
         DoctorSchedule.start_time < end,
         DoctorSchedule.end_time > start,
     )
@@ -66,7 +66,7 @@ def create_schedule(
             DoctorSchedule.day_of_week == data.DayOfWeek,
             DoctorSchedule.start_time == data.StartTime,
             DoctorSchedule.end_time == data.EndTime,
-            DoctorSchedule.is_active.is_(False),
+            ~DoctorSchedule.is_active,
         )
         .first()
     )

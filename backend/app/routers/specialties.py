@@ -95,7 +95,7 @@ def delete_specialty(
         db.query(Doctor)
         .filter(
             Doctor.specialty_id == specialty_id,
-            Doctor.is_active.is_(True),
+            Doctor.is_active,
         )
         .count()
     )
