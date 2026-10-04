@@ -31,3 +31,12 @@ Thumbs.db
 
 # Runtime output
 *.log
+
+.mcp.json
+AGENTS.md
+GEMINI.md
+.codegraph/
+.claude/    
+.codex/
+.cursor/
+.gemini/
