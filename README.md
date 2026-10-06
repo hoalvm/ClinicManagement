@@ -62,7 +62,7 @@ Script sẽ tự động:
 - **Nạp dữ liệu mẫu:**
 
 ```powershell
-.\script\seed_run.ps1
+.\script\init_db.ps1
 ```
 
 ### 3. Khởi chạy hệ thống
@@ -75,6 +75,18 @@ Script sẽ tự động:
 - **Khởi chạy Frontend:**
   ```powershell
   .\script\frontend_run.ps1
+  ```
+
+### 4. Reset Database & Run Test
+
+- **Reset Database:**
+  ```powershell
+  .\script\seed_run.ps1 -Reset
+  ```
+
+- **Run Test:**
+  ```powershell
+  .\script\test_run.ps1
   ```
 
 ---
