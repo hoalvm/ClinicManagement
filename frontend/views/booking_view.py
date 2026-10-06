@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient
+from frontend.core.clinic_clock import clinic_today_qdate
 from frontend.core.i18n import get_i18n, t
 from frontend.views.common import BaseApiView, format_time_range
 from frontend.widgets.calendar_dialog import CalendarDialog
@@ -434,7 +435,7 @@ class BookingView(BaseApiView):
         s2_quick_row.addWidget(self.s2_quick_date_lbl, 0, 0, 1, 3)
 
         self._s2_quick_chip_buttons: list[tuple[QPushButton, QDate]] = []
-        today = QDate.currentDate()
+        today = clinic_today_qdate()
         for offset in range(6):
             target_d = today.addDays(offset)
             chip_btn = QPushButton()
@@ -452,9 +453,9 @@ class BookingView(BaseApiView):
         self.step2_date_edit = QDateEdit()
         self.step2_date_edit.setCalendarPopup(True)
         self.step2_date_edit.setDisplayFormat("dd/MM/yyyy")
-        self.step2_date_edit.setDate(QDate.currentDate().addDays(1))
-        self.step2_date_edit.setMinimumDate(QDate.currentDate())
-        self.step2_date_edit.setMaximumDate(QDate.currentDate().addDays(60))
+        self.step2_date_edit.setDate(clinic_today_qdate().addDays(1))
+        self.step2_date_edit.setMinimumDate(clinic_today_qdate())
+        self.step2_date_edit.setMaximumDate(clinic_today_qdate().addDays(60))
         self.step2_date_edit.dateChanged.connect(self._load_doctors_for_date)
         self.step2_date_edit.hide()
 
@@ -552,8 +553,8 @@ class BookingView(BaseApiView):
     def _open_s2_calendar_dialog(self) -> None:
         dlg = CalendarDialog(
             current_date=self.step2_date_edit.date(),
-            min_date=QDate.currentDate(),
-            max_date=QDate.currentDate().addDays(60),
+            min_date=clinic_today_qdate(),
+            max_date=clinic_today_qdate().addDays(60),
             parent=self,
         )
         if dlg.exec():
@@ -776,10 +777,10 @@ class BookingView(BaseApiView):
         self.selected_slot = None
         self._go_to_step(2)
         self._load_doctor_schedules_info(doc.get("doctor_id"))
-        if not self.slot_date_edit.date().isValid() or self.slot_date_edit.date() < QDate.currentDate():
+        if not self.slot_date_edit.date().isValid() or self.slot_date_edit.date() < clinic_today_qdate():
             signals_were_blocked = self.slot_date_edit.blockSignals(True)
             try:
-                self.slot_date_edit.setDate(QDate.currentDate().addDays(1))
+                self.slot_date_edit.setDate(clinic_today_qdate().addDays(1))
             finally:
                 self.slot_date_edit.blockSignals(signals_were_blocked)
         self._load_available_slots()
@@ -881,7 +882,7 @@ class BookingView(BaseApiView):
         quick_row.addWidget(self.quick_date_lbl, 0, 0, 1, 3)
 
         self._quick_chip_buttons: list[tuple[QPushButton, QDate]] = []
-        today = QDate.currentDate()
+        today = clinic_today_qdate()
         for offset in range(6):
             target_d = today.addDays(offset)
             chip_btn = QPushButton()
@@ -899,9 +900,9 @@ class BookingView(BaseApiView):
         self.slot_date_edit = QDateEdit()
         self.slot_date_edit.setCalendarPopup(True)
         self.slot_date_edit.setDisplayFormat("dd/MM/yyyy")
-        self.slot_date_edit.setDate(QDate.currentDate().addDays(1))
-        self.slot_date_edit.setMinimumDate(QDate.currentDate())
-        self.slot_date_edit.setMaximumDate(QDate.currentDate().addDays(60))
+        self.slot_date_edit.setDate(clinic_today_qdate().addDays(1))
+        self.slot_date_edit.setMinimumDate(clinic_today_qdate())
+        self.slot_date_edit.setMaximumDate(clinic_today_qdate().addDays(60))
         self.slot_date_edit.dateChanged.connect(self._load_available_slots)
         self.slot_date_edit.hide()
 
@@ -948,8 +949,8 @@ class BookingView(BaseApiView):
     def _open_calendar_dialog(self) -> None:
         dlg = CalendarDialog(
             current_date=self.slot_date_edit.date(),
-            min_date=QDate.currentDate(),
-            max_date=QDate.currentDate().addDays(60),
+            min_date=clinic_today_qdate(),
+            max_date=clinic_today_qdate().addDays(60),
             parent=self,
         )
         if dlg.exec():
@@ -1384,6 +1385,16 @@ class BookingView(BaseApiView):
         """Reset wizard state to start fresh."""
         for scope in self._request_versions:
             self._request_versions[scope] += 1
+        today = clinic_today_qdate()
+        for date_edit in (self.step2_date_edit, self.slot_date_edit):
+            signals_were_blocked = date_edit.blockSignals(True)
+            try:
+                date_edit.setMinimumDate(today)
+                date_edit.setMaximumDate(today.addDays(60))
+                if date_edit.date() < today:
+                    date_edit.setDate(today)
+            finally:
+                date_edit.blockSignals(signals_were_blocked)
         self.selected_specialty = None
         self.selected_doctor = None
         self.selected_date = ""

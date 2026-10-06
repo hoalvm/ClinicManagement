@@ -2,24 +2,13 @@
 
 from __future__ import annotations
 
-import base64
-import json
 from typing import Any
 
 import httpx
 
+from frontend.core.clinic_clock import clinic_clock
 from frontend.core.config import get_frontend_settings
 from frontend.core.session import session_state
-
-
-def _decode_jwt_payload(token: str) -> dict[str, Any]:
-    try:
-        payload_part = token.split(".")[1]
-        padding = 4 - len(payload_part) % 4
-        payload_part += "=" * (padding % 4)
-        return json.loads(base64.urlsafe_b64decode(payload_part))
-    except Exception:
-        return {}
 
 
 class LegacyResponse:
@@ -62,9 +51,24 @@ class ApiClient:
         if r.status_code == 200:
             payload = r.json()
             self.token = payload["access_token"]
-            jwt_data = _decode_jwt_payload(self.token)
-            self.role = jwt_data.get("role", "").upper()
-            self.username = jwt_data.get("username") or str(jwt_data.get("sub", username))
+            try:
+                me_response = self._client.get("/auth/me", headers=self._headers())
+                if not me_response.is_success:
+                    raise ValueError("Không thể tải tài khoản hiện tại.")
+                user = me_response.json()
+                if not isinstance(user, dict) or not user.get("is_active"):
+                    raise ValueError("Tài khoản không còn hoạt động.")
+                clock_response = self._client.get(
+                    "/api/v1/system/time", headers=self._headers()
+                )
+                if not clock_response.is_success:
+                    raise ValueError("Không thể đồng bộ thời gian phòng khám.")
+                clinic_clock.set_from_payload(clock_response.json())
+            except (httpx.RequestError, ValueError, KeyError, TypeError):
+                self.clear_session()
+                return False, "Không thể đồng bộ thời gian phòng khám. Vui lòng thử lại."
+            self.role = str(user.get("role") or "").upper()
+            self.username = str(user.get("username") or username)
             session_state.set_authenticated(
                 self.token,
                 {"username": self.username, "role": self.role},
@@ -83,6 +87,7 @@ class ApiClient:
         self.role = None
         self.username = None
         session_state.clear()
+        clinic_clock.clear()
 
     def _headers(self) -> dict[str, str]:
         headers: dict[str, str] = {"Accept": "application/json"}
@@ -102,8 +107,8 @@ class ApiClient:
         try:
             r = self._client.get(path, headers=self._headers(), params=params)
             return self._wrap(r)
-        except Exception as e:
-            return LegacyResponse(503, {"detail": str(e)}, str(e))
+        except httpx.RequestError:
+            return LegacyResponse(503, {"detail": "Không thể kết nối server."})
 
     def post(
         self,
@@ -114,8 +119,8 @@ class ApiClient:
         try:
             r = self._client.post(path, headers=self._headers(), json=json, data=data)
             return self._wrap(r)
-        except Exception as e:
-            return LegacyResponse(503, {"detail": str(e)}, str(e))
+        except httpx.RequestError:
+            return LegacyResponse(503, {"detail": "Không thể kết nối server."})
 
     def put(
         self,
@@ -126,15 +131,15 @@ class ApiClient:
         try:
             r = self._client.put(path, headers=self._headers(), json=json, data=data)
             return self._wrap(r)
-        except Exception as e:
-            return LegacyResponse(503, {"detail": str(e)}, str(e))
+        except httpx.RequestError:
+            return LegacyResponse(503, {"detail": "Không thể kết nối server."})
 
     def delete(self, path: str) -> LegacyResponse:
         try:
             r = self._client.delete(path, headers=self._headers())
             return self._wrap(r)
-        except Exception as e:
-            return LegacyResponse(503, {"detail": str(e)}, str(e))
+        except httpx.RequestError:
+            return LegacyResponse(503, {"detail": "Không thể kết nối server."})
 
 
 api_client = ApiClient()

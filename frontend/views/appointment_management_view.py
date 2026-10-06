@@ -6,6 +6,7 @@ from typing import Any
 
 from PySide6.QtCore import QDate, Qt, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QDateEdit,
     QDialog,
     QFormLayout,
@@ -13,6 +14,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QTimeEdit,
@@ -21,6 +23,8 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient
+from frontend.core.clinic_clock import clinic_today_qdate
+from frontend.core.config import get_frontend_settings
 from frontend.ui.design_system import (
     CellValue,
     ColumnDisplayMode,
@@ -89,6 +93,7 @@ class AppointmentManagementView(BaseApiView):
                 (display_status("IN_PROGRESS", "vi"), "IN_PROGRESS"),
                 (display_status("COMPLETED", "vi"), "COMPLETED"),
                 (display_status("CANCELLED", "vi"), "CANCELLED"),
+                (display_status("NO_SHOW", "vi"), "NO_SHOW"),
             ),
             accessible_name="Lọc lịch hẹn theo trạng thái",
         )
@@ -298,26 +303,24 @@ class AppointmentManagementView(BaseApiView):
                         lambda _, a_id=appt_id: self._check_in_appointment(a_id)
                     )
             overflow: TableActionMenu | None = None
-            if status not in ("COMPLETED", "CANCELLED"):
+            if status in ("PENDING", "CONFIRMED", "CHECKED_IN"):
                 actions: list[RowAction] = []
-                if status == "PENDING":
+                if status in ("PENDING", "CONFIRMED"):
+                    actions.append(
+                        RowAction("Đổi lịch", lambda value=appt: self._reschedule_dialog(value))
+                    )
+                if status == "CONFIRMED" and get_frontend_settings().app_mode == "production":
                     actions.append(
                         RowAction(
-                            "Tiếp nhận",
-                            lambda a_id=appt_id: self._check_in_appointment(a_id),
+                            "Bệnh nhân vắng mặt",
+                            lambda a_id=appt_id: self._confirm_no_show(a_id),
                         )
                     )
-                actions.extend(
-                    (
-                        RowAction(
-                            "Đổi lịch",
-                            lambda value=appt: self._reschedule_dialog(value),
-                        ),
-                        RowAction(
-                            "Hủy lịch",
-                            lambda a_id=appt_id: self._cancel_dialog(a_id),
-                            destructive=True,
-                        ),
+                actions.append(
+                    RowAction(
+                        "Hủy lịch",
+                        lambda value=appt: self._cancel_dialog(value),
+                        destructive=True,
                     )
                 )
                 overflow = TableActionMenu(
@@ -357,17 +360,57 @@ class AppointmentManagementView(BaseApiView):
         self.feedback.show_message("Thành công", msg, severity="success")
         self.load_appointments(clear_feedback=False)
 
-    def _cancel_dialog(self, appt_id: int) -> None:
+    def _confirm_no_show(self, appt_id: int) -> None:
+        choice = QMessageBox.question(
+            self,
+            "Xác nhận bệnh nhân vắng mặt",
+            f"Chỉ đánh dấu lịch #{appt_id} khi đã quá giờ kết thúc cộng thời gian chờ "
+            "và bệnh nhân chưa check-in. Bạn đã đối chiếu tiếp đón?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if choice != QMessageBox.StandardButton.Yes:
+            return
+        self.run_api_task(
+            f"no_show_{appt_id}",
+            lambda: self.api_client.post(
+                f"/api/v1/reception/appointments/{appt_id}/no-show"
+            ),
+            lambda _: self._on_action_success(f"Đã ghi nhận vắng mặt cho lịch #{appt_id}."),
+            controls=(self.table,),
+            loading_text="Đang ghi nhận vắng mặt...",
+        )
+
+    def _cancel_dialog(self, appt: dict[str, Any]) -> None:
+        appt_id = int(appt.get("appointment_id", 0))
+        appointment_day = QDate.fromString(
+            str(appt.get("appointment_date") or "")[:10], "yyyy-MM-dd"
+        )
+        stale_check_in = (
+            appt.get("status") == "CHECKED_IN"
+            and appointment_day.isValid()
+            and appointment_day < clinic_today_qdate()
+        )
         dialog = QDialog(self)
         dialog.setWindowTitle(f"Hủy lịch hẹn #{appt_id}")
-        dialog.resize(360, 160)
+        dialog.resize(460 if stale_check_in else 360, 225 if stale_check_in else 160)
         d_layout = QVBoxLayout(dialog)
 
         label = QLabel("Vui lòng nhập lý do hủy lịch hẹn:")
         d_layout.addWidget(label)
 
         reason_input = QLineEdit()
+        reason_input.setMaxLength(500)
         d_layout.addWidget(reason_input)
+
+        care_attestation = QCheckBox(
+            "Đã đối chiếu: bác sĩ chưa bắt đầu khám ca này."
+        )
+        care_attestation.setToolTip(
+            "Chỉ tích sau khi xác minh với bác sĩ và sổ tiếp đón rằng chưa có khám lâm sàng."
+        )
+        care_attestation.setVisible(stale_check_in)
+        d_layout.addWidget(care_attestation)
 
         btn_row = QHBoxLayout()
         btn_cancel = QPushButton("Đóng")
@@ -378,17 +421,30 @@ class AppointmentManagementView(BaseApiView):
         btn_confirm.setObjectName("dangerButton")
         btn_confirm.setCursor(Qt.PointingHandCursor)
         btn_confirm.clicked.connect(dialog.accept)
+        def update_confirm_state() -> None:
+            minimum = 10 if stale_check_in else 3
+            btn_confirm.setEnabled(
+                len(reason_input.text().strip()) >= minimum
+                and (not stale_check_in or care_attestation.isChecked())
+            )
+
+        reason_input.textChanged.connect(update_confirm_state)
+        care_attestation.toggled.connect(update_confirm_state)
+        update_confirm_state()
         btn_row.addWidget(btn_cancel)
         btn_row.addWidget(btn_confirm)
         d_layout.addLayout(btn_row)
 
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            reason = reason_input.text().strip() or "Hủy bởi nhân viên tiếp đón."
+            reason = reason_input.text().strip()
             self.run_api_task(
                 f"cancel_{appt_id}",
                 lambda: self.api_client.post(
                     f"/api/v1/reception/appointments/{appt_id}/cancel",
-                    json={"cancellation_reason": reason},
+                    json={
+                        "cancellation_reason": reason,
+                        "care_not_started": stale_check_in and care_attestation.isChecked(),
+                    },
                 ),
                 lambda _: self._on_action_success(f"Đã hủy lịch hẹn #{appt_id}."),
                 controls=(self.table,),
@@ -405,12 +461,12 @@ class AppointmentManagementView(BaseApiView):
         date_edit = QDateEdit()
         date_edit.setCalendarPopup(True)
         date_edit.setDisplayFormat("dd/MM/yyyy")
-        date_edit.setMinimumDate(QDate.currentDate())
+        date_edit.setMinimumDate(clinic_today_qdate())
         current_date = QDate.fromString(str(appt.get("appointment_date") or "")[:10], "yyyy-MM-dd")
         date_edit.setDate(
             current_date
-            if current_date.isValid() and current_date >= QDate.currentDate()
-            else QDate.currentDate()
+            if current_date.isValid() and current_date >= clinic_today_qdate()
+            else clinic_today_qdate()
         )
         form.addRow("Ngày khám mới:", date_edit)
 

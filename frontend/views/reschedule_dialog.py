@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QDate, Qt, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QDateEdit,
     QDialog,
@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient, ApiError
+from frontend.core.clinic_clock import clinic_today_qdate
 from frontend.core.i18n import get_i18n, t
 from frontend.views.common import format_date, format_time_range
 from frontend.widgets.async_task_controller import AsyncTaskController
@@ -108,9 +109,9 @@ class RescheduleAppointmentDialog(QDialog):
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDisplayFormat("dd/MM/yyyy")
-        self.date_edit.setDate(QDate.currentDate().addDays(1))
-        self.date_edit.setMinimumDate(QDate.currentDate())
-        self.date_edit.setMaximumDate(QDate.currentDate().addDays(60))
+        self.date_edit.setDate(clinic_today_qdate().addDays(1))
+        self.date_edit.setMinimumDate(clinic_today_qdate())
+        self.date_edit.setMaximumDate(clinic_today_qdate().addDays(60))
         date_row.addWidget(self.date_edit, 1)
 
         self.open_cal_btn = QPushButton(t("btn_open_calendar", default="Chọn ngày"))
@@ -254,8 +255,8 @@ class RescheduleAppointmentDialog(QDialog):
     def _open_calendar_dialog(self) -> None:
         dlg = CalendarDialog(
             current_date=self.date_edit.date(),
-            min_date=QDate.currentDate(),
-            max_date=QDate.currentDate().addDays(60),
+            min_date=clinic_today_qdate(),
+            max_date=clinic_today_qdate().addDays(60),
             parent=self,
         )
         if dlg.exec():

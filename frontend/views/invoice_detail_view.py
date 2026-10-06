@@ -278,7 +278,11 @@ class InvoiceDetailView(BaseApiView):
 
         payment = data.get("payment")
         if isinstance(payment, dict):
-            self.payment_values["method"].setText(display_text(payment.get("payment_method")))
+            self.payment_values["method"].setText(
+                {"CASH": "Tiền mặt", "TRANSFER": "Chuyển khoản", "CARD": "Thẻ"}.get(
+                    str(payment.get("payment_method") or ""), "—"
+                )
+            )
             self.payment_values["amount"].setText(format_money(payment.get("amount")))
             self.payment_values["date"].setText(format_datetime(payment.get("payment_date")))
             self.payment_card.show()

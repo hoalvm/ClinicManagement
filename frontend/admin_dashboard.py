@@ -5,8 +5,10 @@ from __future__ import annotations
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QMainWindow, QStackedWidget
 
+from frontend.pages.charge_catalog_management import ChargeCatalogManagementPage
 from frontend.pages.clinic_management import ClinicManagementPage
 from frontend.pages.doctor_management import DoctorManagementPage
+from frontend.pages.schedule_exception_management import ScheduleExceptionManagementPage
 from frontend.pages.schedule_management import ScheduleManagementPage
 from frontend.pages.specialty_management import SpecialtyManagementPage
 from frontend.pages.statistics_page import StatisticsPage
@@ -28,7 +30,9 @@ class AdminDashboard(QMainWindow):
         NavigationItem("doctors", "Bác sĩ", "medical", "NGƯỜI DÙNG"),
         NavigationItem("specialties", "Chuyên khoa", "medical", "DANH MỤC"),
         NavigationItem("clinics", "Phòng khám", "dashboard", "DANH MỤC"),
+        NavigationItem("charges", "Phí khám", "dashboard", "DANH MỤC"),
         NavigationItem("schedules", "Lịch trực", "calendar", "VẬN HÀNH"),
+        NavigationItem("schedule_exceptions", "Nghỉ/đóng ca", "calendar", "VẬN HÀNH"),
         NavigationItem("statistics", "Thống kê", "dashboard", "BÁO CÁO"),
     )
 
@@ -58,7 +62,9 @@ class AdminDashboard(QMainWindow):
             ("doctors", DoctorManagementPage()),
             ("specialties", SpecialtyManagementPage()),
             ("clinics", ClinicManagementPage()),
+            ("charges", ChargeCatalogManagementPage()),
             ("schedules", ScheduleManagementPage()),
+            ("schedule_exceptions", ScheduleExceptionManagementPage()),
             ("statistics", StatisticsPage()),
         )
         for route, page in admin_pages:

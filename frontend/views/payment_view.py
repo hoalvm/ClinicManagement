@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
+from io import BytesIO
 from typing import Any
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QButtonGroup,
+    QCheckBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -20,19 +24,44 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient
+from frontend.core.config import get_frontend_settings
 from frontend.views.common import BaseApiView, format_money
 from frontend.widgets.empty_state import EmptyState
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.status_badge import StatusBadge
 
 
+def demo_transfer_payload(invoice_id: int, amount: Decimal) -> str:
+    """Local demonstration data: no payment URL or bank account is encoded."""
+    return f"CLINIC-DEMO|{invoice_id}|{amount:.2f}"
+
+
+def parse_tendered(text: str) -> Decimal:
+    """Accept Vietnamese grouping and at most two decimal places."""
+    value = text.strip().replace(" ", "")
+    if not value:
+        raise ValueError("Vui lòng nhập số tiền khách đưa.")
+    if "," in value:
+        value = value.replace(".", "").replace(",", ".")
+    elif value.count(".") > 1 or ("." in value and len(value.rsplit(".", 1)[1]) == 3):
+        value = value.replace(".", "")
+    try:
+        amount = Decimal(value)
+    except InvalidOperation as exc:
+        raise ValueError("Số tiền khách đưa không hợp lệ.") from exc
+    if not amount.is_finite() or amount < 0 or amount.as_tuple().exponent < -2:
+        raise ValueError("Số tiền khách đưa không hợp lệ.")
+    return amount
+
+
 class PaymentView(BaseApiView):
-    """View to collect and process patient payments via CASH or CARD."""
+    """Collect cash or record a manually verified bank transfer."""
 
     payment_completed = Signal(int)  # payment_id
 
     def __init__(self, api_client: ApiClient, parent: QWidget | None = None) -> None:
         super().__init__(api_client, parent)
+        self._production_mode = get_frontend_settings().app_mode == "production"
         self._current_invoice: dict[str, Any] | None = None
 
         scroll = QScrollArea(self)
@@ -138,9 +167,10 @@ class PaymentView(BaseApiView):
         self.method_group.addButton(self.rb_cash)
         method_row.addWidget(self.rb_cash)
 
-        self.rb_card = QRadioButton("Thẻ ngân hàng")
-        self.method_group.addButton(self.rb_card)
-        method_row.addWidget(self.rb_card)
+        self.rb_transfer = QRadioButton("Chuyển khoản (DEMO)")
+        self.rb_transfer.toggled.connect(self._on_method_changed)
+        self.method_group.addButton(self.rb_transfer)
+        method_row.addWidget(self.rb_transfer)
 
         method_row.addStretch(1)
         settle_layout.addLayout(method_row)
@@ -163,6 +193,42 @@ class PaymentView(BaseApiView):
         cash_layout.addWidget(self.lbl_change, 1, 1)
 
         settle_layout.addWidget(self.cash_box)
+
+        self.transfer_box = QFrame()
+        self.transfer_box.setObjectName("filterCard")
+        transfer_layout = QVBoxLayout(self.transfer_box)
+        self.qr_title = QLabel("QR MÔ PHỎNG · KHÔNG THỂ THANH TOÁN")
+        self.qr_title.setObjectName("sectionTitle")
+        transfer_layout.addWidget(self.qr_title)
+        self.qr_label = QLabel()
+        self.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.qr_label.setAccessibleName("Mã QR mô phỏng, không có tài khoản ngân hàng")
+        transfer_layout.addWidget(self.qr_label)
+        self.transfer_note = QLabel(
+            "Mã QR chỉ chứa mã hóa đơn và số tiền DEMO; không có tài khoản ngân hàng. "
+            "Việc mở QR không ghi nhận thanh toán. Nhân viên chỉ bấm xác nhận sau khi đối chiếu."
+        )
+        self.transfer_note.setWordWrap(True)
+        transfer_layout.addWidget(self.transfer_note)
+        self.transfer_reference_label = QLabel("Mã giao dịch trên sao kê ngân hàng:")
+        transfer_layout.addWidget(self.transfer_reference_label)
+        self.transfer_reference_input = QLineEdit()
+        self.transfer_reference_input.setMaxLength(100)
+        self.transfer_reference_input.setPlaceholderText("Nhập mã giao dịch đã đối chiếu")
+        transfer_layout.addWidget(self.transfer_reference_input)
+        self.transfer_verified_check = QCheckBox(
+            "Tôi đã đối chiếu đúng mã giao dịch, số tiền và người nhận trên sao kê ngân hàng."
+        )
+        transfer_layout.addWidget(self.transfer_verified_check)
+        self.rb_transfer.setText("Chuyển khoản xác nhận thủ công" if self._production_mode else "Chuyển khoản (DEMO)")
+        self.qr_title.setVisible(not self._production_mode)
+        self.qr_label.setVisible(not self._production_mode)
+        self.transfer_note.setVisible(not self._production_mode)
+        self.transfer_reference_label.setVisible(self._production_mode)
+        self.transfer_reference_input.setVisible(self._production_mode)
+        self.transfer_verified_check.setVisible(self._production_mode)
+        self.transfer_box.hide()
+        settle_layout.addWidget(self.transfer_box)
 
         # Confirm Button
         btn_row = QHBoxLayout()
@@ -259,9 +325,12 @@ class PaymentView(BaseApiView):
         self.lbl_doctor.setText(matched.get("doctor_name", ""))
         self.badge_status.set_status(matched.get("status", "UNPAID"))
 
-        amount = float(matched.get("total_amount", 0))
+        amount = Decimal(str(matched.get("total_amount", 0)))
         self.lbl_total.setText(format_money(amount))
-        self.cash_input.setText(f"{int(amount)}")
+        self.cash_input.setText(f"{amount:.0f}" if amount == amount.to_integral() else f"{amount:.2f}")
+        self.transfer_reference_input.clear()
+        self.transfer_verified_check.setChecked(False)
+        self._on_method_changed()
         self._calculate_change()
 
         if matched.get("status") == "PAID":
@@ -276,14 +345,40 @@ class PaymentView(BaseApiView):
     def _on_method_changed(self) -> None:
         is_cash = self.rb_cash.isChecked()
         self.cash_box.setVisible(is_cash)
+        self.transfer_box.setVisible(not is_cash)
+        self.btn_pay.setText("Xác nhận thu tiền mặt" if is_cash else "Xác nhận đã nhận chuyển khoản")
+        if not is_cash and self._current_invoice and not self._production_mode:
+            self._show_demo_qr()
+
+    def _show_demo_qr(self) -> None:
+        if not self._current_invoice:
+            return
+        payload = demo_transfer_payload(
+            int(self._current_invoice.get("invoice_id") or 0),
+            Decimal(str(self._current_invoice.get("total_amount") or 0)),
+        )
+        try:
+            import qrcode
+
+            output = BytesIO()
+            qrcode.make(payload, box_size=7, border=2).save(output, format="PNG")
+            pixmap = QPixmap()
+            if not pixmap.loadFromData(output.getvalue(), "PNG"):
+                raise ValueError("Cannot decode demo QR image")
+            self.qr_label.setPixmap(pixmap)
+        except (ImportError, OSError, ValueError):
+            self.qr_label.setText("Không thể tạo QR mô phỏng trên máy này.")
+        self.qr_label.setToolTip(payload)
 
     def _calculate_change(self) -> None:
         if not self._current_invoice:
             return
-        total = float(self._current_invoice.get("total_amount", 0))
-        text = self.cash_input.text().replace(",", "").replace(".", "").strip()
-        tendered = float(text) if text.isdigit() else 0.0
-        change = max(0.0, tendered - total)
+        total = Decimal(str(self._current_invoice.get("total_amount", 0)))
+        try:
+            tendered = parse_tendered(self.cash_input.text())
+        except ValueError:
+            tendered = Decimal("0")
+        change = max(Decimal("0"), tendered - total)
         self.lbl_change.setText(format_money(change))
 
     def _process_payment(self) -> None:
@@ -291,13 +386,18 @@ class PaymentView(BaseApiView):
             return
 
         inv_id = self._current_invoice.get("invoice_id")
-        method = "CASH" if self.rb_cash.isChecked() else "CARD"
-        amount = float(self._current_invoice.get("total_amount", 0))
+        method = "CASH" if self.rb_cash.isChecked() else "TRANSFER"
+        total = Decimal(str(self._current_invoice.get("total_amount", 0)))
+        amount = total
 
         if method == "CASH":
-            tendered_text = self.cash_input.text().replace(",", "").replace(".", "").strip()
-            tendered = float(tendered_text) if tendered_text.isdigit() else 0.0
-            if tendered < amount:
+            try:
+                amount = parse_tendered(self.cash_input.text())
+            except ValueError as exc:
+                self.feedback.show_message("Số tiền không hợp lệ", str(exc), severity="error")
+                self.cash_input.setFocus()
+                return
+            if amount < total:
                 self.feedback.show_message(
                     "Số tiền chưa đủ",
                     "Tiền khách đưa phải lớn hơn hoặc bằng tổng tiền cần thu.",
@@ -306,10 +406,24 @@ class PaymentView(BaseApiView):
                 self.cash_input.setFocus()
                 return
 
+        if method == "TRANSFER" and self._production_mode:
+            reference = self.transfer_reference_input.text().strip()
+            if len(reference) < 3 or not self.transfer_verified_check.isChecked():
+                self.feedback.show_message(
+                    "Chưa đủ thông tin đối soát",
+                    "Nhập mã giao dịch và xác nhận đã đối chiếu trên sao kê ngân hàng.",
+                    severity="error",
+                )
+                self.transfer_reference_input.setFocus()
+                return
+
         payload = {
             "payment_method": method,
-            "amount": amount,
+            "amount": str(amount),
         }
+        if method == "TRANSFER" and self._production_mode:
+            payload["external_reference"] = reference
+            payload["manual_verified"] = True
 
         self.run_api_task(
             f"pay_inv_{inv_id}",
@@ -321,16 +435,14 @@ class PaymentView(BaseApiView):
 
     def _on_payment_success(self, res: dict[str, Any]) -> None:
         inv_id = res.get("invoice_id")
-        total = float(res.get("total_amount", 0))
+        total = Decimal(str(res.get("total_amount", 0)))
         method = res.get("payment_method", "CASH")
         patient_name = res.get("patient_name", "Bệnh nhân")
-        method_str = "Tiền mặt" if method == "CASH" else "Thẻ ngân hàng"
-        tendered = total
-        change = 0.0
-        if method == "CASH":
-            tendered_text = self.cash_input.text().replace(",", "").replace(".", "").strip()
-            tendered = float(tendered_text) if tendered_text.isdigit() else total
-            change = max(0.0, tendered - total)
+        method_str = "Tiền mặt" if method == "CASH" else (
+            "Chuyển khoản đã đối soát" if self._production_mode else "Chuyển khoản (DEMO)"
+        )
+        tendered = Decimal(str(res.get("amount_received") or total))
+        change = Decimal(str(res.get("change_due") or 0))
 
         self.feedback.show_message(
             "Thu tiền thành công",

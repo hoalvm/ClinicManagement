@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QDate, Qt, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient
+from frontend.core.clinic_clock import clinic_today_qdate
 from frontend.ui.design_system import (
     CellValue,
     ColumnDisplayMode,
@@ -84,11 +85,11 @@ class CheckInView(BaseApiView):
         search_row.addWidget(self.search_input, 3)
 
         self.queue_num_input = QLineEdit()
-        self.queue_num_input.setPlaceholderText("Số thứ tự")
+        self.queue_num_input.setPlaceholderText("Server cấp số")
         self.queue_num_input.setAccessibleName("Số thứ tự khám")
         self.queue_num_input.setMaximumWidth(140)
         self.queue_num_input.setReadOnly(True)
-        self.queue_num_input.setText("A-01")
+        self.queue_num_input.setText("Tự động")
         search_row.addWidget(self.queue_num_input, 1)
 
         self.btn_search = QPushButton("Tìm kiếm")
@@ -231,11 +232,11 @@ class CheckInView(BaseApiView):
         keyword = (
             compact_keyword if compact_keyword.lstrip("+").isdigit() else raw_keyword
         ) or None
-        # We look for PENDING and CONFIRMED appointments
+        # Only confirmed appointments can be checked in today.
         params = {
             "page": 1,
             "page_size": 100,
-            "appointment_date": QDate.currentDate().toString(Qt.DateFormat.ISODate),
+            "appointment_date": clinic_today_qdate().toString(Qt.DateFormat.ISODate),
         }
         if keyword:
             params["keyword"] = keyword
@@ -257,9 +258,7 @@ class CheckInView(BaseApiView):
         all_items = data.get("items", [])
         self._candidate_items = list(all_items)
         checked_in = [i for i in all_items if i.get("status") == "CHECKED_IN"]
-        self.queue_num_input.setText(f"A-{len(checked_in) + 1:02d}")
-        # Filter for check-in candidates (PENDING or CONFIRMED)
-        items = [i for i in all_items if i.get("status") in ("CONFIRMED", "PENDING")]
+        items = [i for i in all_items if i.get("status") == "CONFIRMED"]
 
         rows = []
         for appt in items:
@@ -322,16 +321,13 @@ class CheckInView(BaseApiView):
             self.results_table.verticalHeader().resizeSection(row, 60)
 
     def _execute_check_in(self, appt_id: int) -> None:
-        queue_no = self.queue_num_input.text().strip() or None
-        payload = {"queue_number": queue_no}
-
         self.run_api_task(
             f"do_checkin_{appt_id}",
             lambda: self.api_client.post(
                 f"/api/v1/reception/appointments/{appt_id}/check-in",
-                json=payload,
+                json={},
             ),
-            lambda res: self._on_check_in_success(res, queue_no),
+            self._on_check_in_success,
             controls=(
                 self.results_table,
                 self.search_input,
@@ -341,16 +337,29 @@ class CheckInView(BaseApiView):
             loading_text="Đang xác nhận tiếp nhận...",
         )
 
-    def _on_check_in_success(self, result: dict[str, Any], queue_no: str | None) -> None:
+    def _on_check_in_success(self, result: dict[str, Any]) -> None:
         appt_id = int(result.get("appointment_id") or 0)
-        resolved_queue = queue_no or self.queue_num_input.text().strip() or "A-01"
-        self._last_ticket = {**result, "queue_number": resolved_queue}
+        resolved_queue = str(result.get("queue_number") or "")
+        if not resolved_queue:
+            self.feedback.show_message(
+                "Thiếu số thứ tự",
+                "Server đã tiếp nhận nhưng chưa trả số thứ tự. Vui lòng làm mới để đối chiếu.",
+                severity="error",
+            )
+            self.search_and_load(clear_feedback=False)
+            return
+        self._last_ticket = result
+        self.queue_num_input.setText(resolved_queue)
         msg = f"Tiếp nhận bệnh nhân cho lịch hẹn #{appt_id} thành công!"
         if resolved_queue:
             msg += f" (Số thứ tự: {resolved_queue})"
         self.feedback.show_message("Tiếp nhận thành công", msg, severity="success")
         patient_name = str(result.get("patient", {}).get("full_name") or "Bệnh nhân")
-        self.ticket_summary.setText(f"{resolved_queue} · {patient_name} · Hẹn #{appt_id}")
+        check_in_at = str(result.get("check_in_at") or "")
+        self.ticket_summary.setText(
+            f"{resolved_queue} · {patient_name} · Hẹn #{appt_id}"
+            + (f" · Tiếp nhận {check_in_at[11:16]}" if check_in_at else "")
+        )
         self.ticket_card.show()
         self.appointment_checked_in.emit(appt_id)
         self.search_and_load(clear_feedback=False)
@@ -378,6 +387,7 @@ class CheckInView(BaseApiView):
             (
                 "PHIẾU TIẾP NHẬN",
                 f"Số thứ tự: {ticket.get('queue_number', '—')}",
+                f"Giờ tiếp nhận: {str(ticket.get('check_in_at') or '—')[11:16]}",
                 f"Mã lịch hẹn: #{ticket.get('appointment_id', '—')}",
                 f"Bệnh nhân: {patient.get('full_name') or '—'}",
                 f"Số điện thoại: {patient.get('phone') or '—'}",

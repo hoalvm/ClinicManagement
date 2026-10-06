@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QLineEdit, QMessageBox, QVBoxLayout
+from PySide6.QtWidgets import QCheckBox, QFrame, QLineEdit, QMessageBox, QVBoxLayout
 
 from frontend.api_client import api_client
+from frontend.core.config import get_frontend_settings
 from frontend.pages.admin_ui import (
     AdminApiPage,
     AdminFormDialog,
@@ -210,6 +211,17 @@ class UserManagementPage(AdminApiPage):
                         lambda user=user: self._confirm_toggle(user),
                     )
                 )
+            if (
+                get_frontend_settings().app_mode == "production"
+                and user.get("Role") == "STAFF"
+                and active
+            ):
+                overflow_actions.append(
+                    (
+                        "Phân quyền cơ sở",
+                        lambda user=user: self.open_staff_clinics_dialog(user),
+                    )
+                )
             actions = AdminRowActions(
                 f"tài khoản {username}",
                 self.table,
@@ -217,6 +229,85 @@ class UserManagementPage(AdminApiPage):
                 overflow_actions=tuple(overflow_actions),
             )
             set_row_actions(self.table, row, 4, actions)
+
+    @staticmethod
+    def _fetch_staff_clinics(user_id: int) -> tuple[list[dict], list[int]]:
+        clinics = require_success(
+            api_client.get("/clinics/"), "Không thể tải danh sách cơ sở."
+        ).json()
+        access = require_success(
+            api_client.get(f"/users/{user_id}/clinics"),
+            "Không thể tải quyền cơ sở của nhân viên.",
+        ).json()
+        return clinics, access["clinic_ids"]
+
+    def open_staff_clinics_dialog(self, user: dict) -> None:
+        """Edit the complete site grant set; saving revokes existing sessions."""
+
+        user_id = int(user["UserID"])
+        self.run_admin_task(
+            f"load-staff-clinics:{user_id}",
+            lambda: self._fetch_staff_clinics(user_id),
+            lambda result: self._show_staff_clinics_dialog(user, result),
+            loading_text="Đang tải phân quyền cơ sở…",
+        )
+
+    def _show_staff_clinics_dialog(
+        self, user: dict, result: tuple[list[dict], list[int]]
+    ) -> None:
+        clinics, granted = result
+        user_id = int(user["UserID"])
+        dialog = AdminFormDialog(
+            "Phân quyền cơ sở",
+            f"Chọn cơ sở mà {user.get('FullName') or user.get('Username')} được phép tiếp đón. "
+            "Lưu thay đổi sẽ đăng xuất các phiên hiện tại của nhân viên.",
+            self,
+        )
+        container = QFrame()
+        choices = QVBoxLayout(container)
+        choices.setContentsMargins(0, 0, 0, 0)
+        choices.setSpacing(8)
+        checkboxes: list[tuple[int, QCheckBox]] = []
+        for clinic in clinics:
+            clinic_id = int(clinic["ClinicID"])
+            active = bool(clinic.get("IsActive"))
+            name = str(clinic.get("ClinicName") or f"Cơ sở #{clinic_id}")
+            checkbox = QCheckBox(name if active else f"{name} (đã ngừng hoạt động)")
+            checkbox.setChecked(active and clinic_id in granted)
+            checkbox.setEnabled(active)
+            choices.addWidget(checkbox)
+            checkboxes.append((clinic_id, checkbox))
+        dialog.add_field("Cơ sở được phép", container, 0, 0, column_span=2)
+
+        def submit() -> None:
+            clinic_ids = [clinic_id for clinic_id, box in checkboxes if box.isChecked()]
+            dialog.set_busy(True)
+            self.run_admin_task(
+                f"save-staff-clinics:{user_id}",
+                lambda: require_success(
+                    api_client.put(
+                        f"/users/{user_id}/clinics", json={"clinic_ids": clinic_ids}
+                    ),
+                    "Không thể lưu quyền cơ sở.",
+                ),
+                lambda _response: self._staff_clinics_saved(dialog),
+                on_finished=lambda: dialog.set_busy(False),
+                on_error=lambda error: dialog.show_request_error(
+                    "Không thể lưu phân quyền", self.error_message(error)
+                ),
+                loading_text="Đang lưu phân quyền cơ sở…",
+            )
+
+        dialog.buttons.accepted.connect(submit)
+        dialog.exec()
+
+    def _staff_clinics_saved(self, dialog: AdminFormDialog) -> None:
+        dialog.accept()
+        self.feedback.show_message(
+            "Đã cập nhật quyền cơ sở",
+            "Nhân viên cần đăng nhập lại để tiếp tục làm việc.",
+            severity="success",
+        )
 
     def _build_dialog(
         self,
@@ -228,7 +319,11 @@ class UserManagementPage(AdminApiPage):
             "Chỉnh sửa tài khoản" if editing else "Tạo tài khoản",
             "Cập nhật thông tin định danh và quyền truy cập."
             if editing
-            else "Tạo tài khoản cho bệnh nhân, nhân viên hoặc quản trị viên.",
+            else (
+                "Tạo tài khoản nhân viên hoặc quản trị viên. Bác sĩ được cấp tại mục Bác sĩ."
+                if get_frontend_settings().app_mode == "production"
+                else "Tạo tài khoản cho bệnh nhân, nhân viên hoặc quản trị viên."
+            ),
             self,
             save_text="Lưu thay đổi" if editing else "Tạo tài khoản",
         )
@@ -237,13 +332,20 @@ class UserManagementPage(AdminApiPage):
         phone = QLineEdit(str((user or {}).get("Phone") or ""))
         email = QLineEdit(str((user or {}).get("Email") or ""))
         role = ChevronComboBox()
-        for code in ("PATIENT", "STAFF", "ADMIN"):
+        production = get_frontend_settings().app_mode == "production"
+        available_roles = ("STAFF", "ADMIN") if production and not editing else (
+            "PATIENT", "STAFF", "ADMIN"
+        )
+        for code in available_roles:
             role.addItem(ROLE_LABELS[code], code)
-        current_role = str((user or {}).get("Role") or "PATIENT")
+        current_role = str((user or {}).get("Role") or ("STAFF" if production else "PATIENT"))
         if editing and current_role == "DOCTOR":
             role.insertItem(0, ROLE_LABELS["DOCTOR"], "DOCTOR")
             role.setEnabled(False)
             role.setToolTip("Vai trò bác sĩ được quản lý trong mục Bác sĩ.")
+        if editing and production:
+            role.setEnabled(False)
+            role.setToolTip("Vai trò tài khoản production không thể thay đổi.")
         index = role.findData(current_role)
         role.setCurrentIndex(max(0, index))
 

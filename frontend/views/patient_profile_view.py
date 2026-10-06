@@ -21,6 +21,8 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient
+from frontend.core.clinic_clock import clinic_today_qdate
+from frontend.core.config import get_frontend_settings
 from frontend.core.i18n import get_i18n, t
 from frontend.core.session import SessionState
 from frontend.views.common import BaseApiView, require_dict
@@ -42,6 +44,7 @@ class PatientProfileView(BaseApiView):
         super().__init__(api_client, parent)
         self.session = session
         self._profile: dict[str, Any] | None = None
+        self.production = get_frontend_settings().app_mode == "production"
 
         root = QVBoxLayout(self)
         root.setContentsMargins(32, 28, 32, 28)
@@ -124,7 +127,7 @@ class PatientProfileView(BaseApiView):
         self.date_of_birth.setDisplayFormat("dd/MM/yyyy")
         self.date_of_birth.setMinimumDate(NULL_DATE)
         self.date_of_birth.setSpecialValueText(t("not_set"))
-        self.date_of_birth.setMaximumDate(QDate.currentDate())
+        self.date_of_birth.setMaximumDate(clinic_today_qdate())
         self.date_of_birth.setAccessibleName(t("date_of_birth"))
         self.gender = ChevronComboBox()
         self._populate_gender_combo()
@@ -144,6 +147,13 @@ class PatientProfileView(BaseApiView):
         self._add_form_row(personal_form, "date_of_birth", self.date_of_birth)
         self._add_form_row(personal_form, "gender", self.gender)
         card_layout.addLayout(personal_form)
+        self.identity_notice = QLabel(
+            "Họ tên và ngày sinh đã xác minh. Muốn điều chỉnh, vui lòng liên hệ cơ sở khám để kiểm tra giấy tờ."
+        )
+        self.identity_notice.setObjectName("mutedLabel")
+        self.identity_notice.setWordWrap(True)
+        self.identity_notice.setVisible(self.production)
+        card_layout.addWidget(self.identity_notice)
 
         self.contact_title = QLabel(t("sec_contact_info"))
         self.contact_title.setObjectName("sectionTitle")
@@ -290,10 +300,12 @@ class PatientProfileView(BaseApiView):
 
     def _set_editing(self, editing: bool, *, focus: bool = False) -> None:
         for widget in (self.full_name, self.phone, self.email, self.address):
-            widget.setReadOnly(not editing)
-            self._refresh_property(widget, "viewMode", not editing)
-        self.date_of_birth.setReadOnly(not editing)
-        self._refresh_property(self.date_of_birth, "viewMode", not editing)
+            read_only = not editing or (self.production and widget is self.full_name)
+            widget.setReadOnly(read_only)
+            self._refresh_property(widget, "viewMode", read_only)
+        self.date_of_birth.setReadOnly(not editing or self.production)
+        self.date_of_birth.setCalendarPopup(not self.production)
+        self._refresh_property(self.date_of_birth, "viewMode", not editing or self.production)
         self.gender.setEnabled(editing)
         self._refresh_property(self.gender, "viewMode", not editing)
         self._refresh_property(self.username, "viewMode", True)
@@ -302,8 +314,9 @@ class PatientProfileView(BaseApiView):
         self.cancel_button.setVisible(editing)
         if editing and focus:
             self.feedback.clear()
-            self.full_name.setFocus(Qt.FocusReason.ShortcutFocusReason)
-            self.full_name.selectAll()
+            focus_field = self.phone if self.production else self.full_name
+            focus_field.setFocus(Qt.FocusReason.ShortcutFocusReason)
+            focus_field.selectAll()
 
     @staticmethod
     def _refresh_property(widget: QWidget, name: str, value: object) -> None:
@@ -332,7 +345,7 @@ class PatientProfileView(BaseApiView):
         full_name = self.full_name.text().strip()
         email = self.email.text().strip()
         phone = self.phone.text().strip()
-        if not full_name:
+        if not self.production and not full_name:
             self._validation_error(self.full_name, t("err_fullname_required"))
             return
         if email and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
@@ -350,15 +363,16 @@ class PatientProfileView(BaseApiView):
 
         selected_date = self.date_of_birth.date()
         payload: dict[str, Any] = {
-            "full_name": full_name,
             "phone": phone or None,
             "email": email or None,
-            "date_of_birth": (
-                None if selected_date == NULL_DATE else selected_date.toString("yyyy-MM-dd")
-            ),
             "gender": self.gender.currentData(),
             "address": self.address.toPlainText().strip() or None,
         }
+        if not self.production:
+            payload["full_name"] = full_name
+            payload["date_of_birth"] = (
+                None if selected_date == NULL_DATE else selected_date.toString("yyyy-MM-dd")
+            )
 
         def save_and_reload() -> object:
             self.api_client.patch("/api/v1/patients/me", json=payload)

@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 from frontend.api_client import api_client
 from frontend.pages.admin_ui import AdminApiPage, require_success
 from frontend.ui.design_system import ColumnDisplayMode, ColumnPriority, ColumnSpec
+from frontend.views.common import format_money
 from frontend.widgets.adaptive_data_table import AdaptiveDataTable
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.stat_card import ModernStatCard
@@ -168,6 +169,9 @@ class StatisticsPage(AdminApiPage):
             "total_clinics",
             "total_specialties",
             "total_schedules",
+            "total_appointments",
+            "completed_appointments",
+            "paid_revenue",
         )
         return not any(data.get(key, 0) for key in total_keys) and not any(
             data.get(key) for key in ("doctors_by_specialty", "doctors_by_clinic")
@@ -181,6 +185,9 @@ class StatisticsPage(AdminApiPage):
             ("Phòng khám đang hoạt động", d.get("total_clinics", 0), "#d97706"),
             ("Chuyên khoa đang hoạt động", d.get("total_specialties", 0), "#7c3aed"),
             ("Lịch trực đang mở", d.get("total_schedules", 0), "#059669"),
+            ("Lượt hẹn", d.get("total_appointments", 0), "#0369a1"),
+            ("Đã khám", d.get("completed_appointments", 0), "#0f766e"),
+            ("Đã thu", format_money(d.get("paid_revenue", 0)), "#047857"),
         ]
 
         if not self._stat_cards:
@@ -213,7 +220,7 @@ class StatisticsPage(AdminApiPage):
     def _card_column_count(self) -> int:
         width = self.width()
         if width >= 1320:
-            return 5
+            return 4
         if width >= 1040:
             return 3
         return 2
@@ -228,7 +235,7 @@ class StatisticsPage(AdminApiPage):
         # leave blank cells or duplicate cards behind.
         while self.cards_layout.count():
             self.cards_layout.takeAt(0)
-        for column in range(5):
+        for column in range(8):
             self.cards_layout.setColumnStretch(column, 1 if column < columns else 0)
         for index, card in enumerate(self._stat_cards):
             self.cards_layout.addWidget(card, index // columns, index % columns)

@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient, ApiError
+from frontend.core.clinic_clock import clinic_today_qdate
 from frontend.core.i18n import get_i18n, t
 from frontend.views.common import BaseApiView
 from frontend.widgets.combo_box import ChevronComboBox
@@ -160,7 +161,7 @@ class RegisterView(BaseApiView):
         self.date_of_birth.setCalendarPopup(True)
         self.date_of_birth.setDisplayFormat("dd/MM/yyyy")
         self.date_of_birth.setMinimumDate(NULL_DATE)
-        self.date_of_birth.setMaximumDate(QDate.currentDate())
+        self.date_of_birth.setMaximumDate(clinic_today_qdate())
         self.date_of_birth.setDate(NULL_DATE)
         calendar = self.date_of_birth.calendarWidget()
         calendar.setMinimumSize(360, 280)
@@ -168,7 +169,7 @@ class RegisterView(BaseApiView):
         calendar.setHorizontalHeaderFormat(
             QCalendarWidget.HorizontalHeaderFormat.ShortDayNames
         )
-        calendar.setSelectedDate(QDate.currentDate())
+        calendar.setSelectedDate(clinic_today_qdate())
         self._add_grid_field(grid_pers, 2, 0, self.dob_label, self.date_of_birth)
 
         self.gender_label = QLabel()

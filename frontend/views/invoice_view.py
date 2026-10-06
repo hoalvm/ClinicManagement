@@ -21,7 +21,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from frontend.api.api_client import ApiClient
+from frontend.api.api_client import ApiClient, ApiError
+from frontend.core.config import get_frontend_settings
 from frontend.ui.design_system import (
     CellValue,
     ColumnDisplayMode,
@@ -30,6 +31,7 @@ from frontend.ui.design_system import (
 )
 from frontend.views.common import BaseApiView, format_money
 from frontend.widgets.adaptive_data_table import AdaptiveDataTable
+from frontend.widgets.async_task_controller import AsyncTaskController
 from frontend.widgets.filter_toolbar import FilterToolbar
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.pagination import Pagination
@@ -142,6 +144,7 @@ class InvoiceManagementView(BaseApiView):
                     priority=ColumnPriority.HIGH,
                     formatter=lambda value: {
                         "CASH": "Tiền mặt",
+                        "TRANSFER": "Chuyển khoản",
                         "CARD": "Thẻ",
                     }.get(str(value or ""), "—"),
                     display_mode=ColumnDisplayMode.ELIDE,
@@ -309,7 +312,7 @@ class InvoiceManagementView(BaseApiView):
                     f"Bác sĩ: {invoice.get('doctor_name', '—')}",
                     f"Tổng tiền: {format_money(invoice.get('total_amount', 0))}",
                     "Phương thức: "
-                    + {"CASH": "Tiền mặt", "CARD": "Thẻ"}.get(
+                    + {"CASH": "Tiền mặt", "TRANSFER": "Chuyển khoản", "CARD": "Thẻ"}.get(
                         str(invoice.get("payment_method") or ""), "Chưa ghi nhận"
                     ),
                 )
@@ -349,13 +352,13 @@ class InvoiceManagementView(BaseApiView):
                 raise ValueError(f"Đơn giá ở dòng {row + 1} không hợp lệ.") from exc
             if quantity <= 0:
                 raise ValueError(f"Số lượng ở dòng {row + 1} phải lớn hơn 0.")
-            if not unit_price.is_finite() or unit_price < 0:
+            if not unit_price.is_finite() or unit_price < 0 or unit_price.as_tuple().exponent < -2:
                 raise ValueError(f"Đơn giá ở dòng {row + 1} phải là số không âm.")
             items.append(
                 {
                     "item_name": name,
                     "quantity": quantity,
-                    "unit_price": float(unit_price),
+                    "unit_price": str(unit_price),
                 }
             )
         if not items:
@@ -363,6 +366,9 @@ class InvoiceManagementView(BaseApiView):
         return items
 
     def _create_invoice_dialog(self) -> None:
+        if get_frontend_settings().app_mode == "production":
+            self._create_production_invoice_dialog()
+            return
         dialog = QDialog(self)
         dialog.setWindowTitle("Lập hóa đơn")
         dialog.resize(480, 420)
@@ -376,6 +382,10 @@ class InvoiceManagementView(BaseApiView):
         items_label = QLabel("Chi tiết dịch vụ:")
         items_label.setObjectName("fieldLabel")
         d_layout.addWidget(items_label)
+        help_label = QLabel("Chỉ thêm phí khám, thuốc hoặc dịch vụ thực sự thuộc ca đã hoàn tất.")
+        help_label.setWordWrap(True)
+        help_label.setObjectName("helperText")
+        d_layout.addWidget(help_label)
 
         # Editable line items with explicit add/remove controls and a live total.
         item_table = QTableWidget()
@@ -383,18 +393,10 @@ class InvoiceManagementView(BaseApiView):
         item_table.setHorizontalHeaderLabels(
             ["Tên dịch vụ / Thuốc", "Số lượng", "Đơn giá (₫)", "Xóa"]
         )
-        item_table.setRowCount(3)
-
-        default_items = [
-            ("Khám chuyên khoa", 1, 200000),
-            ("Xét nghiệm chỉ định", 1, 150000),
-            ("Thuốc điều trị", 1, 100000),
-        ]
-
-        for i, (name, qty, price) in enumerate(default_items):
-            item_table.setItem(i, 0, QTableWidgetItem(name))
-            item_table.setItem(i, 1, QTableWidgetItem(str(qty)))
-            item_table.setItem(i, 2, QTableWidgetItem(str(price)))
+        item_table.setRowCount(1)
+        item_table.setItem(0, 0, QTableWidgetItem(""))
+        item_table.setItem(0, 1, QTableWidgetItem("1"))
+        item_table.setItem(0, 2, QTableWidgetItem("0"))
 
         item_table.horizontalHeader().setStretchLastSection(True)
         d_layout.addWidget(item_table)
@@ -457,6 +459,13 @@ class InvoiceManagementView(BaseApiView):
         update_total()
 
         btn_row = QHBoxLayout()
+        error_label = QLabel()
+        error_label.setObjectName("errorText")
+        error_label.setWordWrap(True)
+        error_label.hide()
+        d_layout.addWidget(error_label)
+        tasks = AsyncTaskController(dialog)
+        dialog.finished.connect(lambda _result: tasks.invalidate())
         btn_cancel = QPushButton("Hủy")
         btn_cancel.setObjectName("secondaryButton")
         btn_cancel.setCursor(Qt.PointingHandCursor)
@@ -464,37 +473,173 @@ class InvoiceManagementView(BaseApiView):
         btn_submit = QPushButton("Tạo hóa đơn")
         btn_submit.setObjectName("primaryButton")
         btn_submit.setCursor(Qt.PointingHandCursor)
-        btn_submit.clicked.connect(dialog.accept)
+        def submit() -> None:
+            appt_id_text = appt_input.text().strip()
+            if not appt_id_text.isdigit() or int(appt_id_text) <= 0:
+                error_label.setText("Vui lòng nhập mã lịch hẹn hợp lệ dạng số.")
+                error_label.show()
+                return
+            try:
+                items_payload = self._collect_invoice_items(item_table)
+            except ValueError as exc:
+                error_label.setText(str(exc))
+                error_label.show()
+                return
+            error_label.hide()
+            payload = {"appointment_id": int(appt_id_text), "items": items_payload}
+
+            def succeeded(result: dict[str, Any]) -> None:
+                dialog.accept()
+                self._on_invoice_created(result)
+
+            def failed(error: Exception) -> None:
+                if isinstance(error, ApiError) and error.status_code == 401:
+                    dialog.reject()
+                    self.session_expired.emit()
+                    return
+                error_label.setText(
+                    error.message if isinstance(error, ApiError) else "Không thể lập hóa đơn. Vui lòng thử lại."
+                )
+                error_label.show()
+
+            tasks.run(
+                "create_invoice",
+                lambda: self.api_client.post("/api/v1/reception/invoices", json=payload),
+                succeeded,
+                failed,
+                controls=(btn_submit, btn_cancel, appt_input, item_table),
+            )
+
+        btn_submit.clicked.connect(submit)
         btn_row.addWidget(btn_cancel)
         btn_row.addWidget(btn_submit)
         d_layout.addLayout(btn_row)
 
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            appt_id_text = appt_input.text().strip()
-            if not appt_id_text.isdigit():
-                self.feedback.show_message(
-                    "Sai thông tin", "Vui lòng nhập mã lịch hẹn hợp lệ dạng số.", severity="error"
+        dialog.exec()
+
+    def _create_production_invoice_dialog(self) -> None:
+        """Review the server-owned consultation charge before issuing an invoice."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Lập hóa đơn khám")
+        dialog.resize(520, 320)
+        layout = QVBoxLayout(dialog)
+        help_label = QLabel(
+            "Hóa đơn chỉ gồm phí khám đã cấu hình. Đơn thuốc chưa được phát và không được thu trong luồng này."
+        )
+        help_label.setWordWrap(True)
+        layout.addWidget(help_label)
+
+        appt_input = QLineEdit()
+        appt_input.setPlaceholderText("Mã lịch khám đã hoàn tất")
+        appt_input.setAccessibleName("Mã lịch khám đã hoàn tất")
+        layout.addWidget(appt_input)
+        preview_label = QLabel("Nhập mã lịch khám và chọn Kiểm tra.")
+        preview_label.setWordWrap(True)
+        layout.addWidget(preview_label)
+        error_label = QLabel()
+        error_label.setWordWrap(True)
+        error_label.setObjectName("errorText")
+        error_label.hide()
+        layout.addWidget(error_label)
+
+        actions = QHBoxLayout()
+        btn_check = QPushButton("Kiểm tra phí khám")
+        btn_check.setObjectName("secondaryButton")
+        actions.addWidget(btn_check)
+        actions.addStretch(1)
+        btn_cancel = QPushButton("Hủy")
+        btn_cancel.clicked.connect(dialog.reject)
+        actions.addWidget(btn_cancel)
+        btn_create = QPushButton("Xác nhận lập hóa đơn")
+        btn_create.setObjectName("primaryButton")
+        btn_create.setEnabled(False)
+        actions.addWidget(btn_create)
+        layout.addLayout(actions)
+
+        tasks = AsyncTaskController(dialog)
+        dialog.finished.connect(lambda _result: tasks.invalidate())
+        verified_id: int | None = None
+
+        def reset_preview(_text: str) -> None:
+            nonlocal verified_id
+            verified_id = None
+            btn_create.setEnabled(False)
+            preview_label.setText("Nhập mã lịch khám và chọn Kiểm tra.")
+            error_label.hide()
+
+        appt_input.textChanged.connect(reset_preview)
+
+        def check() -> None:
+            nonlocal verified_id
+            raw = appt_input.text().strip()
+            if not raw.isdigit() or int(raw) <= 0:
+                error_label.setText("Mã lịch khám phải là số dương.")
+                error_label.show()
+                return
+            requested_id = int(raw)
+            error_label.hide()
+
+            def succeeded(result: dict[str, Any]) -> None:
+                nonlocal verified_id
+                if appt_input.text().strip() != str(requested_id):
+                    return
+                verified_id = requested_id
+                preview_label.setText(
+                    f"Bệnh nhân: {result['patient_name']}\n"
+                    f"Bác sĩ: {result['doctor_name']}\n"
+                    f"Khoản thu: {result['charge_name']}\n"
+                    f"Tổng tiền: {format_money(Decimal(str(result['total_amount'])))}\n"
+                    f"{result.get('medication_note', '')}"
                 )
-                return
+                btn_create.setEnabled(True)
 
-            try:
-                items_payload = self._collect_invoice_items(item_table)
-            except ValueError as exc:
-                self.feedback.show_message("Sai thông tin", str(exc), severity="error")
-                return
+            def failed(error: Exception) -> None:
+                error_label.setText(
+                    error.message if isinstance(error, ApiError)
+                    else "Không thể kiểm tra phí khám. Vui lòng thử lại."
+                )
+                error_label.show()
 
-            payload = {
-                "appointment_id": int(appt_id_text),
-                "items": items_payload,
-            }
-
-            self.run_api_task(
-                "create_invoice",
-                lambda: self.api_client.post("/api/v1/reception/invoices", json=payload),
-                lambda res: self._on_invoice_created(res),
-                controls=(self.header.action_button,),
-                loading_text="Đang lập hóa đơn...",
+            tasks.run(
+                "invoice_preview",
+                lambda: self.api_client.get(
+                    f"/api/v1/reception/appointments/{requested_id}/invoice-preview"
+                ),
+                succeeded,
+                failed,
+                controls=(btn_check, appt_input),
             )
+
+        def create() -> None:
+            if verified_id is None or appt_input.text().strip() != str(verified_id):
+                return
+            error_label.hide()
+
+            def succeeded(result: dict[str, Any]) -> None:
+                dialog.accept()
+                self._on_invoice_created(result)
+
+            def failed(error: Exception) -> None:
+                error_label.setText(
+                    error.message if isinstance(error, ApiError)
+                    else "Không thể lập hóa đơn. Vui lòng thử lại."
+                )
+                error_label.show()
+
+            tasks.run(
+                "create_invoice",
+                lambda: self.api_client.post(
+                    "/api/v1/reception/invoices", json={"appointment_id": verified_id}
+                ),
+                succeeded,
+                failed,
+                controls=(btn_create, btn_cancel, appt_input),
+            )
+
+        btn_check.clicked.connect(check)
+        appt_input.returnPressed.connect(check)
+        btn_create.clicked.connect(create)
+        dialog.exec()
 
     def _on_invoice_created(self, inv: dict[str, Any]) -> None:
         inv_id = inv.get("invoice_id", 0)

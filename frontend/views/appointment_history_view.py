@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QDate, QModelIndex, Qt, Signal
+from PySide6.QtCore import QModelIndex, Qt, Signal
 from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
     QCalendarWidget,
@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient
+from frontend.core.clinic_clock import clinic_today_qdate
 from frontend.core.i18n import get_i18n, t
 from frontend.views.common import (
     BaseApiView,
@@ -71,7 +72,7 @@ class AppointmentHistoryView(BaseApiView):
 
         self.date_filter = QCheckBox(t("filter_by_appointment_date"))
         self.date_filter.setObjectName("filterCheckBox")
-        self.date_edit = QDateEdit(QDate.currentDate())
+        self.date_edit = QDateEdit(clinic_today_qdate())
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDisplayFormat("dd/MM/yyyy")
         self.date_edit.setEnabled(False)
@@ -400,7 +401,7 @@ class AppointmentHistoryView(BaseApiView):
         self._total_appointments = 0
         self.search.clear()
         self.date_filter.setChecked(False)
-        self.date_edit.setDate(QDate.currentDate())
+        self.date_edit.setDate(clinic_today_qdate())
         self.specialty.setCurrentIndex(0)
         self.clinic.setCurrentIndex(0)
         was_blocked = self.status.blockSignals(True)

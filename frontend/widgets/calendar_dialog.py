@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from frontend.core.clinic_clock import clinic_today_qdate
 from frontend.core.i18n import get_i18n, t
 
 
@@ -32,9 +33,9 @@ class CalendarDialog(QDialog):
         self.setMinimumWidth(380)
         self.setMinimumHeight(390)
 
-        self._selected_date = current_date or QDate.currentDate()
-        self._min_date = min_date or QDate.currentDate()
-        self._max_date = max_date or QDate.currentDate().addDays(60)
+        self._selected_date = current_date or clinic_today_qdate()
+        self._min_date = min_date or clinic_today_qdate()
+        self._max_date = max_date or clinic_today_qdate().addDays(60)
 
         self._build_ui()
         get_i18n().language_changed.connect(self.retranslate_ui)

@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QLineEdit, QMessageBox, QVBoxLayout
 
 from frontend.api_client import api_client
+from frontend.core.config import get_frontend_settings
 from frontend.pages.admin_ui import (
     AdminApiPage,
     AdminFormDialog,
@@ -287,6 +288,9 @@ class DoctorManagementPage(AdminApiPage):
             address = str(item.get("Address") or "").strip()
             clinic.addItem(f"{name} · {address}" if address else name, item["ClinicID"])
         license_input = QLineEdit(str((doctor or {}).get("LicenseNumber") or ""))
+        production = get_frontend_settings().app_mode == "production"
+        if production:
+            license_input.setPlaceholderText("Nhập sau khi đối chiếu giấy phép hành nghề")
 
         if editing:
             fullname.setReadOnly(True)
@@ -298,14 +302,20 @@ class DoctorManagementPage(AdminApiPage):
             dialog.add_field("Họ và tên bác sĩ", fullname, 0, 0, column_span=2)
             dialog.add_field("Chuyên khoa", specialty, 1, 0, required=True)
             dialog.add_field("Phòng khám", clinic, 1, 1)
-            dialog.add_field("Số giấy phép hành nghề", license_input, 2, 0, column_span=2)
+            dialog.add_field(
+                "Số giấy phép hành nghề", license_input, 2, 0,
+                column_span=2, required=production,
+            )
         else:
             dialog.add_field("Tên đăng nhập", username, 0, 0, required=True)
             dialog.add_field("Mật khẩu", password, 0, 1, required=True)
             dialog.add_field("Họ và tên bác sĩ", fullname, 1, 0, required=True, column_span=2)
             dialog.add_field("Chuyên khoa", specialty, 2, 0, required=True)
             dialog.add_field("Phòng khám", clinic, 2, 1)
-            dialog.add_field("Số giấy phép hành nghề", license_input, 3, 0, column_span=2)
+            dialog.add_field(
+                "Số giấy phép hành nghề", license_input, 3, 0,
+                column_span=2, required=production,
+            )
         return dialog, {
             "username": username,
             "password": password,
@@ -335,13 +345,22 @@ class DoctorManagementPage(AdminApiPage):
                     "Vui lòng nhập tên đăng nhập, mật khẩu và họ tên bác sĩ.",
                 )
                 return
+            license_number = controls["license"].text().strip()
+            if get_frontend_settings().app_mode == "production" and (
+                not license_number or license_number.upper().startswith("DEMO")
+            ):
+                dialog.show_request_error(
+                    "Thiếu giấy phép đã đối chiếu",
+                    "Nhập số giấy phép hành nghề thật sau khi kiểm tra giấy tờ.",
+                )
+                return
             payload = {
                 "Username": username,
                 "Password": password,
                 "FullName": fullname,
                 "SpecialtyID": controls["specialty"].currentData(),
                 "ClinicID": controls["clinic"].currentData(),
-                "LicenseNumber": controls["license"].text().strip() or None,
+                "LicenseNumber": license_number or None,
             }
             self._submit_dialog(
                 dialog,
@@ -361,10 +380,19 @@ class DoctorManagementPage(AdminApiPage):
         doctor_id = doctor["DoctorID"]
 
         def submit() -> None:
+            license_number = controls["license"].text().strip()
+            if get_frontend_settings().app_mode == "production" and (
+                not license_number or license_number.upper().startswith("DEMO")
+            ):
+                dialog.show_request_error(
+                    "Thiếu giấy phép đã đối chiếu",
+                    "Nhập số giấy phép hành nghề thật sau khi kiểm tra giấy tờ.",
+                )
+                return
             payload = {
                 "SpecialtyID": controls["specialty"].currentData(),
                 "ClinicID": controls["clinic"].currentData(),
-                "LicenseNumber": controls["license"].text().strip() or None,
+                "LicenseNumber": license_number or None,
             }
             self._submit_dialog(
                 dialog,

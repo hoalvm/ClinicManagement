@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from frontend.api.api_client import ApiClient, ApiError
+from frontend.core.config import get_frontend_settings
 from frontend.core.i18n import get_i18n, t
 from frontend.views.common import BaseApiView, require_dict
 from frontend.widgets.form_field import FormField
@@ -97,6 +98,7 @@ class LoginView(BaseApiView):
         self.login_button.setMinimumHeight(42)
         self.login_button.setAccessibleName(t("sign_in_button"))
         self.register_button = QPushButton(t("create_account_button"))
+        self.register_button.setVisible(get_frontend_settings().app_mode != "production")
         self.register_button.setObjectName("secondaryButton")
         self.register_button.setCursor(Qt.PointingHandCursor)
         self.register_button.setMinimumHeight(40)

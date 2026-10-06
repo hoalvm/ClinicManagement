@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from frontend.core.clinic_clock import clinic_clock
 from frontend.core.config import get_frontend_settings
 from frontend.ui.icons import apply_line_icon
 from frontend.views.common import format_time_range
@@ -102,8 +103,8 @@ class LoginWorker(QThread):
                 else:
                     detail = res.json().get("detail", "Sai tài khoản hoặc mật khẩu!")
                     self.login_error.emit(detail)
-        except Exception as e:
-            self.login_error.emit(f"Không thể kết nối máy chủ: {str(e)}")
+        except (httpx.RequestError, ValueError, TypeError, KeyError):
+            self.login_error.emit("Không thể kết nối hoặc đọc phản hồi máy chủ.")
 
 
 class FetchScheduleWorker(QThread):
@@ -134,8 +135,8 @@ class FetchScheduleWorker(QThread):
                         self.unauthorized.emit(str(detail))
                     else:
                         self.error.emit(str(detail))
-        except Exception as e:
-            self.error.emit(f"Lỗi kết nối: {str(e)}")
+        except (httpx.RequestError, ValueError, TypeError):
+            self.error.emit("Không thể kết nối hoặc đọc lịch khám từ máy chủ.")
 
 
 class AcceptPatientWorker(QThread):
@@ -160,8 +161,8 @@ class AcceptPatientWorker(QThread):
                     self.success.emit(res.json())
                 else:
                     self.error.emit(res.json().get("detail", "Lỗi tiếp nhận bệnh nhân"))
-        except Exception as e:
-            self.error.emit(f"Lỗi kết nối: {str(e)}")
+        except (httpx.RequestError, ValueError, TypeError):
+            self.error.emit("Không thể kết nối hoặc đọc phản hồi tiếp nhận.")
 
 
 class CompleteExamWorker(QThread):
@@ -188,8 +189,51 @@ class CompleteExamWorker(QThread):
                     self.finished.emit(
                         False, res.json().get("detail", "Lỗi lưu dữ liệu")
                     )
-        except Exception as e:
-            self.finished.emit(False, f"Lỗi kết nối máy chủ: {str(e)}")
+        except (httpx.RequestError, ValueError, TypeError):
+            self.finished.emit(False, "Không thể kết nối hoặc đọc phản hồi ca khám.")
+
+
+class FetchClinicalContextWorker(QThread):
+    success = Signal(dict)
+    error = Signal(str)
+    unauthorized = Signal(str)
+
+    def __init__(self, appointment_id: int, token: str):
+        super().__init__()
+        self.appointment_id = appointment_id
+        self.token = token
+
+    def run(self) -> None:
+        try:
+            with httpx.Client(timeout=8.0) as client:
+                response = client.get(
+                    f"{API_URL}/appointments/{self.appointment_id}/clinical-context",
+                    headers={"Authorization": f"Bearer {self.token}"},
+                )
+            if response.status_code == 200:
+                payload = response.json()
+                if not isinstance(payload, dict):
+                    self.error.emit("Dữ liệu lịch sử khám không hợp lệ.")
+                    return
+                self.success.emit(payload)
+                return
+            try:
+                payload = response.json()
+                detail = (
+                    payload.get("detail", "Không thể tải lịch sử khám")
+                    if isinstance(payload, dict)
+                    else "Không thể tải lịch sử khám"
+                )
+            except (TypeError, ValueError):
+                detail = "Không thể tải lịch sử khám"
+            if response.status_code in {401, 403}:
+                self.unauthorized.emit(str(detail))
+            else:
+                self.error.emit(str(detail))
+        except httpx.HTTPError:
+            self.error.emit("Không thể kết nối máy chủ để tải lịch sử khám.")
+        except ValueError:
+            self.error.emit("Dữ liệu lịch sử khám không hợp lệ.")
 
 
 # ==========================================
@@ -209,7 +253,7 @@ class DoctorScheduleView(QWidget):
 
         self.header = PageHeader(
             "Lịch tiếp nhận khám bệnh",
-            "Theo dõi và tiếp nhận bệnh nhân trong ngày",
+            "Theo dõi ca hôm nay và ca đang khám còn tồn từ ngày trước",
         )
         self.btn_refresh = QPushButton("Làm mới")
         self.btn_refresh.setObjectName("secondaryButton")
@@ -234,14 +278,14 @@ class DoctorScheduleView(QWidget):
         card_layout.setContentsMargins(20, 18, 20, 18)
         card_layout.setSpacing(12)
 
-        card_title = QLabel("Hàng đợi khám hôm nay")
+        card_title = QLabel("Hàng đợi và ca đang khám")
         card_title.setObjectName("sectionTitle")
         card_layout.addWidget(card_title)
 
         self.table = QTableWidget()
         self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels(
-            ["Mã hẹn", "Thời gian", "Bệnh nhân", "Lý do khám", "Trạng thái", "Thao tác"]
+            ["Mã hẹn", "Ngày / giờ", "Bệnh nhân", "Lý do khám", "Trạng thái", "Thao tác"]
         )
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
@@ -252,7 +296,7 @@ class DoctorScheduleView(QWidget):
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.table.setAccessibleName("Danh sách bệnh nhân chờ khám hôm nay")
+        self.table.setAccessibleName("Danh sách bệnh nhân chờ khám và ca đang khám")
 
         h = self.table.horizontalHeader()
         h.setFixedHeight(40)
@@ -264,7 +308,7 @@ class DoctorScheduleView(QWidget):
         h.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
         h.setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
         self.table.setColumnWidth(0, 76)
-        self.table.setColumnWidth(1, 126)
+        self.table.setColumnWidth(1, 205)
         self.table.setColumnWidth(2, 180)
         self.table.setColumnWidth(4, 126)
         self.table.setColumnWidth(5, 148)
@@ -278,8 +322,8 @@ class DoctorScheduleView(QWidget):
         self.state_host.retry_requested.connect(self.load_schedule)
         self.state_host.empty_action_requested.connect(self.load_schedule)
         self.state_host.show_empty(
-            "Chưa có bệnh nhân trong hàng đợi hôm nay",
-            "Danh sách sẽ tự cập nhật khi lễ tân tiếp nhận bệnh nhân.",
+            "Không có ca chờ khám hoặc đang khám",
+            "Danh sách cập nhật khi lễ tân tiếp nhận hoặc bác sĩ còn ca chưa hoàn tất.",
             action_text="Làm mới",
         )
 
@@ -336,8 +380,8 @@ class DoctorScheduleView(QWidget):
 
         if not items:
             self.state_host.show_empty(
-                "Chưa có bệnh nhân trong hàng đợi hôm nay",
-                "Danh sách sẽ tự cập nhật khi lễ tân tiếp nhận bệnh nhân.",
+                "Không có ca chờ khám hoặc đang khám",
+                "Danh sách cập nhật khi lễ tân tiếp nhận hoặc bác sĩ còn ca chưa hoàn tất.",
                 action_text="Làm mới",
             )
             return
@@ -351,10 +395,11 @@ class DoctorScheduleView(QWidget):
             self.table.setItem(row, 0, item_id)
 
             time_str = format_time_range(appt.get("StartTime"), appt.get("EndTime"))
+            appointment_day = _display_date(appt.get("AppointmentDate"))
             item_time = _table_item(
-                time_str,
+                f"{appointment_day} · {time_str}",
                 alignment=Qt.AlignmentFlag.AlignCenter,
-                accessible_label="Thời gian khám",
+                accessible_label="Ngày và giờ khám",
             )
             self.table.setItem(row, 1, item_time)
 
@@ -461,6 +506,7 @@ class DoctorScheduleView(QWidget):
 class MedicalExamView(QWidget):
     examination_done = Signal()
     back_to_schedule = Signal()
+    session_expired = Signal()
     STACKED_BREAKPOINT = 1040
 
     def __init__(self, main_window):
@@ -468,6 +514,9 @@ class MedicalExamView(QWidget):
         self.main_window = main_window
         self.current_appt = None
         self.worker: CompleteExamWorker | None = None
+        self._context_workers: list[FetchClinicalContextWorker] = []
+        self._context_loaded = False
+        self._context_request_id = 0
         self._stacked_layout: bool | None = None
         self._editing_medicine_row: int | None = None
         self._baseline_state: tuple[object, ...] | None = None
@@ -497,14 +546,14 @@ class MedicalExamView(QWidget):
         content_root.setContentsMargins(28, 20, 28, 22)
         content_root.setSpacing(14)
 
-        self.breadcrumb = QPushButton("← Lịch khám hôm nay")
+        self.breadcrumb = QPushButton("← Hàng đợi khám")
         self.breadcrumb.setObjectName("ghostButton")
         self.breadcrumb.setCursor(Qt.CursorShape.PointingHandCursor)
         self.breadcrumb.setSizePolicy(
             QSizePolicy.Policy.Maximum,
             QSizePolicy.Policy.Fixed,
         )
-        self.breadcrumb.setAccessibleName("Quay lại lịch khám hôm nay")
+        self.breadcrumb.setAccessibleName("Quay lại hàng đợi khám")
         self.breadcrumb.clicked.connect(self.back_to_schedule.emit)
         content_root.addWidget(self.breadcrumb, 0, Qt.AlignmentFlag.AlignLeft)
 
@@ -571,6 +620,37 @@ class MedicalExamView(QWidget):
         patient_layout.setColumnStretch(2, 3)
         content_root.addWidget(self.patient_summary)
 
+        self.clinical_context_card = QFrame()
+        self.clinical_context_card.setObjectName("contentCard")
+        context_layout = QVBoxLayout(self.clinical_context_card)
+        context_layout.setContentsMargins(20, 16, 20, 16)
+        context_layout.setSpacing(8)
+        context_title = QLabel("Lịch sử khám trong hệ thống")
+        context_title.setObjectName("sectionTitle")
+        context_layout.addWidget(context_title)
+        self.allergy_status_label = QLabel(
+            "Dị ứng: CHƯA ĐƯỢC GHI NHẬN. Cần xác minh trực tiếp và ghi hồ sơ ngoài hệ thống."
+        )
+        self.allergy_status_label.setWordWrap(True)
+        self.allergy_status_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.allergy_status_label.setAccessibleName("Cảnh báo tình trạng dị ứng chưa được ghi nhận")
+        context_layout.addWidget(self.allergy_status_label)
+        self.clinical_context_status = QLabel("Đang tải lịch sử khám…")
+        self.clinical_context_status.setWordWrap(True)
+        self.clinical_context_status.setTextFormat(Qt.TextFormat.PlainText)
+        context_layout.addWidget(self.clinical_context_status)
+        self.clinical_context_history = QTextEdit()
+        self.clinical_context_history.setReadOnly(True)
+        self.clinical_context_history.setFixedHeight(188)
+        self.clinical_context_history.setAccessibleName("Các lần khám trước trong hệ thống")
+        context_layout.addWidget(self.clinical_context_history)
+        self.refresh_context_button = QPushButton("Tải lại lịch sử khám")
+        self.refresh_context_button.setObjectName("secondaryButton")
+        self.refresh_context_button.clicked.connect(self.load_clinical_context)
+        context_layout.addWidget(self.refresh_context_button, 0, Qt.AlignmentFlag.AlignLeft)
+        self.clinical_context_card.setVisible(get_frontend_settings().app_mode == "production")
+        content_root.addWidget(self.clinical_context_card)
+
         self.body_layout = QGridLayout()
         self.body_layout.setContentsMargins(0, 0, 0, 0)
         self.body_layout.setHorizontalSpacing(18)
@@ -632,6 +712,20 @@ class MedicalExamView(QWidget):
         exam_card_layout.addWidget(lbl_note)
         exam_card_layout.addWidget(self.txt_notes)
 
+        self.late_entry_panel = QWidget()
+        late_entry_layout = QVBoxLayout(self.late_entry_panel)
+        late_entry_layout.setContentsMargins(0, 8, 0, 0)
+        late_entry_label = QLabel("Lý do ghi hồ sơ muộn *")
+        late_entry_label.setObjectName("fieldLabel")
+        self.txt_late_reason = QLineEdit()
+        self.txt_late_reason.setMaxLength(500)
+        self.txt_late_reason.setPlaceholderText("Ví dụ: Hoàn tất sau sự cố gián đoạn hệ thống")
+        self.txt_late_reason.setAccessibleName("Lý do ghi hồ sơ muộn")
+        late_entry_layout.addWidget(late_entry_label)
+        late_entry_layout.addWidget(self.txt_late_reason)
+        self.late_entry_panel.hide()
+        exam_card_layout.addWidget(self.late_entry_panel)
+
         left_col.addWidget(card_exam)
 
         self.right_panel = QWidget()
@@ -653,6 +747,14 @@ class MedicalExamView(QWidget):
         lbl_pres_title = QLabel("Đơn thuốc")
         lbl_pres_title.setObjectName("sectionTitle")
         pres_card_layout.addWidget(lbl_pres_title)
+        self.prescription_notice = QLabel(
+            "Chế độ production chưa hỗ trợ kê đơn an toàn. "
+            "Không nhập hoặc phát thuốc qua màn hình này; dùng quy trình lâm sàng được bệnh viện phê duyệt."
+        )
+        self.prescription_notice.setWordWrap(True)
+        self.prescription_notice.setTextFormat(Qt.TextFormat.PlainText)
+        self.prescription_notice.setVisible(get_frontend_settings().app_mode == "production")
+        pres_card_layout.addWidget(self.prescription_notice)
 
         med_form = QGridLayout()
         med_form.setContentsMargins(0, 0, 0, 0)
@@ -686,6 +788,10 @@ class MedicalExamView(QWidget):
         self.btn_add_medicine.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_add_medicine.setAccessibleName("Thêm thuốc vào đơn")
         self.btn_add_medicine.clicked.connect(self.add_medicine)
+        if get_frontend_settings().app_mode == "production":
+            for field in (self.in_med, self.in_dosage, self.spin_qty, self.in_instructions):
+                field.setEnabled(False)
+            self.btn_add_medicine.setEnabled(False)
         self.btn_cancel_medicine_edit = QPushButton("Hủy sửa")
         self.btn_cancel_medicine_edit.setObjectName("ghostButton")
         self.btn_cancel_medicine_edit.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -906,7 +1012,7 @@ class MedicalExamView(QWidget):
             born = date.fromisoformat(raw[:10])
         except ValueError:
             return None
-        today = date.today()
+        today = clinic_clock.today()
         return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
 
     def _prescription_state(self) -> tuple[tuple[str, str, int, str], ...]:
@@ -929,6 +1035,7 @@ class MedicalExamView(QWidget):
             self.txt_symptoms.toPlainText(),
             self.txt_diagnosis.toPlainText(),
             self.txt_notes.toPlainText(),
+            self.txt_late_reason.text(),
             self._prescription_state(),
             self.in_med.text(),
             self.in_dosage.text(),
@@ -1023,6 +1130,18 @@ class MedicalExamView(QWidget):
         self.txt_symptoms.setText(appt.get("Reason") or "")
         self.txt_diagnosis.clear()
         self.txt_notes.clear()
+        raw_appointment_date = str(appt.get("AppointmentDate") or "")[:10]
+        try:
+            appointment_date = date.fromisoformat(raw_appointment_date)
+        except ValueError:
+            appointment_date = clinic_clock.today()
+        self._late_entry_required = (
+            get_frontend_settings().app_mode == "production"
+            and appointment_date < clinic_clock.today()
+        )
+        self.txt_late_reason.clear()
+        self.late_entry_panel.setVisible(self._late_entry_required)
+        self._set_field_error(self.txt_late_reason, False)
         self._set_field_error(self.txt_symptoms, False)
         self._set_field_error(self.txt_diagnosis, False)
         self.table_med.setRowCount(0)
@@ -1030,8 +1149,134 @@ class MedicalExamView(QWidget):
         self._update_medicine_table_height()
         self.scroll_area.verticalScrollBar().setValue(0)
         self._baseline_state = self._capture_state()
+        if get_frontend_settings().app_mode == "production":
+            self._context_loaded = False
+            self.btn_add_medicine.setEnabled(False)
+            self.btn_finish.setEnabled(False)
+            self.clinical_context_history.clear()
+            self.clinical_context_status.setText("Đang tải lịch sử khám…")
+            self.load_clinical_context()
+
+    def load_clinical_context(self) -> None:
+        if self.current_appt is None:
+            return
+        appointment_id = self.current_appt["AppointmentID"]
+        self._context_request_id += 1
+        request_id = self._context_request_id
+        self._context_loaded = False
+        self.btn_add_medicine.setEnabled(False)
+        self.btn_finish.setEnabled(False)
+        self.clinical_context_status.setText("Đang tải lịch sử khám…")
+        self.clinical_context_history.clear()
+        self.refresh_context_button.setEnabled(False)
+        worker = FetchClinicalContextWorker(appointment_id, self.main_window.token)
+        self._context_workers.append(worker)
+        worker.success.connect(
+            lambda context, visit_id=appointment_id, fetch_id=request_id: self._on_context_loaded(
+                visit_id, context, fetch_id
+            )
+        )
+        worker.error.connect(
+            lambda message, visit_id=appointment_id, fetch_id=request_id: self._on_context_error(
+                visit_id, message, fetch_id
+            )
+        )
+        worker.unauthorized.connect(
+            lambda message, visit_id=appointment_id, fetch_id=request_id: self._on_context_unauthorized(
+                visit_id, message, fetch_id
+            )
+        )
+        worker.finished.connect(lambda: self._context_workers.remove(worker))
+        worker.start()
+
+    def _on_context_loaded(
+        self, appointment_id: int, context: dict, request_id: int
+    ) -> None:
+        if (
+            self.current_appt is None
+            or self.current_appt["AppointmentID"] != appointment_id
+            or self._context_request_id != request_id
+        ):
+            return
+        if context.get("appointment_id") != appointment_id:
+            self._on_context_error(appointment_id, "Lịch sử khám không khớp ca hiện tại.", request_id)
+            return
+        expected_patient = self.current_appt.get("Patient", {}).get("PatientID")
+        if expected_patient is not None and context.get("patient_id") != expected_patient:
+            self._on_context_error(appointment_id, "Lịch sử khám không khớp bệnh nhân.", request_id)
+            return
+        if context.get("allergy_status") != "NOT_DOCUMENTED":
+            self._on_context_error(appointment_id, "Trạng thái dị ứng không hợp lệ.", request_id)
+            return
+        records = context.get("prior_records")
+        has_more = context.get("prior_records_has_more")
+        if not isinstance(records, list) or not isinstance(has_more, bool):
+            self._on_context_error(appointment_id, "Dữ liệu lịch sử khám không hợp lệ.", request_id)
+            return
+        if has_more:
+            self.clinical_context_status.setText(
+                "Hiển thị 10 lần khám gần nhất; còn hồ sơ cũ hơn trong hệ thống. "
+                "Cần tra cứu đầy đủ khi có chỉ định lâm sàng."
+            )
+        else:
+            self.clinical_context_status.setText(
+                f"{len(records)} lần khám trước trong hệ thống; "
+                "không thay thế việc hỏi bệnh và đối chiếu hồ sơ khác."
+            )
+        lines: list[str] = []
+        for record in records:
+            examined = _display_date(record.get("examination_date"))
+            lines.append(f"{examined} · {record.get('doctor_name') or 'Bác sĩ'}")
+            lines.append(f"Triệu chứng: {record.get('symptoms') or 'Chưa ghi'}")
+            lines.append(f"Chẩn đoán: {record.get('diagnosis') or 'Chưa ghi'}")
+            if record.get("notes"):
+                lines.append(f"Dặn dò: {record['notes']}")
+            if record.get("late_entry_reason"):
+                lines.append(f"Lý do ghi hồ sơ muộn: {record['late_entry_reason']}")
+            for medicine in record.get("prescription_items") or []:
+                lines.append(
+                    f"Đã kê: {medicine.get('medicine_name') or 'Thuốc'} · "
+                    f"{medicine.get('dosage') or 'chưa ghi hàm lượng'} · "
+                    f"SL {medicine.get('quantity') or '?'} · "
+                    f"{medicine.get('instructions') or 'chưa ghi cách dùng'}"
+                )
+            lines.append("")
+        self.clinical_context_history.setPlainText(
+            "\n".join(lines).strip() if lines else "Chưa có hồ sơ khám trước trong hệ thống."
+        )
+        self._context_loaded = True
+        self.btn_add_medicine.setEnabled(get_frontend_settings().app_mode != "production")
+        self.btn_finish.setEnabled(True)
+        self.refresh_context_button.setEnabled(True)
+
+    def _on_context_error(
+        self, appointment_id: int, message: str, request_id: int
+    ) -> None:
+        if (
+            self.current_appt is None
+            or self.current_appt["AppointmentID"] != appointment_id
+            or self._context_request_id != request_id
+        ):
+            return
+        self.clinical_context_status.setText(f"Không thể tải lịch sử khám: {message}")
+        self.clinical_context_history.setPlainText(
+            "Chưa thể đối chiếu các lần khám trước. Tải lại trước khi hoàn tất ca."
+        )
+        self._context_loaded = False
+        self.btn_add_medicine.setEnabled(False)
+        self.btn_finish.setEnabled(False)
+        self.refresh_context_button.setEnabled(True)
+
+    def _on_context_unauthorized(
+        self, appointment_id: int, message: str, request_id: int
+    ) -> None:
+        self._on_context_error(appointment_id, message, request_id)
+        if self.current_appt is not None and self._context_request_id == request_id:
+            self.session_expired.emit()
 
     def add_medicine(self):
+        if get_frontend_settings().app_mode == "production":
+            return
         med = self.in_med.text().strip()
         dosage = self.in_dosage.text().strip()
         qty = self.spin_qty.value()
@@ -1182,6 +1427,13 @@ class MedicalExamView(QWidget):
     def submit_examination(self):
         if self.worker is not None and self.worker.isRunning():
             return
+        if get_frontend_settings().app_mode == "production" and not self._context_loaded:
+            self.feedback.show_message(
+                "Chưa đối chiếu lịch sử khám",
+                "Tải lại lịch sử khám trong hệ thống trước khi hoàn tất ca.",
+                severity="error",
+            )
+            return
 
         symptoms = self.txt_symptoms.toPlainText().strip()
         diagnosis = self.txt_diagnosis.toPlainText().strip()
@@ -1208,6 +1460,19 @@ class MedicalExamView(QWidget):
             )
             return
 
+        late_reason = self.txt_late_reason.text().strip()
+        if self._late_entry_required and not late_reason:
+            self._set_field_error(self.txt_late_reason, True)
+            self.feedback.show_message(
+                "Thiếu lý do ghi hồ sơ muộn",
+                "Ca khám từ ngày trước cần nêu lý do trước khi hoàn tất.",
+                severity="error",
+            )
+            self.txt_late_reason.setFocus()
+            self.scroll_area.ensureWidgetVisible(self.txt_late_reason)
+            return
+        self._set_field_error(self.txt_late_reason, False)
+
         med_items = []
         for r in range(self.table_med.rowCount()):
             med_items.append(
@@ -1219,12 +1484,22 @@ class MedicalExamView(QWidget):
                 }
             )
 
+        if get_frontend_settings().app_mode == "production" and med_items:
+            self.feedback.show_message(
+                "Kê đơn chưa được hỗ trợ",
+                "Hệ thống production chỉ lưu kết quả khám không kèm đơn thuốc.",
+                severity="error",
+            )
+            return
+
         payload = {
             "symptoms": symptoms,
             "diagnosis": diagnosis,
             "notes": self.txt_notes.toPlainText().strip() or None,
             "prescription_items": med_items,
         }
+        if self._late_entry_required:
+            payload["late_entry_reason"] = late_reason
 
         if not self._ask_confirmation(
             "Xác nhận hoàn tất",
@@ -1271,7 +1546,7 @@ class DoctorSidebar(AppSidebar):
     def __init__(self, doctor_name: str, license_number: str, parent=None):
         super().__init__(
             (
-                NavigationItem("schedule", "Lịch khám hôm nay", "calendar", "NGHIỆP VỤ"),
+                NavigationItem("schedule", "Hàng đợi khám", "calendar", "NGHIỆP VỤ"),
                 NavigationItem("exam", "Hồ sơ đang khám", "medical"),
             ),
             parent,
@@ -1372,6 +1647,7 @@ class DoctorDashboard(QMainWindow):
         self.schedule_view.session_expired.connect(self.handle_logout)
         self.exam_view.examination_done.connect(self.finish_examination)
         self.exam_view.back_to_schedule.connect(self.go_to_schedule)
+        self.exam_view.session_expired.connect(self.handle_logout)
 
         self.shell = ApplicationShell(self.sidebar, self.stack)
         self.setCentralWidget(self.shell)

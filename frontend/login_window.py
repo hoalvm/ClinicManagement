@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from frontend.api.workers import ApiWorker
 from frontend.api_client import api_client
+from frontend.core.config import get_frontend_settings
 from frontend.views.register_view import RegisterView
 from frontend.widgets.feedback_banner import FeedbackBanner
 
@@ -115,6 +116,7 @@ class LoginWindow(QWidget):
         card_layout.addWidget(self.login_btn)
 
         self.register_btn = QPushButton("Đăng ký tài khoản bệnh nhân")
+        self.register_btn.setVisible(get_frontend_settings().app_mode != "production")
         self.register_btn.setObjectName("secondaryButton")
         self.register_btn.setMinimumHeight(40)
         self.register_btn.setCursor(Qt.PointingHandCursor)

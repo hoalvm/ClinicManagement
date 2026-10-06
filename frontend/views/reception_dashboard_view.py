@@ -238,11 +238,11 @@ class ReceptionDashboardView(BaseApiView):
                 act_layout.setContentsMargins(4, 0, 4, 0)
                 act_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-                action_btn = QPushButton("Lập hóa đơn")
-                action_btn.setObjectName("tableActionPrimary")
+                action_btn = QPushButton("Xem lịch hẹn")
+                action_btn.setObjectName("tableActionSecondary")
                 action_btn.setCursor(Qt.PointingHandCursor)
-                action_btn.setAccessibleName(f"Lập hóa đơn cho lịch hẹn #{appt_id}")
-                action_btn.clicked.connect(lambda _, a_id=appt_id: self.create_invoice_requested.emit(a_id))
+                action_btn.setAccessibleName(f"Xem lịch hẹn #{appt_id}")
+                action_btn.clicked.connect(lambda _checked=False: self.navigate_requested.emit("appointment_management"))
                 act_layout.addWidget(action_btn)
 
                 self.queue_table.setCellWidget(row, 5, action_widget)

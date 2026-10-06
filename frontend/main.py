@@ -4,6 +4,7 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
+import httpx
 from PySide6.QtCore import QObject, QThreadPool, Slot
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QMessageBox
@@ -60,6 +61,18 @@ doctor_profile_routes: dict[
 ] = {}
 
 
+def _revoke_server_session_async(token: str) -> None:
+    """Revoke the captured bearer token without delaying the desktop logout."""
+
+    logout_url = f"{get_frontend_settings().api_base_url.rstrip('/')}/auth/logout"
+
+    def revoke() -> None:
+        with httpx.Client(timeout=3.0) as client:
+            client.post(logout_url, headers={"Authorization": f"Bearer {token}"})
+
+    QThreadPool.globalInstance().start(ApiWorker(revoke))
+
+
 def _next_route_generation() -> int:
     global doctor_profile_generation, doctor_profile_worker
     doctor_profile_generation += 1
@@ -70,10 +83,13 @@ def _next_route_generation() -> int:
 def show_login() -> None:
     global login, dashboard
     _next_route_generation()
+    old_token = api_client.token
     if dashboard:
         dashboard.close()
         dashboard = None
     api_client.clear_session()
+    if old_token:
+        _revoke_server_session_async(old_token)
     if not login:
         login = LoginWindow(on_success=open_dashboard)
     login.reset_for_login()
@@ -133,6 +149,7 @@ def open_dashboard() -> None:
             timeout=settings.api_timeout_seconds,
         )
         staff_client.set_access_token(api_client.token)
+        staff_client.set_user_identity(username=api_client.username or "", role=role)
 
         session_state.set_authenticated(
             access_token=api_client.token,
@@ -155,6 +172,7 @@ def open_dashboard() -> None:
             timeout=settings.api_timeout_seconds,
         )
         portal_client.set_access_token(api_client.token)
+        portal_client.set_user_identity(username=api_client.username or "", role=role)
 
         session = SessionState()
         session.set_authenticated(

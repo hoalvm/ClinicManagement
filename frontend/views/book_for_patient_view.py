@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import re
-from datetime import date
 from typing import Any
 
 from PySide6.QtCore import QDate, Qt, Signal
 from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
     QDateEdit,
+    QDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -23,7 +23,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from frontend.api.api_client import ApiClient
+from frontend.api.api_client import ApiClient, ApiError
+from frontend.core.clinic_clock import clinic_clock, clinic_today_qdate
+from frontend.core.config import get_frontend_settings
 from frontend.ui.design_system import (
     CellValue,
     ColumnDisplayMode,
@@ -32,6 +34,7 @@ from frontend.ui.design_system import (
 )
 from frontend.views.common import BaseApiView, format_date
 from frontend.widgets.adaptive_data_table import AdaptiveDataTable
+from frontend.widgets.async_task_controller import AsyncTaskController
 from frontend.widgets.combo_box import ChevronComboBox
 from frontend.widgets.page_header import PageHeader
 from frontend.widgets.semantic_check_box import SemanticCheckBox
@@ -60,6 +63,7 @@ class BookForPatientView(BaseApiView):
 
     def __init__(self, api_client: ApiClient, parent: QWidget | None = None) -> None:
         super().__init__(api_client, parent)
+        self._production_mode = get_frontend_settings().app_mode == "production"
         self._selected_patient: dict[str, Any] | None = None
         self._selected_patient_id: int | None = None
         self._doctors_cache: list[dict[str, Any]] = []
@@ -192,6 +196,11 @@ class BookForPatientView(BaseApiView):
         self.btn_lookup.clicked.connect(self._lookup_patient)
         lookup_row.addWidget(self.btn_lookup)
         lookup_layout.addLayout(lookup_row)
+        self.btn_verify_identity = QPushButton("Xác minh hồ sơ theo mã và ngày sinh")
+        self.btn_verify_identity.setObjectName("secondaryButton")
+        self.btn_verify_identity.clicked.connect(self._verify_identity_dialog)
+        self.btn_verify_identity.setVisible(self._production_mode)
+        lookup_layout.addWidget(self.btn_verify_identity)
 
         self.search_results_table = AdaptiveDataTable(
             (
@@ -271,7 +280,112 @@ class BookForPatientView(BaseApiView):
         fields.setColumnStretch(0, 1)
         fields.setColumnStretch(1, 1)
         layout.addLayout(fields)
+        self.chk_identity_checked = SemanticCheckBox(
+            "Tôi đã đối chiếu giấy tờ định danh và ngày sinh của bệnh nhân."
+        )
+        self.chk_identity_checked.setVisible(self._production_mode)
+        layout.addWidget(self.chk_identity_checked)
         return card
+
+    def _verify_identity_dialog(self) -> None:
+        if not self._production_mode:
+            return
+        doctor_id = self.doctor_combo.currentData()
+        doctor = next(
+            (item for item in self._doctors_cache if item.get("doctor_id") == doctor_id),
+            None,
+        )
+        clinic_id = doctor.get("clinic_id") if doctor else None
+        if not clinic_id:
+            self.feedback.show_message(
+                "Chưa chọn cơ sở",
+                "Chọn bác sĩ và cơ sở khám trước khi xác minh hồ sơ liên cơ sở.",
+                severity="error",
+            )
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Xác minh bệnh nhân")
+        dialog.resize(440, 260)
+        layout = QVBoxLayout(dialog)
+        help_label = QLabel(
+            "Nhập mã hồ sơ và ngày sinh trên giấy tờ bệnh nhân cung cấp. "
+            "Hệ thống ghi lại người thực hiện tra cứu."
+        )
+        help_label.setWordWrap(True)
+        layout.addWidget(help_label)
+        patient_id_input = QLineEdit()
+        patient_id_input.setPlaceholderText("Mã hồ sơ bệnh nhân")
+        layout.addWidget(patient_id_input)
+        dob_input = QDateEdit()
+        dob_input.setCalendarPopup(True)
+        dob_input.setDisplayFormat("dd/MM/yyyy")
+        dob_input.setMinimumDate(self.NULL_DATE)
+        dob_input.setSpecialValueText("Chọn ngày sinh")
+        dob_input.setDate(self.NULL_DATE)
+        layout.addWidget(dob_input)
+        confirmed = SemanticCheckBox("Tôi đã đối chiếu giấy tờ định danh bản gốc.")
+        layout.addWidget(confirmed)
+        error = QLabel()
+        error.setObjectName("errorText")
+        error.setWordWrap(True)
+        error.hide()
+        layout.addWidget(error)
+        actions = QHBoxLayout()
+        actions.addStretch(1)
+        cancel = QPushButton("Hủy")
+        cancel.clicked.connect(dialog.reject)
+        actions.addWidget(cancel)
+        verify = QPushButton("Xác minh")
+        verify.setObjectName("primaryButton")
+        actions.addWidget(verify)
+        layout.addLayout(actions)
+        tasks = AsyncTaskController(dialog)
+        dialog.finished.connect(lambda _result: tasks.invalidate())
+
+        def submit() -> None:
+            raw_id = patient_id_input.text().strip()
+            if (
+                not raw_id.isdigit()
+                or int(raw_id) <= 0
+                or dob_input.date() == self.NULL_DATE
+                or not confirmed.isChecked()
+            ):
+                error.setText("Nhập mã hồ sơ, ngày sinh và xác nhận đã kiểm tra giấy tờ.")
+                error.show()
+                return
+            payload = {
+                "patient_id": int(raw_id),
+                "date_of_birth": dob_input.date().toString(Qt.DateFormat.ISODate),
+                "clinic_id": int(clinic_id),
+                "identity_checked": True,
+            }
+            error.hide()
+
+            def succeeded(patient: dict[str, Any]) -> None:
+                self._select_patient(patient)
+                self.chk_identity_checked.setChecked(True)
+                dialog.accept()
+
+            def failed(exc: Exception) -> None:
+                error.setText(
+                    exc.message if isinstance(exc, ApiError)
+                    else "Không thể xác minh hồ sơ lúc này. Vui lòng thử lại."
+                )
+                error.show()
+
+            tasks.run(
+                "verify_patient_identity",
+                lambda: self.api_client.post(
+                    "/api/v1/reception/patients/verify-identity", json=payload
+                ),
+                succeeded,
+                failed,
+                controls=(verify, patient_id_input, dob_input),
+            )
+
+        verify.clicked.connect(submit)
+        dialog.exec()
 
     @staticmethod
     def _add_top_field(
@@ -314,8 +428,8 @@ class BookForPatientView(BaseApiView):
         self.doctor_combo.currentIndexChanged.connect(self._schedule_context_changed)
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
-        self.date_edit.setMinimumDate(QDate.currentDate())
-        self.date_edit.setDate(QDate.currentDate())
+        self.date_edit.setMinimumDate(clinic_today_qdate())
+        self.date_edit.setDate(clinic_today_qdate())
         self.date_edit.setDisplayFormat("dd/MM/yyyy")
         self.date_edit.dateChanged.connect(self._schedule_context_changed)
         self.time_combo = ChevronComboBox()
@@ -500,6 +614,7 @@ class BookForPatientView(BaseApiView):
 
     def showEvent(self, event: Any) -> None:
         super().showEvent(event)
+        self.date_edit.setMinimumDate(clinic_today_qdate())
         if not self._doctors_cache:
             self._load_doctors()
 
@@ -524,6 +639,7 @@ class BookForPatientView(BaseApiView):
             self.content_grid.setColumnStretch(1, 0)
 
     def refresh(self) -> None:
+        self.date_edit.setMinimumDate(clinic_today_qdate())
         self._load_doctors()
 
     def _load_doctors(self) -> None:
@@ -708,6 +824,7 @@ class BookForPatientView(BaseApiView):
     def _select_patient(self, patient: dict[str, Any]) -> None:
         self._selected_patient = patient
         self._selected_patient_id = patient.get("patient_id")
+        self.chk_identity_checked.setChecked(False)
         self.search_results_table.hide()
         self.name_input.setText(str(patient.get("full_name", "")))
         self.phone_input.setText(str(patient.get("phone", "") or ""))
@@ -737,6 +854,7 @@ class BookForPatientView(BaseApiView):
     def _reset_patient_selection(self, keep_search_text: bool = False) -> None:
         self._selected_patient = None
         self._selected_patient_id = None
+        self.chk_identity_checked.setChecked(False)
         self.search_results_table.hide()
         self.btn_unselect_pt.hide()
         self._set_patient_fields_read_only(False)
@@ -771,7 +889,7 @@ class BookForPatientView(BaseApiView):
         age = ""
         if len(dob) >= 4:
             try:
-                age = f" · {date.today().year - int(dob[:4])} tuổi"
+                age = f" · {clinic_clock.today().year - int(dob[:4])} tuổi"
             except ValueError:
                 pass
         self.val_p_dob.setText(f"{format_date(dob)}{age}" if dob else "—")
@@ -879,7 +997,7 @@ class BookForPatientView(BaseApiView):
         self.gender_combo.setCurrentIndex(0)
         self.dob_edit.setDate(self.NULL_DATE)
         self.reason_input.clear()
-        self.date_edit.setDate(QDate.currentDate())
+        self.date_edit.setDate(clinic_today_qdate())
         self.specialty_combo.setCurrentIndex(0)
         self.doctor_combo.setCurrentIndex(0)
         self.chk_autoconfirm.setChecked(True)
@@ -890,14 +1008,24 @@ class BookForPatientView(BaseApiView):
     def _submit_booking(self) -> None:
         full_name = self.name_input.text().strip()
         phone = re.sub(r"\s+", "", self.phone_input.text())
-        if not full_name or not phone:
+        if not full_name or (not phone and not self._selected_patient_id):
             self.feedback.show_message(
                 "Thiếu thông tin bắt buộc",
                 "Nhập họ tên và số điện thoại bệnh nhân.",
                 severity="error",
             )
             return
-        if self.date_edit.date() < QDate.currentDate():
+        if self._production_mode and (
+            self.dob_edit.date() == self.NULL_DATE
+            or not self.chk_identity_checked.isChecked()
+        ):
+            self.feedback.show_message(
+                "Chưa xác minh bệnh nhân",
+                "Cần ghi ngày sinh và đối chiếu giấy tờ định danh trước khi đặt lịch.",
+                severity="error",
+            )
+            return
+        if self.date_edit.date() < clinic_today_qdate():
             self.feedback.show_message(
                 "Ngày khám không hợp lệ",
                 "Không thể đặt lịch khám trong quá khứ.",
@@ -924,6 +1052,9 @@ class BookForPatientView(BaseApiView):
         }
         if self._selected_patient_id:
             payload["patient_id"] = self._selected_patient_id
+            if self._production_mode:
+                payload["date_of_birth"] = self.dob_edit.date().toString(Qt.DateFormat.ISODate)
+                payload["identity_checked"] = True
         else:
             payload.update(
                 {
@@ -938,6 +1069,8 @@ class BookForPatientView(BaseApiView):
                     ),
                 }
             )
+            if self._production_mode:
+                payload["identity_checked"] = True
         self.run_api_task(
             "book_for_patient",
             lambda: self.api_client.post("/api/v1/reception/appointments/book", json=payload),

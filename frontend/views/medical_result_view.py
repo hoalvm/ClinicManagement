@@ -87,6 +87,7 @@ class MedicalResultView(BaseApiView):
             ("field_symptoms", "symptoms"),
             ("th_diagnosis", "diagnosis"),
             ("field_clinical_notes", "notes"),
+            ("field_late_entry_reason", "late_entry_reason"),
         ]
         for row, (label_key, key) in enumerate(fields, start=1):
             label_widget = QLabel(t(label_key))
@@ -161,6 +162,7 @@ class MedicalResultView(BaseApiView):
             "symptoms": "field_symptoms",
             "diagnosis": "th_diagnosis",
             "notes": "field_clinical_notes",
+            "late_entry_reason": "field_late_entry_reason",
         }
         for key, lbl in self._field_labels.items():
             if key in field_key_map:
@@ -206,10 +208,14 @@ class MedicalResultView(BaseApiView):
             "symptoms": data.get("symptoms"),
             "diagnosis": data.get("diagnosis"),
             "notes": data.get("notes"),
+            "late_entry_reason": data.get("late_entry_reason"),
         }
         for key, value in values.items():
             if key in self.values:
                 self.values[key].setText(display_text(value))
+        late_reason_visible = bool(str(data.get("late_entry_reason") or "").strip())
+        self._field_labels["late_entry_reason"].setVisible(late_reason_visible)
+        self.values["late_entry_reason"].setVisible(late_reason_visible)
         appt_id = data.get("appointment_id")
         self._appointment_id = int(appt_id) if appt_id is not None else None
         self.appointment_button.show()
@@ -242,6 +248,8 @@ class MedicalResultView(BaseApiView):
         self.header.set_subtitle(t("medical_result_subtitle"))
         for value in self.values.values():
             value.setText("—")
+        self._field_labels["late_entry_reason"].hide()
+        self.values["late_entry_reason"].hide()
         self.prescription_model.removeRows(0, self.prescription_model.rowCount())
         self.prescription_table.hide()
         self.no_prescription.hide()

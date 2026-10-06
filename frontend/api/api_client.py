@@ -78,15 +78,25 @@ class ApiClient:
     def clear_access_token(self) -> None:
         self.set_access_token(None)
 
+    def set_user_identity(self, *, username: str, role: str) -> None:
+        """Use the server's /auth/me result for display and route labels."""
+        self._username = username
+        self._role = role.upper()
+
     def login(self, username: str, password: str) -> tuple[bool, str | None, dict[str, Any]]:
         """Log in via OAuth2 form and save token in client."""
         try:
             res = self.request("POST", "/auth/login", data={"username": username, "password": password})
             token = res.get("access_token", "")
             self.set_access_token(token)
-            payload = decode_jwt_payload(token)
-            return True, None, payload
+            current_user = self.get("/auth/me")
+            if not isinstance(current_user, dict) or not current_user.get("is_active"):
+                raise ApiError(t("api_invalid_response"))
+            self._role = str(current_user.get("role") or "").upper()
+            self._username = str(current_user.get("username") or username)
+            return True, None, current_user
         except ApiError as exc:
+            self.clear_access_token()
             return False, exc.message, {}
 
     def get(self, path: str, *, params: dict[str, Any] | None = None) -> Any:

@@ -80,7 +80,8 @@ class PaymentHistoryView(BaseApiView):
             (
                 ("Tất cả phương thức", None),
                 ("Tiền mặt", "CASH"),
-                ("Thẻ ngân hàng", "CARD"),
+                ("Chuyển khoản", "TRANSFER"),
+                ("Thẻ (dữ liệu cũ)", "CARD"),
             ),
             accessible_name="Lọc theo phương thức thanh toán",
         )
@@ -147,6 +148,7 @@ class PaymentHistoryView(BaseApiView):
                     maximum_width=122,
                     formatter=lambda value: {
                         "CASH": "Tiền mặt",
+                        "TRANSFER": "Chuyển khoản",
                         "CARD": "Thẻ",
                     }.get(str(value), str(value or "—")),
                     display_mode=ColumnDisplayMode.FULL,
