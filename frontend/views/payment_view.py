@@ -32,8 +32,8 @@ from frontend.widgets.status_badge import StatusBadge
 
 
 def demo_transfer_payload(invoice_id: int, amount: Decimal) -> str:
-    """Local demonstration data: no payment URL or bank account is encoded."""
-    return f"CLINIC-DEMO|{invoice_id}|{amount:.2f}"
+    """Invoice reference only: no payment URL or bank account is encoded."""
+    return f"CLINIC-INVOICE|{invoice_id}|{amount:.2f}"
 
 
 def parse_tendered(text: str) -> Decimal:
@@ -167,7 +167,7 @@ class PaymentView(BaseApiView):
         self.method_group.addButton(self.rb_cash)
         method_row.addWidget(self.rb_cash)
 
-        self.rb_transfer = QRadioButton("Chuyển khoản (DEMO)")
+        self.rb_transfer = QRadioButton("Chuyển khoản xác nhận thủ công")
         self.rb_transfer.toggled.connect(self._on_method_changed)
         self.method_group.addButton(self.rb_transfer)
         method_row.addWidget(self.rb_transfer)
@@ -197,7 +197,7 @@ class PaymentView(BaseApiView):
         self.transfer_box = QFrame()
         self.transfer_box.setObjectName("filterCard")
         transfer_layout = QVBoxLayout(self.transfer_box)
-        self.qr_title = QLabel("QR MÔ PHỎNG · KHÔNG THỂ THANH TOÁN")
+        self.qr_title = QLabel("QR tham chiếu hóa đơn · không dùng để thanh toán")
         self.qr_title.setObjectName("sectionTitle")
         transfer_layout.addWidget(self.qr_title)
         self.qr_label = QLabel()
@@ -205,7 +205,7 @@ class PaymentView(BaseApiView):
         self.qr_label.setAccessibleName("Mã QR mô phỏng, không có tài khoản ngân hàng")
         transfer_layout.addWidget(self.qr_label)
         self.transfer_note = QLabel(
-            "Mã QR chỉ chứa mã hóa đơn và số tiền DEMO; không có tài khoản ngân hàng. "
+            "Mã QR chỉ chứa mã hóa đơn và số tiền; không có tài khoản ngân hàng. "
             "Việc mở QR không ghi nhận thanh toán. Nhân viên chỉ bấm xác nhận sau khi đối chiếu."
         )
         self.transfer_note.setWordWrap(True)
@@ -220,7 +220,6 @@ class PaymentView(BaseApiView):
             "Tôi đã đối chiếu đúng mã giao dịch, số tiền và người nhận trên sao kê ngân hàng."
         )
         transfer_layout.addWidget(self.transfer_verified_check)
-        self.rb_transfer.setText("Chuyển khoản xác nhận thủ công" if self._production_mode else "Chuyển khoản (DEMO)")
         self.qr_title.setVisible(not self._production_mode)
         self.qr_label.setVisible(not self._production_mode)
         self.transfer_note.setVisible(not self._production_mode)
@@ -439,7 +438,7 @@ class PaymentView(BaseApiView):
         method = res.get("payment_method", "CASH")
         patient_name = res.get("patient_name", "Bệnh nhân")
         method_str = "Tiền mặt" if method == "CASH" else (
-            "Chuyển khoản đã đối soát" if self._production_mode else "Chuyển khoản (DEMO)"
+            "Chuyển khoản đã đối soát" if self._production_mode else "Chuyển khoản xác nhận thủ công"
         )
         tendered = Decimal(str(res.get("amount_received") or total))
         change = Decimal(str(res.get("change_due") or 0))
