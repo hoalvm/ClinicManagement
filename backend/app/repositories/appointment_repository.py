@@ -149,7 +149,7 @@ class AppointmentRepository:
             .where(
                 Appointment.doctor_id == doctor_id,
                 Appointment.appointment_date == appointment_date,
-                Appointment.status != "CANCELLED",
+                Appointment.status.notin_(("CANCELLED", "NO_SHOW")),
             )
             .order_by(Appointment.start_time)
         )
@@ -163,7 +163,7 @@ class AppointmentRepository:
             .where(
                 Appointment.patient_id == patient_id,
                 Appointment.appointment_date == appointment_date,
-                Appointment.status != "CANCELLED",
+                Appointment.status.notin_(("CANCELLED", "NO_SHOW")),
             )
             .order_by(Appointment.start_time)
         )
@@ -175,7 +175,7 @@ class AppointmentRepository:
             .options(*_appointment_load_options())
             .where(
                 Appointment.patient_id == patient_id,
-                Appointment.status.in_(("PENDING", "CONFIRMED")),
+                Appointment.status.notin_(("CANCELLED", "NO_SHOW")),
             )
             .order_by(Appointment.appointment_date.asc(), Appointment.start_time.asc())
         )

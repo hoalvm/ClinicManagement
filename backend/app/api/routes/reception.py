@@ -13,6 +13,7 @@ from backend.app.schemas.reception import (
     CancelAppointmentRequest,
     CheckInRequest,
     CreateInvoiceRequest,
+    InvoicePreview,
     PaymentRecordPage,
     ProcessPaymentRequest,
     ReceptionAppointmentItem,
@@ -22,22 +23,28 @@ from backend.app.schemas.reception import (
     ReceptionInvoicePage,
     ReceptionPatientSummary,
     RescheduleAppointmentRequest,
+    VerifiedPatientIdentity,
+    VerifyPatientIdentityRequest,
 )
 from backend.app.services.reception_service import ReceptionService
 
 router = APIRouter(prefix="/reception", tags=["Reception & Staff Operations"])
 
 
-def require_staff_or_admin(
+def require_staff(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
-    allowed_roles = {"STAFF", "RECEPTIONIST", "ADMIN"}
+    allowed_roles = {"STAFF"}
     if current_user.role not in allowed_roles:
-        raise AuthorizationError("Yêu cầu quyền nhân viên tiếp tân hoặc quản trị viên.")
+        raise AuthorizationError("Yêu cầu quyền nhân viên tiếp tân.")
     return current_user
 
 
-StaffUser = Annotated[User, Depends(require_staff_or_admin)]
+StaffUser = Annotated[User, Depends(require_staff)]
+
+
+def _service(session: DatabaseSession, staff: StaffUser) -> ReceptionService:
+    return ReceptionService(session, staff_user_id=staff.user_id)
 
 
 @router.get("/dashboard", response_model=ReceptionDashboardStats)
@@ -45,7 +52,7 @@ def get_dashboard(
     session: DatabaseSession,
     staff: StaffUser,
 ) -> ReceptionDashboardStats:
-    return ReceptionService(session).get_dashboard_stats()
+    return _service(session, staff).get_dashboard_stats()
 
 
 @router.get("/appointments", response_model=ReceptionAppointmentPage)
@@ -59,7 +66,7 @@ def list_appointments(
     appointment_date: Annotated[date | None, Query()] = None,
     doctor_id: Annotated[int | None, Query()] = None,
 ) -> ReceptionAppointmentPage:
-    return ReceptionService(session).list_appointments(
+    return _service(session, staff).list_appointments(
         page=page,
         page_size=page_size,
         keyword=keyword,
@@ -69,13 +76,22 @@ def list_appointments(
     )
 
 
+@router.get("/appointments/{appointment_id}", response_model=ReceptionAppointmentItem)
+def get_appointment(
+    appointment_id: int,
+    session: DatabaseSession,
+    staff: StaffUser,
+) -> ReceptionAppointmentItem:
+    return _service(session, staff).get_appointment(appointment_id)
+
+
 @router.post("/appointments/{appointment_id}/confirm", response_model=ReceptionAppointmentItem)
 def confirm_appointment(
     appointment_id: int,
     session: DatabaseSession,
     staff: StaffUser,
 ) -> ReceptionAppointmentItem:
-    return ReceptionService(session).confirm_appointment(appointment_id)
+    return _service(session, staff).confirm_appointment(appointment_id)
 
 
 @router.post("/appointments/{appointment_id}/check-in", response_model=ReceptionAppointmentItem)
@@ -85,11 +101,19 @@ def check_in_patient(
     staff: StaffUser,
     body: CheckInRequest | None = None,
 ) -> ReceptionAppointmentItem:
-    return ReceptionService(session).check_in_patient(
+    return _service(session, staff).check_in_patient(
         appointment_id,
-        queue_number=body.queue_number if body else None,
         notes=body.notes if body else None,
     )
+
+
+@router.post("/appointments/{appointment_id}/no-show", response_model=ReceptionAppointmentItem)
+def mark_no_show(
+    appointment_id: int,
+    session: DatabaseSession,
+    staff: StaffUser,
+) -> ReceptionAppointmentItem:
+    return _service(session, staff).mark_no_show(appointment_id)
 
 
 @router.post("/appointments/book", response_model=ReceptionAppointmentItem)
@@ -98,7 +122,7 @@ def book_for_patient(
     session: DatabaseSession,
     staff: StaffUser,
 ) -> ReceptionAppointmentItem:
-    return ReceptionService(session).book_for_patient(body)
+    return _service(session, staff).book_for_patient(body)
 
 
 @router.post("/appointments/{appointment_id}/cancel", response_model=ReceptionAppointmentItem)
@@ -108,7 +132,11 @@ def cancel_appointment(
     session: DatabaseSession,
     staff: StaffUser,
 ) -> ReceptionAppointmentItem:
-    return ReceptionService(session).cancel_appointment(appointment_id, body.cancellation_reason)
+    return _service(session, staff).cancel_appointment(
+        appointment_id,
+        body.cancellation_reason,
+        care_not_started=body.care_not_started,
+    )
 
 
 @router.post("/appointments/{appointment_id}/reschedule", response_model=ReceptionAppointmentItem)
@@ -118,7 +146,7 @@ def reschedule_appointment(
     session: DatabaseSession,
     staff: StaffUser,
 ) -> ReceptionAppointmentItem:
-    return ReceptionService(session).reschedule_appointment(
+    return _service(session, staff).reschedule_appointment(
         appointment_id=appointment_id,
         appointment_date=body.appointment_date,
         start_time=body.start_time,
@@ -137,7 +165,7 @@ def list_invoices(
     status: Annotated[str | None, Query()] = None,
     keyword: Annotated[str | None, Query(max_length=200)] = None,
 ) -> ReceptionInvoicePage:
-    return ReceptionService(session).list_invoices(
+    return _service(session, staff).list_invoices(
         page=page,
         page_size=page_size,
         status=status,
@@ -151,7 +179,18 @@ def get_invoice(
     session: DatabaseSession,
     staff: StaffUser,
 ) -> ReceptionInvoiceItem:
-    return ReceptionService(session).get_invoice(invoice_id)
+    return _service(session, staff).get_invoice(invoice_id)
+
+
+@router.get(
+    "/appointments/{appointment_id}/invoice-preview", response_model=InvoicePreview
+)
+def invoice_preview(
+    appointment_id: int,
+    session: DatabaseSession,
+    staff: StaffUser,
+) -> InvoicePreview:
+    return _service(session, staff).invoice_preview(appointment_id)
 
 
 @router.post("/invoices", response_model=ReceptionInvoiceItem)
@@ -160,7 +199,7 @@ def create_invoice(
     session: DatabaseSession,
     staff: StaffUser,
 ) -> ReceptionInvoiceItem:
-    return ReceptionService(session).create_invoice(body)
+    return _service(session, staff).create_invoice(body)
 
 
 @router.post("/invoices/{invoice_id}/pay", response_model=ReceptionInvoiceItem)
@@ -170,7 +209,9 @@ def process_payment(
     session: DatabaseSession,
     staff: StaffUser,
 ) -> ReceptionInvoiceItem:
-    return ReceptionService(session).process_payment(invoice_id, body)
+    return _service(session, staff).process_payment(
+        invoice_id, body, recorded_by_user_id=staff.user_id
+    )
 
 
 @router.get("/payments", response_model=PaymentRecordPage)
@@ -182,7 +223,7 @@ def list_payments(
     payment_method: Annotated[str | None, Query()] = None,
     keyword: Annotated[str | None, Query(max_length=200)] = None,
 ) -> PaymentRecordPage:
-    return ReceptionService(session).list_payments(
+    return _service(session, staff).list_payments(
         page=page,
         page_size=page_size,
         payment_method=payment_method,
@@ -196,4 +237,13 @@ def search_patients(
     staff: StaffUser,
     q: Annotated[str, Query(min_length=1, max_length=100)],
 ) -> list[ReceptionPatientSummary]:
-    return ReceptionService(session).search_patients(q)
+    return _service(session, staff).search_patients(q)
+
+
+@router.post("/patients/verify-identity", response_model=VerifiedPatientIdentity)
+def verify_patient_identity(
+    body: VerifyPatientIdentityRequest,
+    session: DatabaseSession,
+    staff: StaffUser,
+) -> VerifiedPatientIdentity:
+    return _service(session, staff).verify_patient_identity(body)

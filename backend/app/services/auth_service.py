@@ -3,6 +3,7 @@
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from backend.app.core.audit import record_audit_event
 from backend.app.core.exceptions import (
     AppError,
     AuthenticationError,
@@ -52,6 +53,14 @@ class AuthService:
                 address=payload.address,
             )
             self.patients.add(patient)
+            record_audit_event(
+                self.session,
+                actor_user_id=user.user_id,
+                actor_role="PATIENT",
+                action="PATIENT_REGISTERED",
+                entity_type="Patient",
+                entity_id=patient.patient_id,
+            )
             self.session.commit()
         except IntegrityError as exc:
             self.session.rollback()
@@ -74,9 +83,15 @@ class AuthService:
         user = self.users.get_by_username(payload.username)
         password_hash = user.password_hash if user is not None else DUMMY_PASSWORD_HASH
         password_valid = verify_password(payload.password, password_hash)
-        if user is None or not user.is_active or user.role != "PATIENT" or not password_valid:
+        if (
+            user is None
+            or not user.is_active
+            or user.role != "PATIENT"
+            or user.patient is None
+            or not password_valid
+        ):
             raise AuthenticationError("Incorrect username or password.")
-        return TokenResponse(access_token=create_access_token(user_id=user.user_id, role=user.role))
+        return TokenResponse(access_token=create_access_token(user_id=user.user_id, role=user.role, session=self.session))
 
     @staticmethod
     def current_user_response(user: User) -> CurrentUserResponse:

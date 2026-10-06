@@ -12,6 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.app.models.base import Base
 
 if TYPE_CHECKING:
+    from backend.app.models.charge_catalog import ChargeCatalog
     from backend.app.models.invoice import Invoice
 
 
@@ -22,6 +23,9 @@ class InvoiceItem(Base):
     invoice_id: Mapped[int] = mapped_column(
         "InvoiceID", ForeignKey("Invoices.InvoiceID"), nullable=False
     )
+    charge_id: Mapped[int | None] = mapped_column(
+        "ChargeID", ForeignKey("ChargeCatalog.ChargeID"), nullable=True
+    )
     item_name: Mapped[str] = mapped_column("ItemName", NVARCHAR(200), nullable=False)
     quantity: Mapped[int] = mapped_column(
         "Quantity", Integer, nullable=False, server_default=text("1")
@@ -29,3 +33,6 @@ class InvoiceItem(Base):
     unit_price: Mapped[Decimal] = mapped_column("UnitPrice", Numeric(18, 2), nullable=False)
 
     invoice: Mapped[Invoice] = relationship("Invoice", back_populates="items")
+    charge: Mapped[ChargeCatalog | None] = relationship(
+        "ChargeCatalog", back_populates="invoice_items"
+    )

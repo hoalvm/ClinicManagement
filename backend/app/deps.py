@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 
 from backend.app.models import User
 
-from .auth import decode_access_token
+from .core.exceptions import AuthenticationError
+from .core.security import decode_access_token, validate_access_session
 from .database import get_db
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -15,23 +16,18 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     )
     try:
         payload = decode_access_token(token)
-        sub_val = payload.get("sub")
-        username = payload.get("username")
-        if not sub_val and not username:
-            raise credentials_exception
-    except Exception:
-        # Do not expose token parsing details through the authentication error.
+    except AuthenticationError:
         raise credentials_exception from None
 
-    if username:
-        user = db.query(User).filter(User.username == username).first()
-    elif sub_val and str(sub_val).isdigit():
-        user = db.query(User).filter(User.user_id == int(sub_val)).first()
-    else:
-        user = db.query(User).filter(User.username == str(sub_val)).first()
-
-    if user is None:
+    user = db.query(User).filter(User.user_id == payload.user_id).first()
+    if user is None or not user.is_active or user.role != payload.role:
         raise credentials_exception
+    if user.role == "DOCTOR" and (user.doctor is None or not user.doctor.is_active):
+        raise credentials_exception
+    try:
+        validate_access_session(db, payload)
+    except AuthenticationError:
+        raise credentials_exception from None
     return user
 
 def require_admin(current_user: User = Depends(get_current_user)):

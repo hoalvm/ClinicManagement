@@ -1,39 +1,25 @@
-"""JWT and password helpers – uses PyJWT (jwt) and pwdlib, same as core/security.py."""
+"""Compatibility wrappers around the single password and JWT implementation."""
 
-from datetime import UTC, datetime, timedelta
+from backend.app.core.security import (
+    create_access_token as _create_access_token,
+)
+from backend.app.core.security import (
+    decode_access_token as _decode_access_token,
+)
+from backend.app.core.security import (
+    hash_password,
+    verify_password,
+)
 
-import jwt
-from pwdlib import PasswordHash
-from pwdlib.exceptions import UnknownHashError
-
-from backend.app.core.config import get_settings
-
-_settings = get_settings()
-
-SECRET_KEY = _settings.jwt_secret_value
-ALGORITHM = _settings.jwt_algorithm
-EXPIRE_MINUTES = _settings.access_token_expire_minutes
-
-_hasher = PasswordHash.recommended()
+__all__ = ["create_access_token", "decode_access_token", "hash_password", "verify_password"]
 
 
-def hash_password(password: str) -> str:
-    return _hasher.hash(password)
+def create_access_token(data: dict[str, object]) -> str:
+    """Issue a token for an immutable user id, never a mutable username."""
+
+    return _create_access_token(user_id=int(data["sub"]), role=str(data["role"]))
 
 
-def verify_password(plain: str, hashed: str) -> bool:
-    try:
-        return _hasher.verify(plain, hashed)
-    except (TypeError, UnknownHashError, ValueError):
-        return False
-
-
-def create_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.now(UTC) + timedelta(minutes=EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-
-def decode_access_token(token: str):
-    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+def decode_access_token(token: str) -> dict[str, str]:
+    payload = _decode_access_token(token)
+    return {"sub": str(payload.user_id), "role": payload.role}

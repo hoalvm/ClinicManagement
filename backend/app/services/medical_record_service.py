@@ -83,6 +83,7 @@ class MedicalRecordService:
             symptoms=record.symptoms,
             diagnosis=record.diagnosis,
             notes=record.notes,
+            late_entry_reason=record.late_entry_reason,
             doctor=self._doctor(record),
             clinic=(
                 ClinicSummary(clinic_id=clinic.clinic_id, clinic_name=clinic.clinic_name)

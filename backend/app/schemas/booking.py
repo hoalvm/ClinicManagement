@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import date, time
 
+from pydantic import Field, field_validator
+
 from backend.app.schemas.common import APIModel
 
 
@@ -55,20 +57,41 @@ class DoctorScheduleItem(APIModel):
 
 
 class AppointmentCreateRequest(APIModel):
-    doctor_id: int
+    doctor_id: int = Field(gt=0)
     appointment_date: date
     start_time: time
     end_time: time
-    reason: str | None = None
+    reason: str | None = Field(default=None, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def nonblank_reason(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("Reason cannot be blank")
+        return value
 
 
 class AppointmentRescheduleRequest(APIModel):
     new_appointment_date: date
     new_start_time: time
     new_end_time: time
-    new_doctor_id: int | None = None
-    reason: str | None = None
+    new_doctor_id: int | None = Field(default=None, gt=0)
+    reason: str | None = Field(default=None, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def nonblank_reason(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("Reason cannot be blank")
+        return value
 
 
 class AppointmentCancelRequest(APIModel):
-    cancellation_reason: str | None = None
+    cancellation_reason: str | None = Field(default=None, max_length=500)
+
+    @field_validator("cancellation_reason")
+    @classmethod
+    def nonblank_reason(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("Cancellation reason cannot be blank")
+        return value

@@ -29,6 +29,9 @@ class MedicalRecord(Base):
     symptoms: Mapped[str | None] = mapped_column("Symptoms", NVARCHAR(1000), nullable=True)
     diagnosis: Mapped[str | None] = mapped_column("Diagnosis", NVARCHAR(1000), nullable=True)
     notes: Mapped[str | None] = mapped_column("Notes", NVARCHAR(2000), nullable=True)
+    late_entry_reason: Mapped[str | None] = mapped_column(
+        "LateEntryReason", NVARCHAR(500), nullable=True
+    )
     examination_date: Mapped[datetime] = mapped_column(
         "ExaminationDate", DATETIME2, nullable=False, server_default=text("GETDATE()")
     )

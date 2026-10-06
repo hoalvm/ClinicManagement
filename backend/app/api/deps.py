@@ -6,8 +6,9 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from backend.app.core.config import get_settings
 from backend.app.core.exceptions import AuthenticationError, AuthorizationError
-from backend.app.core.security import decode_access_token
+from backend.app.core.security import decode_access_token, validate_access_session
 from backend.app.db.session import get_db
 from backend.app.models import Patient, User
 from backend.app.repositories import PatientRepository, UserRepository
@@ -25,6 +26,9 @@ def get_current_user(
     user = UserRepository(session).get_by_id(token_payload.user_id)
     if user is None or not user.is_active or user.role != token_payload.role:
         raise AuthenticationError()
+    if user.role == "DOCTOR" and (user.doctor is None or not user.doctor.is_active):
+        raise AuthenticationError()
+    validate_access_session(session, token_payload)
     return user
 
 
@@ -51,10 +55,19 @@ def get_optional_patient(
     try:
         token_payload = decode_access_token(credentials.credentials)
         user = UserRepository(session).get_by_id(token_payload.user_id)
-        if user and user.is_active and user.role == "PATIENT":
-            return user.patient or PatientRepository(session).get_by_user_id(user.user_id)
-    except Exception:
-        return None
+        if user and user.is_active and user.role == token_payload.role:
+            validate_access_session(session, token_payload)
+            if user.role == "PATIENT":
+                patient = user.patient or PatientRepository(session).get_by_user_id(user.user_id)
+                if patient is None and get_settings().app_mode == "production":
+                    raise AuthenticationError()
+                return patient
+            return None
+        if get_settings().app_mode == "production":
+            raise AuthenticationError()
+    except AuthenticationError:
+        if get_settings().app_mode == "production":
+            raise
     return None
 
 

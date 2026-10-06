@@ -38,6 +38,7 @@ class MedicalRecordDetail(APIModel):
     symptoms: str | None = None
     diagnosis: str | None = None
     notes: str | None = None
+    late_entry_reason: str | None = None
     doctor: DoctorSummary
     clinic: ClinicSummary | None = None
     prescription: PrescriptionResponse | None = None

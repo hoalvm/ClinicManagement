@@ -91,11 +91,12 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
-        logger.exception(
-            "Unhandled error while processing %s %s",
+        logger.error(
+            "Unhandled %s while processing %s %s (request_id=%s)",
+            type(exc).__name__,
             request.method,
             request.url.path,
-            exc_info=exc,
+            getattr(request.state, "request_id", "unavailable"),
         )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

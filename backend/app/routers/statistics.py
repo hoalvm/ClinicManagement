@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from backend.app.api.routes.admin import load_admin_stats
+from backend.app.core.clock import clinic_today
 from backend.app.models import Clinic, Doctor, DoctorSchedule, Specialty, User
 
 from ..database import get_db
@@ -47,6 +49,7 @@ def overview(db: Session = Depends(get_db), admin=Depends(require_admin)):
     )
 
     return {
+        **load_admin_stats(db, clinic_today()).model_dump(mode="json"),
         "total_users": total_users,
         "total_doctors": total_doctors,
         "total_clinics": total_clinics,

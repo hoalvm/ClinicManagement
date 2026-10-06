@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, ForeignKey, Integer
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, text
 from sqlalchemy.dialects.mssql import NVARCHAR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -26,6 +26,9 @@ class Patient(Base):
     date_of_birth: Mapped[date | None] = mapped_column("DateOfBirth", Date, nullable=True)
     gender: Mapped[str | None] = mapped_column("Gender", NVARCHAR(10), nullable=True)
     address: Mapped[str | None] = mapped_column("Address", NVARCHAR(255), nullable=True)
+    is_walk_in: Mapped[bool] = mapped_column(
+        "IsWalkIn", Boolean, nullable=False, server_default=text("0")
+    )
 
     user: Mapped[User] = relationship("User", back_populates="patient")
     appointments: Mapped[list[Appointment]] = relationship("Appointment", back_populates="patient")

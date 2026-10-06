@@ -2,6 +2,7 @@
 
 import re
 from datetime import date
+from typing import Literal
 
 from pydantic import EmailStr, Field, field_validator
 
@@ -26,7 +27,7 @@ class PatientProfileUpdate(APIModel):
     phone: str | None = Field(default=None, max_length=15)
     email: EmailStr | None = Field(default=None, max_length=100)
     date_of_birth: date | None = None
-    gender: str | None = Field(default=None, max_length=10)
+    gender: Literal["MALE", "FEMALE", "OTHER"] | None = None
     address: str | None = Field(default=None, max_length=255)
 
     @field_validator("full_name")
@@ -54,7 +55,7 @@ class PatientProfileUpdate(APIModel):
             raise ValueError("Date of birth cannot be in the future")
         return value
 
-    @field_validator("gender", "address")
+    @field_validator("address")
     @classmethod
     def empty_to_none(cls, value: str | None) -> str | None:
         if value is None:

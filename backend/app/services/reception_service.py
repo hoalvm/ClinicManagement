@@ -1,26 +1,43 @@
 """Receptionist and Clinic Staff business logic."""
 
-from datetime import date, datetime, time
+from collections import Counter
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
+from secrets import token_urlsafe
+from uuid import uuid4
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, inspect, or_, select, text
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, aliased, joinedload
 
-from backend.app.core.clock import clinic_now
-from backend.app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from backend.app.core.audit import record_audit_event
+from backend.app.core.clock import clinic_naive_now, clinic_now, clinic_today
+from backend.app.core.config import get_settings
+from backend.app.core.exceptions import (
+    AuthorizationError,
+    ConflictError,
+    InternalServerError,
+    NotFoundError,
+    ValidationError,
+)
 from backend.app.core.phone import normalize_phone
+from backend.app.core.security import hash_password
 from backend.app.models import (
     Appointment,
+    ChargeCatalog,
     Doctor,
     Invoice,
     InvoiceItem,
+    MedicalRecord,
     Patient,
     Payment,
+    StaffClinicAssignment,
     User,
 )
 from backend.app.schemas.reception import (
     BookForPatientRequest,
     CreateInvoiceRequest,
+    InvoicePreview,
     PaymentRecordItem,
     PaymentRecordPage,
     ProcessPaymentRequest,
@@ -30,12 +47,50 @@ from backend.app.schemas.reception import (
     ReceptionInvoiceItem,
     ReceptionInvoicePage,
     ReceptionPatientSummary,
+    VerifiedPatientIdentity,
+    VerifyPatientIdentityRequest,
 )
+from backend.app.services.booking_service import BookingService
 
 
 class ReceptionService:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, *, staff_user_id: int | None = None) -> None:
         self.session = session
+        self.staff_user_id = staff_user_id
+        self.production = get_settings().app_mode == "production"
+        self.allowed_clinic_ids: frozenset[int] | None = None
+        if self.production:
+            if staff_user_id is None:
+                raise AuthorizationError("Nhân viên cần được xác định trước khi truy cập dữ liệu cơ sở.")
+            clinic_ids = self.session.scalars(
+                select(StaffClinicAssignment.clinic_id).where(
+                    StaffClinicAssignment.user_id == staff_user_id,
+                    StaffClinicAssignment.is_active,
+                )
+            ).all()
+            self.allowed_clinic_ids = frozenset(int(clinic_id) for clinic_id in clinic_ids)
+            if not self.allowed_clinic_ids:
+                raise AuthorizationError("Nhân viên chưa được phân quyền cho cơ sở khám nào.")
+
+    def _require_clinic_access(self, clinic_id: int | None) -> None:
+        if self.allowed_clinic_ids is not None and clinic_id not in self.allowed_clinic_ids:
+            raise AuthorizationError("Bạn không được phân quyền thao tác tại cơ sở này.")
+
+    def _lock_row(self, table: str, key: str, value: int) -> None:
+        """Hold a SQL Server row lock through the current transaction."""
+
+        bind = self.session.get_bind()
+        if bind is not None and bind.dialect.name == "mssql":
+            if (table, key) not in {
+                ("Appointments", "AppointmentID"),
+                ("Invoices", "InvoiceID"),
+                ("Clinics", "ClinicID"),
+            }:
+                raise ValueError("Unexpected lock target")
+            self.session.execute(
+                text(f"SELECT {key} FROM {table} WITH (UPDLOCK, HOLDLOCK) WHERE {key}=:id"),
+                {"id": value},
+            )
 
     def _to_appointment_item(self, appt: Appointment) -> ReceptionAppointmentItem:
         patient = appt.patient
@@ -80,6 +135,14 @@ class ReceptionService:
                 else None
             ),
             invoice_id=appt.invoice.invoice_id if appt.invoice else None,
+            queue_number=getattr(appt, "queue_number", None),
+            check_in_at=getattr(appt, "check_in_at", None),
+            check_in_note=getattr(appt, "check_in_note", None),
+            cancellation_reason=getattr(appt, "cancellation_reason", None),
+            last_reschedule_reason=getattr(appt, "last_reschedule_reason", None),
+            no_show_at=getattr(appt, "no_show_at", None),
+            no_show_by_user_id=getattr(appt, "no_show_by_user_id", None),
+            no_show_reason_code=getattr(appt, "no_show_reason_code", None),
         )
 
     def get_dashboard_stats(self) -> ReceptionDashboardStats:
@@ -88,6 +151,8 @@ class ReceptionService:
 
         # Appointments today query
         base_today = select(Appointment).where(Appointment.appointment_date == today)
+        if self.allowed_clinic_ids is not None:
+            base_today = base_today.where(Appointment.clinic_id.in_(self.allowed_clinic_ids))
         today_appts = list(self.session.execute(base_today).scalars().all())
 
         total_today = len(today_appts)
@@ -96,12 +161,17 @@ class ReceptionService:
         checked_in = sum(1 for a in today_appts if a.status == "CHECKED_IN")
         completed = sum(1 for a in today_appts if a.status == "COMPLETED")
         cancelled = sum(1 for a in today_appts if a.status == "CANCELLED")
+        no_show = sum(1 for a in today_appts if a.status == "NO_SHOW")
 
         # Unpaid invoices
         unpaid_invoices_stmt = select(
             func.count(Invoice.invoice_id),
             func.coalesce(func.sum(Invoice.total_amount), 0),
         ).where(Invoice.status == "UNPAID")
+        if self.allowed_clinic_ids is not None:
+            unpaid_invoices_stmt = unpaid_invoices_stmt.join(Invoice.appointment).where(
+                Appointment.clinic_id.in_(self.allowed_clinic_ids)
+            )
         unpaid_count, unpaid_amount = self.session.execute(unpaid_invoices_stmt).one()
 
         # Today's collected revenue from Payments
@@ -110,6 +180,12 @@ class ReceptionService:
         payments_today_stmt = select(func.coalesce(func.sum(Payment.amount), 0)).where(
             Payment.payment_date >= start_of_today, Payment.payment_date <= end_of_today
         )
+        if self.allowed_clinic_ids is not None:
+            payments_today_stmt = (
+                payments_today_stmt.join(Payment.invoice)
+                .join(Invoice.appointment)
+                .where(Appointment.clinic_id.in_(self.allowed_clinic_ids))
+            )
         collected_today = self.session.scalar(payments_today_stmt) or Decimal(0)
 
         # Recent checked in appointments today
@@ -123,9 +199,14 @@ class ReceptionService:
                 joinedload(Appointment.invoice),
             )
             .where(Appointment.status == "CHECKED_IN")
+            .where(Appointment.appointment_date == today)
             .order_by(Appointment.appointment_date.desc(), Appointment.start_time.asc())
             .limit(5)
         )
+        if self.allowed_clinic_ids is not None:
+            recent_checked_stmt = recent_checked_stmt.where(
+                Appointment.clinic_id.in_(self.allowed_clinic_ids)
+            )
         recent_checked = [
             self._to_appointment_item(a)
             for a in self.session.execute(recent_checked_stmt).unique().scalars().all()
@@ -138,6 +219,7 @@ class ReceptionService:
             today_checked_in=checked_in,
             today_completed=completed,
             today_cancelled=cancelled,
+            today_no_show=no_show,
             unpaid_invoices_count=int(unpaid_count),
             unpaid_invoices_amount=Decimal(unpaid_amount),
             today_collected_amount=Decimal(collected_today),
@@ -179,6 +261,11 @@ class ReceptionService:
             .join(Appointment.doctor)
             .join(du, Doctor.user_id == du.user_id)
         )
+
+        if self.allowed_clinic_ids is not None:
+            scope = Appointment.clinic_id.in_(self.allowed_clinic_ids)
+            base = base.where(scope)
+            count_stmt = count_stmt.where(scope)
 
         if status and status != "ALL":
             base = base.where(Appointment.status == status)
@@ -232,41 +319,214 @@ class ReceptionService:
             total_pages=total_pages,
         )
 
+    def get_appointment(self, appointment_id: int) -> ReceptionAppointmentItem:
+        statement = (
+            select(Appointment)
+            .where(Appointment.appointment_id == appointment_id)
+            .options(
+                joinedload(Appointment.patient).joinedload(Patient.user),
+                joinedload(Appointment.doctor).joinedload(Doctor.user),
+                joinedload(Appointment.doctor).joinedload(Doctor.specialty),
+                joinedload(Appointment.clinic),
+                joinedload(Appointment.invoice),
+            )
+        )
+        appt = self.session.execute(statement).unique().scalar_one_or_none()
+        if appt is None:
+            raise NotFoundError("Appointment not found.")
+        self._require_clinic_access(appt.clinic_id)
+        return self._to_appointment_item(appt)
+
     def confirm_appointment(self, appointment_id: int) -> ReceptionAppointmentItem:
+        self._lock_row("Appointments", "AppointmentID", appointment_id)
         appt = self.session.get(Appointment, appointment_id)
         if not appt:
             raise NotFoundError("Appointment not found.")
+        self._require_clinic_access(appt.clinic_id)
         if appt.status != "PENDING":
             raise ConflictError(
                 f"Only pending appointments can be confirmed (current status: {appt.status})."
             )
+        if appt.appointment_date < clinic_today():
+            raise ConflictError("Cannot confirm an appointment from a past date.")
+        if self.production and appt.appointment_date == clinic_today() and appt.end_time <= clinic_now().time().replace(tzinfo=None):
+            raise ConflictError("Khung giờ khám đã kết thúc; không thể xác nhận lịch.")
         appt.status = "CONFIRMED"
-        self.session.commit()
+        try:
+            record_audit_event(
+                self.session,
+                actor_user_id=self.staff_user_id,
+                actor_role="STAFF",
+                action="APPOINTMENT_CONFIRMED",
+                entity_type="Appointment",
+                entity_id=appt.appointment_id,
+                clinic_id=appt.clinic_id,
+                details={"old_status": "PENDING", "new_status": "CONFIRMED"},
+            )
+            self.session.commit()
+        except SQLAlchemyError as exc:
+            self.session.rollback()
+            raise InternalServerError("Không thể xác nhận lịch khám lúc này.") from exc
         return self._to_appointment_item(appt)
 
     def check_in_patient(
-        self, appointment_id: int, queue_number: str | None = None, notes: str | None = None
+        self, appointment_id: int, notes: str | None = None
     ) -> ReceptionAppointmentItem:
+        self._lock_row("Appointments", "AppointmentID", appointment_id)
         appt = self.session.get(Appointment, appointment_id)
         if not appt:
             raise NotFoundError("Appointment not found.")
-        if appt.status not in ("PENDING", "CONFIRMED"):
+        self._require_clinic_access(appt.clinic_id)
+        if appt.status != "CONFIRMED":
             raise ConflictError(f"Cannot check in appointment with status {appt.status}.")
+        if appt.appointment_date != clinic_today():
+            raise ConflictError("Check-in is allowed only on the appointment date.")
+        if self.production:
+            cutoff = datetime.combine(appt.appointment_date, appt.end_time) + timedelta(
+                minutes=get_settings().appointment_grace_minutes
+            )
+            if clinic_naive_now() > cutoff:
+                raise ConflictError("Đã hết thời gian check-in; hãy đặt lịch khám mới.")
+        if appt.clinic_id is None:
+            raise ConflictError("The appointment has no clinic for queue assignment.")
+        self._lock_row("Clinics", "ClinicID", appt.clinic_id)
+        existing_numbers = self.session.scalars(
+            select(Appointment.queue_number).where(
+                Appointment.clinic_id == appt.clinic_id,
+                Appointment.appointment_date == appt.appointment_date,
+                Appointment.queue_number.is_not(None),
+            )
+        ).all()
+        used = [
+            int(number[2:])
+            for number in existing_numbers
+            if isinstance(number, str) and number.startswith("A-") and number[2:].isdigit()
+        ]
+        next_number = max(used, default=0) + 1
+        if next_number > 99_999_999:
+            raise ConflictError("Clinic queue is full for this date.")
+        appt.queue_number = f"A-{next_number:03d}"
+        appt.check_in_at = clinic_naive_now()
+        appt.check_in_note = notes
         appt.status = "CHECKED_IN"
-        if notes:
-            appt.reason = f"{appt.reason or ''} [Check-in note: {notes}]".strip()
-        self.session.commit()
+        try:
+            record_audit_event(
+                self.session,
+                actor_user_id=self.staff_user_id,
+                actor_role="STAFF",
+                action="APPOINTMENT_CHECKED_IN",
+                entity_type="Appointment",
+                entity_id=appt.appointment_id,
+                clinic_id=appt.clinic_id,
+                details={"old_status": "CONFIRMED", "new_status": "CHECKED_IN"},
+            )
+            self.session.commit()
+        except IntegrityError as exc:
+            self.session.rollback()
+            raise ConflictError("Queue number was assigned concurrently; please retry.") from exc
+        except SQLAlchemyError as exc:
+            self.session.rollback()
+            raise InternalServerError("Unable to check in this appointment.") from exc
         return self._to_appointment_item(appt)
 
-    def cancel_appointment(self, appointment_id: int, reason: str) -> ReceptionAppointmentItem:
+    def mark_no_show(self, appointment_id: int) -> ReceptionAppointmentItem:
+        if not self.production:
+            raise ConflictError("Trạng thái vắng mặt chỉ áp dụng trong vận hành production.")
+        self._lock_row("Appointments", "AppointmentID", appointment_id)
+        appt = self.session.get(Appointment, appointment_id)
+        if appt is None:
+            raise NotFoundError("Không tìm thấy lịch khám.")
+        self._require_clinic_access(appt.clinic_id)
+        if appt.status != "CONFIRMED":
+            raise ConflictError("Chỉ lịch đã xác nhận mới được đánh dấu bệnh nhân vắng mặt.")
+        cutoff = datetime.combine(appt.appointment_date, appt.end_time) + timedelta(
+            minutes=get_settings().appointment_grace_minutes
+        )
+        now = clinic_naive_now()
+        if now <= cutoff:
+            raise ConflictError("Chưa hết thời gian chờ check-in của ca khám.")
+        previous_status = appt.status
+        appt.status = "NO_SHOW"
+        appt.no_show_at = now
+        appt.no_show_by_user_id = self.staff_user_id
+        appt.no_show_reason_code = "NO_ARRIVAL"
+        try:
+            record_audit_event(
+                self.session,
+                actor_user_id=self.staff_user_id,
+                actor_role="STAFF",
+                action="APPOINTMENT_NO_SHOW",
+                entity_type="Appointment",
+                entity_id=appt.appointment_id,
+                clinic_id=appt.clinic_id,
+                details={
+                    "old_status": previous_status,
+                    "new_status": "NO_SHOW",
+                    "reason_code": "NO_ARRIVAL",
+                },
+            )
+            self.session.commit()
+        except SQLAlchemyError as exc:
+            self.session.rollback()
+            raise InternalServerError("Không thể ghi nhận bệnh nhân vắng mặt lúc này.") from exc
+        return self._to_appointment_item(appt)
+
+    def cancel_appointment(
+        self, appointment_id: int, reason: str, *, care_not_started: bool = False
+    ) -> ReceptionAppointmentItem:
+        self._lock_row("Appointments", "AppointmentID", appointment_id)
         appt = self.session.get(Appointment, appointment_id)
         if not appt:
             raise NotFoundError("Appointment not found.")
-        if appt.status in ("COMPLETED", "CANCELLED"):
+        self._require_clinic_access(appt.clinic_id)
+        if appt.status not in ("PENDING", "CONFIRMED", "CHECKED_IN"):
             raise ConflictError(f"Cannot cancel an appointment with status {appt.status}.")
+        if not reason.strip() or len(reason) > 500:
+            raise ValidationError("Lý do hủy phải có nội dung và không quá 500 ký tự.")
+        if self.production and appt.status == "CONFIRMED":
+            cutoff = datetime.combine(appt.appointment_date, appt.end_time) + timedelta(
+                minutes=get_settings().appointment_grace_minutes
+            )
+            if clinic_naive_now() > cutoff:
+                raise ConflictError(
+                    "Ca đã xác nhận và quá thời gian chờ; hãy ghi nhận vắng mặt thay vì hủy."
+                )
+        late_check_in = (
+            self.production
+            and appt.status == "CHECKED_IN"
+            and appt.appointment_date < clinic_today()
+        )
+        if self.production and appt.status == "CHECKED_IN" and appt.appointment_date > clinic_today():
+            raise ConflictError("Ngày check-in của ca khám không hợp lệ.")
+        if late_check_in and (not care_not_started or len(reason.strip()) < 10):
+            raise ValidationError(
+                "Ca check-in từ ngày trước cần xác nhận chưa được khám và lý do hủy ít nhất 10 ký tự."
+            )
+        previous_status = appt.status
         appt.status = "CANCELLED"
-        appt.reason = f"{appt.reason or ''} [Cancelled: {reason}]".strip()
-        self.session.commit()
+        appt.cancellation_reason = reason
+        audit_details = {"old_status": previous_status, "new_status": "CANCELLED"}
+        if late_check_in:
+            audit_details["care_not_started"] = True
+        try:
+            record_audit_event(
+                self.session,
+                actor_user_id=self.staff_user_id,
+                actor_role="STAFF",
+                action=(
+                    "APPOINTMENT_LATE_CHECKIN_CANCELLED"
+                    if late_check_in
+                    else "APPOINTMENT_CANCELLED"
+                ),
+                entity_type="Appointment",
+                entity_id=appt.appointment_id,
+                clinic_id=appt.clinic_id,
+                details=audit_details,
+            )
+            self.session.commit()
+        except SQLAlchemyError as exc:
+            self.session.rollback()
+            raise InternalServerError("Không thể hủy lịch khám lúc này.") from exc
         return self._to_appointment_item(appt)
 
     def reschedule_appointment(
@@ -281,102 +541,143 @@ class ReceptionService:
         appt = self.session.get(Appointment, appointment_id)
         if not appt:
             raise NotFoundError("Appointment not found.")
-        if appt.status in ("COMPLETED", "CANCELLED"):
+        self._require_clinic_access(appt.clinic_id)
+        if appt.status not in ("PENDING", "CONFIRMED"):
             raise ConflictError(f"Cannot reschedule an appointment with status {appt.status}.")
-        if appointment_date < clinic_now().date():
-            raise ValidationError("Cannot reschedule an appointment to a past date.")
-        if (
-            appointment_date == clinic_now().date()
-            and start_time <= clinic_now().time().replace(tzinfo=None)
-        ):
-            raise ValidationError("Cannot reschedule an appointment to a past time.")
-        if start_time >= end_time:
-            raise ValidationError("Start time must be earlier than end time.")
-        appt.appointment_date = appointment_date
-        appt.start_time = start_time
-        appt.end_time = end_time
-        if doctor_id:
-            appt.doctor_id = doctor_id
-        if reason:
-            appt.reason = reason
-        appt.status = "CONFIRMED"
-        self.session.commit()
+        target_doctor = self.session.get(Doctor, doctor_id or appt.doctor_id)
+        if target_doctor is None:
+            raise NotFoundError("Không tìm thấy bác sĩ mới.")
+        self._require_clinic_access(target_doctor.clinic_id)
+        def authorize_and_audit(changed: Appointment) -> None:
+            # BookingService has now locked and refreshed the appointment row.
+            # Its pending clinic_id change retains the refreshed source clinic
+            # in SQLAlchemy history. The initial read above may have been stale
+            # while a patient concurrently moved the visit to another clinic.
+            clinic_history = inspect(changed).attrs.clinic_id.history
+            source_clinic_id = (
+                clinic_history.deleted[0]
+                if clinic_history.deleted
+                else changed.clinic_id
+            )
+            self._require_clinic_access(source_clinic_id)
+            self._require_clinic_access(changed.clinic_id)
+            status_history = inspect(changed).attrs.status.history
+            actual_previous_status = (
+                status_history.deleted[0]
+                if status_history.deleted
+                else changed.status
+            )
+            record_audit_event(
+                self.session,
+                actor_user_id=self.staff_user_id,
+                actor_role="STAFF",
+                action="APPOINTMENT_RESCHEDULED",
+                entity_type="Appointment",
+                entity_id=changed.appointment_id,
+                clinic_id=changed.clinic_id,
+                details={
+                    "old_status": actual_previous_status,
+                    "new_status": changed.status,
+                    "doctor_id": changed.doctor_id,
+                },
+            )
+
+        try:
+            BookingService(self.session).reschedule_for_patient(
+                appt,
+                appointment_date,
+                start_time,
+                end_time,
+                doctor_id or appt.doctor_id,
+                status="CONFIRMED",
+                reason=reason,
+                allow_inactive_patient=True,
+                before_commit=authorize_and_audit,
+            )
+        except AuthorizationError:
+            self.session.rollback()
+            raise
         return self._to_appointment_item(appt)
 
     def book_for_patient(self, req: BookForPatientRequest) -> ReceptionAppointmentItem:
         patient_id = req.patient_id
-
-        if req.appointment_date < clinic_now().date():
-            raise ValidationError("Cannot book an appointment in the past.")
-        if (
-            req.appointment_date == clinic_now().date()
-            and req.start_time <= clinic_now().time().replace(tzinfo=None)
-        ):
-            raise ValidationError("Cannot book an appointment in a past time slot.")
-        if req.start_time >= req.end_time:
-            raise ValidationError("Start time must be earlier than end time.")
-
-        # If patient_id not supplied, locate or create a new user & patient record
-        if not patient_id:
-            if not req.full_name or not req.phone:
-                raise ValidationError(
-                    "Full name and phone number are required for walk-in patient booking."
-                )
-
-            # Check if user already exists with this phone
-            normalized_phone = normalize_phone(req.phone)
-            if not normalized_phone:
-                raise ValidationError("A valid phone number is required.")
-            existing_user = self.session.scalar(select(User).where(User.phone == normalized_phone))
-            if existing_user and existing_user.patient:
-                patient_id = existing_user.patient.patient_id
-            else:
-                # Create user & patient
-                username = f"pt_{normalized_phone.replace('+', '')[-8:]}_{int(datetime.now().timestamp()) % 10000}"
-                new_user = User(
-                    username=username,
-                    password_hash="argon2id$v=19$m=65536,t=3,p=4$defaultwalkin$placeholder",
-                    full_name=req.full_name,
-                    phone=normalized_phone,
-                    role="PATIENT",
-                    is_active=True,
-                )
-                self.session.add(new_user)
-                self.session.flush()
-
-                new_patient = Patient(
-                    user_id=new_user.user_id,
-                    date_of_birth=req.date_of_birth,
-                    gender=req.gender or "OTHER",
-                    address=req.address or "",
-                )
-                self.session.add(new_patient)
-                self.session.flush()
-                patient_id = new_patient.patient_id
-
-        # Verify doctor exists
+        if self.production and patient_id is None and req.date_of_birth is None:
+            raise ValidationError("Khách vãng lai cần ngày sinh để xác minh danh tính khi quay lại.")
+        if self.production and patient_id is None and not req.identity_checked:
+            raise ValidationError(
+                "Cần xác nhận đã kiểm tra giấy tờ và danh tính khách vãng lai tại quầy."
+            )
         doctor = self.session.get(Doctor, req.doctor_id)
-        if not doctor or not doctor.is_active:
-            raise NotFoundError("Doctor not found.")
+        if doctor is None:
+            raise NotFoundError("Không tìm thấy bác sĩ.")
+        self._require_clinic_access(doctor.clinic_id)
+        if req.clinic_id is not None and doctor is not None and req.clinic_id != doctor.clinic_id:
+            raise ValidationError("Clinic must match the selected doctor's clinic.")
+        if self.production and patient_id is not None:
+            if not req.identity_checked or req.date_of_birth is None:
+                raise ValidationError("Cần ngày sinh và xác nhận đã kiểm tra danh tính bệnh nhân.")
+            existing_patient = self.session.get(Patient, patient_id)
+            if existing_patient is None or existing_patient.date_of_birth != req.date_of_birth:
+                raise NotFoundError("Không tìm thấy hồ sơ khớp mã bệnh nhân và ngày sinh.")
+        if patient_id is None:
+            normalized_phone = normalize_phone(req.phone)
+            if normalized_phone is None:
+                raise ValidationError("A valid phone number is required.")
+            new_user = User(
+                username=f"walkin{uuid4().hex[:24]}",
+                password_hash=hash_password(token_urlsafe(48)),
+                full_name=req.full_name,
+                phone=normalized_phone,
+                role="PATIENT",
+                is_active=False,
+                created_at=clinic_naive_now(),
+            )
+            self.session.add(new_user)
+            self.session.flush()
+            new_patient = Patient(
+                user_id=new_user.user_id,
+                date_of_birth=req.date_of_birth,
+                gender=req.gender,
+                address=req.address,
+                is_walk_in=True,
+            )
+            self.session.add(new_patient)
+            self.session.flush()
+            patient_id = new_patient.patient_id
 
-        if patient_id and not self.session.get(Patient, patient_id):
-            raise NotFoundError("Patient not found.")
+        def audit_booking(booked: Appointment) -> None:
+            if self.production and req.patient_id is not None:
+                record_audit_event(
+                    self.session,
+                    actor_user_id=self.staff_user_id,
+                    actor_role="STAFF",
+                    action="PATIENT_IDENTITY_VERIFIED",
+                    entity_type="Patient",
+                    entity_id=req.patient_id,
+                    clinic_id=booked.clinic_id,
+                )
+            record_audit_event(
+                self.session,
+                actor_user_id=self.staff_user_id,
+                actor_role="STAFF",
+                action="APPOINTMENT_STAFF_BOOKED",
+                entity_type="Appointment",
+                entity_id=booked.appointment_id,
+                clinic_id=booked.clinic_id,
+                details={"new_status": booked.status, "doctor_id": booked.doctor_id},
+            )
 
-        clinic_id = req.clinic_id or doctor.clinic_id
-
-        status = "CONFIRMED" if req.auto_confirm else "PENDING"
-        appt = Appointment(
-            patient_id=patient_id,
-            doctor_id=req.doctor_id,
-            clinic_id=clinic_id,
-            appointment_date=req.appointment_date,
-            start_time=req.start_time,
-            end_time=req.end_time,
-            reason=req.reason or "Walk-in registration via Reception desk",
-            status=status,
+        appt = BookingService(self.session).create_appointment_for_patient(
+            patient_id,
+            req.doctor_id,
+            req.appointment_date,
+            req.start_time,
+            req.end_time,
+            req.reason or "Khám tại quầy tiếp tân",
+            status="CONFIRMED" if req.auto_confirm else "PENDING",
+            allow_inactive_patient=True,
+            before_commit=audit_booking,
         )
-        self.session.add(appt)
-        self.session.commit()
         return self._to_appointment_item(appt)
 
     def list_invoices(
@@ -416,6 +717,11 @@ class ReceptionService:
             .join(Appointment.doctor)
             .join(du, Doctor.user_id == du.user_id)
         )
+
+        if self.allowed_clinic_ids is not None:
+            scope = Appointment.clinic_id.in_(self.allowed_clinic_ids)
+            base = base.where(scope)
+            count_stmt = count_stmt.where(scope)
 
         if status and status != "ALL":
             base = base.where(Invoice.status == status)
@@ -468,6 +774,11 @@ class ReceptionService:
                     appointment_date=appt.appointment_date if appt else date.today(),
                     payment_method=payment.payment_method if payment else None,
                     paid_at=payment.payment_date if payment else None,
+                    amount_received=getattr(payment, "amount_received", None) if payment else None,
+                    change_due=getattr(payment, "change_due", None) if payment else None,
+                    recorded_by_user_id=getattr(payment, "recorded_by_user_id", None) if payment else None,
+                    external_reference=getattr(payment, "external_reference", None) if payment else None,
+                    verified_at=getattr(payment, "verified_at", None) if payment else None,
                 )
             )
 
@@ -497,6 +808,7 @@ class ReceptionService:
         if not inv:
             raise NotFoundError(f"Invoice #{invoice_id} not found.")
         appt = inv.appointment
+        self._require_clinic_access(appt.clinic_id if appt else None)
         pt_user = appt.patient.user if appt and appt.patient else None
         dr_user = appt.doctor.user if appt and appt.doctor else None
         payment = inv.payment
@@ -513,44 +825,152 @@ class ReceptionService:
             appointment_date=appt.appointment_date if appt else date.today(),
             payment_method=payment.payment_method if payment else None,
             paid_at=payment.payment_date if payment else None,
+            amount_received=getattr(payment, "amount_received", None) if payment else None,
+            change_due=getattr(payment, "change_due", None) if payment else None,
+            recorded_by_user_id=getattr(payment, "recorded_by_user_id", None) if payment else None,
+            external_reference=getattr(payment, "external_reference", None) if payment else None,
+            verified_at=getattr(payment, "verified_at", None) if payment else None,
+        )
+
+    def _resolve_consultation_charge(self, appt: Appointment) -> ChargeCatalog:
+        specialty_id = getattr(appt, "specialty_id", None)
+        if specialty_id is None:
+            raise ConflictError("Ca khám chưa có chuyên khoa được ghi nhận tại thời điểm đặt lịch.")
+        # Price at the scheduled service time. Retiring a catalog row later must not
+        # rewrite an already completed encounter's consultation price.
+        service_time = datetime.combine(appt.appointment_date, appt.start_time)
+        charges = self.session.scalars(
+            select(ChargeCatalog).where(
+                ChargeCatalog.category == "CONSULTATION",
+                ChargeCatalog.specialty_id == specialty_id,
+                ChargeCatalog.effective_from <= service_time,
+                or_(
+                    ChargeCatalog.effective_to.is_(None),
+                    ChargeCatalog.effective_to > service_time,
+                ),
+            )
+        ).all()
+        if len(charges) != 1:
+            raise ConflictError(
+                "Chuyên khoa chưa có đúng một mức phí khám đang hiệu lực; quản trị viên cần cấu hình bảng giá."
+            )
+        return charges[0]
+
+    @staticmethod
+    def _record_is_complete(record: MedicalRecord | None) -> bool:
+        return bool(
+            record is not None
+            and str(getattr(record, "symptoms", "") or "").strip()
+            and str(getattr(record, "diagnosis", "") or "").strip()
+        )
+
+    def invoice_preview(self, appointment_id: int) -> InvoicePreview:
+        appt = self.session.get(Appointment, appointment_id)
+        if appt is None:
+            raise NotFoundError("Không tìm thấy ca khám.")
+        self._require_clinic_access(appt.clinic_id)
+        if appt.status != "COMPLETED" or not self._record_is_complete(appt.medical_record):
+            raise ConflictError("Chỉ có thể xem phí cho ca đã hoàn tất và có bệnh án.")
+        if appt.invoice is not None:
+            raise ConflictError("Ca khám này đã có hóa đơn.")
+        if not self.production:
+            raise ConflictError("Xem trước bảng giá chỉ hỗ trợ chế độ production.")
+        charge = self._resolve_consultation_charge(appt)
+        return InvoicePreview(
+            appointment_id=appt.appointment_id,
+            patient_name=appt.patient.user.full_name,
+            doctor_name=appt.doctor.user.full_name,
+            appointment_status=appt.status,
+            charge_id=charge.charge_id,
+            charge_name=charge.display_name,
+            unit_price=charge.unit_price,
+            quantity=1,
+            total_amount=charge.unit_price,
+            medication_note="Thuốc trong đơn là chỉ định điều trị, chưa được giao hoặc thu tiền tại bước này.",
         )
 
     def create_invoice(self, req: CreateInvoiceRequest) -> ReceptionInvoiceItem:
+        if self.production:
+            return self._create_production_invoice(req)
+        if not req.items or any(item.item_name is None or item.unit_price is None for item in req.items):
+            raise ValidationError("Hóa đơn demo cần tên và đơn giá của từng dòng.")
+        self._lock_row("Appointments", "AppointmentID", req.appointment_id)
         appt = self.session.get(Appointment, req.appointment_id)
         if not appt:
             raise NotFoundError("Appointment not found.")
+        if appt.status != "COMPLETED":
+            raise ConflictError("Chỉ có thể lập hóa đơn sau khi bác sĩ hoàn tất ca khám.")
+        record = self.session.scalar(
+            select(MedicalRecord).where(
+                MedicalRecord.appointment_id == req.appointment_id
+            )
+        )
+        if record is None:
+            raise ConflictError("Ca khám phải có bệnh án trước khi lập hóa đơn.")
 
-        # Check if invoice already exists
         existing_invoice = self.session.scalar(
             select(Invoice).where(Invoice.appointment_id == req.appointment_id)
         )
         if existing_invoice:
-            raise ConflictError("An invoice already exists for this appointment.")
+            raise ConflictError("Ca khám này đã có hóa đơn.")
+
+        specialty = appt.doctor.specialty if appt.doctor else None
+        if specialty is None:
+            raise ConflictError("Ca khám chưa có chuyên khoa để xác định phí khám.")
+        fee_names = {
+            f"khám {specialty.specialty_name}".casefold(),
+            f"phí khám {specialty.specialty_name}".casefold(),
+        }
+        prescribed = Counter()
+        if record.prescription is not None:
+            for medicine in record.prescription.items:
+                prescribed[medicine.medicine_name.strip().casefold()] += medicine.quantity
+        billed_medicines = Counter()
+        fee_count = 0
+        for item in req.items:
+            name = item.item_name.strip().casefold()
+            if name in fee_names:
+                if item.quantity != 1:
+                    raise ValidationError("Phí khám phải có số lượng bằng một.")
+                fee_count += 1
+            elif name in prescribed:
+                billed_medicines[name] += item.quantity
+            else:
+                raise ValidationError("Dòng hóa đơn phải là phí khám hoặc thuốc đã được kê.")
+        if fee_count != 1:
+            raise ValidationError("Hóa đơn phải có đúng một dòng phí khám.")
+        if any(quantity > prescribed[name] for name, quantity in billed_medicines.items()):
+            raise ValidationError("Số lượng thuốc trên hóa đơn vượt quá đơn thuốc.")
 
         total_amount = sum(Decimal(item.unit_price) * Decimal(item.quantity) for item in req.items)
+        if total_amount <= 0 or total_amount > Decimal("9999999999999999.99"):
+            raise ValidationError("Tổng hóa đơn vượt phạm vi số tiền cho phép.")
 
         new_invoice = Invoice(
             appointment_id=req.appointment_id,
             total_amount=total_amount,
             status="UNPAID",
+            created_at=clinic_naive_now(),
         )
-        self.session.add(new_invoice)
-        self.session.flush()
-
-        for item in req.items:
-            invoice_item = InvoiceItem(
-                invoice_id=new_invoice.invoice_id,
-                item_name=item.item_name,
-                quantity=item.quantity,
-                unit_price=item.unit_price,
-            )
-            self.session.add(invoice_item)
-
-        # Mark appointment completed if it was in-progress or checked in
-        if appt.status in ("CHECKED_IN", "IN_PROGRESS"):
-            appt.status = "COMPLETED"
-
-        self.session.commit()
+        try:
+            self.session.add(new_invoice)
+            self.session.flush()
+            for item in req.items:
+                self.session.add(
+                    InvoiceItem(
+                        invoice_id=new_invoice.invoice_id,
+                        item_name=item.item_name,
+                        quantity=item.quantity,
+                        unit_price=item.unit_price,
+                    )
+                )
+            self.session.commit()
+        except IntegrityError as exc:
+            self.session.rollback()
+            raise ConflictError("Ca khám này đã có hóa đơn.") from exc
+        except SQLAlchemyError as exc:
+            self.session.rollback()
+            raise InternalServerError("Không thể lập hóa đơn lúc này.") from exc
 
         # Reload for response
         pt_user = appt.patient.user if appt.patient else None
@@ -568,29 +988,165 @@ class ReceptionService:
             appointment_date=appt.appointment_date,
         )
 
-    def process_payment(self, invoice_id: int, req: ProcessPaymentRequest) -> ReceptionInvoiceItem:
+    def _create_production_invoice(self, req: CreateInvoiceRequest) -> ReceptionInvoiceItem:
+        if req.items is not None:
+            raise ValidationError(
+                "Hóa đơn production được tính từ bảng giá trên server; không nhận giá hoặc dòng phí từ client."
+            )
+        self._lock_row("Appointments", "AppointmentID", req.appointment_id)
+        appt = self.session.get(Appointment, req.appointment_id)
+        if appt is None:
+            raise NotFoundError("Không tìm thấy ca khám.")
+        self._require_clinic_access(appt.clinic_id)
+        if appt.status != "COMPLETED":
+            raise ConflictError("Chỉ lập hóa đơn khi bác sĩ đã hoàn tất ca khám.")
+        record = self.session.scalar(
+            select(MedicalRecord).where(MedicalRecord.appointment_id == req.appointment_id)
+        )
+        if not self._record_is_complete(record):
+            raise ConflictError("Ca khám cần bệnh án có triệu chứng và chẩn đoán trước khi lập hóa đơn.")
+        if self.session.scalar(
+            select(Invoice.invoice_id).where(Invoice.appointment_id == req.appointment_id)
+        ) is not None:
+            raise ConflictError("Ca khám này đã có hóa đơn.")
+        charge = self._resolve_consultation_charge(appt)
+        price = Decimal(charge.unit_price)
+        if price <= 0 or price > Decimal("9999999999999999.99"):
+            raise ConflictError("Mức phí khám trên bảng giá không hợp lệ.")
+        invoice = Invoice(
+            appointment_id=appt.appointment_id,
+            total_amount=price,
+            status="UNPAID",
+            created_at=clinic_naive_now(),
+        )
+        try:
+            self.session.add(invoice)
+            self.session.flush()
+            self.session.add(
+                InvoiceItem(
+                    invoice_id=invoice.invoice_id,
+                    charge_id=charge.charge_id,
+                    item_name=charge.display_name,
+                    quantity=1,
+                    unit_price=price,
+                )
+            )
+            record_audit_event(
+                self.session,
+                actor_user_id=self.staff_user_id,
+                actor_role="STAFF",
+                action="INVOICE_CREATED",
+                entity_type="Invoice",
+                entity_id=invoice.invoice_id,
+                clinic_id=appt.clinic_id,
+                details={"amount": price},
+            )
+            self.session.commit()
+        except IntegrityError as exc:
+            self.session.rollback()
+            raise ConflictError("Ca khám này đã có hóa đơn hoặc bảng giá đã thay đổi.") from exc
+        except SQLAlchemyError as exc:
+            self.session.rollback()
+            raise InternalServerError("Không thể lập hóa đơn lúc này.") from exc
+        return ReceptionInvoiceItem(
+            invoice_id=invoice.invoice_id,
+            appointment_id=invoice.appointment_id,
+            created_at=invoice.created_at,
+            total_amount=invoice.total_amount,
+            status=invoice.status,
+            patient_name=appt.patient.user.full_name,
+            patient_phone=appt.patient.user.phone,
+            doctor_name=appt.doctor.user.full_name,
+            appointment_date=appt.appointment_date,
+        )
+
+    def process_payment(
+        self,
+        invoice_id: int,
+        req: ProcessPaymentRequest,
+        *,
+        recorded_by_user_id: int | None = None,
+    ) -> ReceptionInvoiceItem:
+        if self.production and (
+            recorded_by_user_id is None or recorded_by_user_id != self.staff_user_id
+        ):
+            raise AuthorizationError("Không xác định được nhân viên xác nhận thanh toán.")
+        self._lock_row("Invoices", "InvoiceID", invoice_id)
         invoice = self.session.get(Invoice, invoice_id)
         if not invoice:
-            raise NotFoundError("Invoice not found.")
-        if invoice.status == "PAID":
-            raise ConflictError("This invoice has already been paid.")
+            raise NotFoundError("Không tìm thấy hóa đơn.")
+        self._require_clinic_access(invoice.appointment.clinic_id)
+        if invoice.status != "UNPAID":
+            raise ConflictError("Chỉ có thể thu tiền cho hóa đơn chưa thanh toán.")
+        if self.session.scalar(select(Payment.payment_id).where(Payment.invoice_id == invoice_id)):
+            raise ConflictError("Hóa đơn này đã có giao dịch thanh toán.")
         total = Decimal(invoice.total_amount)
         tendered = Decimal(req.amount)
-        if tendered < total:
-            raise ValidationError("The received amount is less than the invoice total.")
-        if req.payment_method == "CARD" and tendered != total:
-            raise ValidationError("Card payments must match the invoice total.")
+        if req.payment_method == "CASH":
+            if tendered < total:
+                raise ValidationError("Tiền khách đưa chưa đủ tổng hóa đơn.")
+        elif req.payment_method == "TRANSFER":
+            if tendered != total:
+                raise ValidationError("Số tiền chuyển khoản phải bằng tổng hóa đơn.")
+        else:
+            raise ValidationError("Phương thức thanh toán không được hỗ trợ.")
 
-        # Create payment
+        if self.production:
+            if req.payment_method == "TRANSFER":
+                if not req.manual_verified or not req.external_reference:
+                    raise ValidationError(
+                        "Chuyển khoản cần mã giao dịch ngoài hệ thống và xác nhận đã đối chiếu thủ công."
+                    )
+                if self.session.scalar(
+                    select(Payment.payment_id).where(
+                        Payment.payment_method == "TRANSFER",
+                        Payment.external_reference == req.external_reference,
+                    )
+                ) is not None:
+                    raise ConflictError("Mã giao dịch chuyển khoản đã được dùng cho hóa đơn khác.")
+            elif req.external_reference is not None or req.manual_verified:
+                raise ValidationError("Thanh toán tiền mặt không nhận mã giao dịch chuyển khoản.")
+
         payment = Payment(
             invoice_id=invoice_id,
             amount=total,
             payment_method=req.payment_method,
-            payment_date=clinic_now(),
+            payment_date=clinic_naive_now(),
+            amount_received=tendered,
+            change_due=tendered - total if req.payment_method == "CASH" else Decimal("0.00"),
+            recorded_by_user_id=recorded_by_user_id,
+            external_reference=req.external_reference if self.production else None,
+            verified_at=clinic_naive_now()
+            if self.production and req.payment_method == "TRANSFER"
+            else None,
         )
-        self.session.add(payment)
-        invoice.status = "PAID"
-        self.session.commit()
+        try:
+            self.session.add(payment)
+            invoice.status = "PAID"
+            record_audit_event(
+                self.session,
+                actor_user_id=recorded_by_user_id,
+                actor_role="STAFF",
+                action="PAYMENT_RECORDED",
+                entity_type="Invoice",
+                entity_id=invoice_id,
+                clinic_id=invoice.appointment.clinic_id,
+                details={
+                    "old_status": "UNPAID",
+                    "new_status": "PAID",
+                    "payment_method": req.payment_method,
+                    "amount": total,
+                    "amount_received": tendered,
+                    "change_due": payment.change_due,
+                },
+            )
+            self.session.commit()
+        except IntegrityError as exc:
+            self.session.rollback()
+            raise ConflictError("Hóa đơn này đã được thanh toán.") from exc
+        except SQLAlchemyError as exc:
+            self.session.rollback()
+            raise InternalServerError("Không thể ghi nhận thanh toán lúc này.") from exc
 
         appt = invoice.appointment
         pt_user = appt.patient.user if appt and appt.patient else None
@@ -608,6 +1164,11 @@ class ReceptionService:
             appointment_date=appt.appointment_date if appt else date.today(),
             payment_method=payment.payment_method,
             paid_at=payment.payment_date,
+            amount_received=payment.amount_received,
+            change_due=payment.change_due,
+            recorded_by_user_id=payment.recorded_by_user_id,
+            external_reference=payment.external_reference,
+            verified_at=payment.verified_at,
         )
 
     def list_payments(
@@ -650,6 +1211,11 @@ class ReceptionService:
             .join(Appointment.doctor)
             .join(du, Doctor.user_id == du.user_id)
         )
+
+        if self.allowed_clinic_ids is not None:
+            scope = Appointment.clinic_id.in_(self.allowed_clinic_ids)
+            base = base.where(scope)
+            count_stmt = count_stmt.where(scope)
 
         if payment_method and payment_method != "ALL":
             base = base.where(Payment.payment_method == payment_method)
@@ -707,6 +1273,11 @@ class ReceptionService:
                     patient_phone=pt_user.phone if pt_user else None,
                     doctor_name=dr_user.full_name if dr_user else "Doctor",
                     total_invoice_amount=inv.total_amount if inv else p.amount,
+                    amount_received=getattr(p, "amount_received", None),
+                    change_due=getattr(p, "change_due", None),
+                    recorded_by_user_id=getattr(p, "recorded_by_user_id", None),
+                    external_reference=getattr(p, "external_reference", None),
+                    verified_at=getattr(p, "verified_at", None),
                 )
             )
 
@@ -745,6 +1316,12 @@ class ReceptionService:
             .where(or_(*conditions))
             .limit(10)
         )
+        if self.allowed_clinic_ids is not None:
+            stmt = stmt.where(
+                Patient.appointments.any(
+                    Appointment.clinic_id.in_(self.allowed_clinic_ids)
+                )
+            )
         patients = self.session.execute(stmt).unique().scalars().all()
         return [
             ReceptionPatientSummary(
@@ -759,3 +1336,45 @@ class ReceptionService:
             )
             for p in patients
         ]
+
+    def verify_patient_identity(
+        self, request: VerifyPatientIdentityRequest
+    ) -> VerifiedPatientIdentity:
+        """Allow a cross-clinic lookup only after exact identity verification."""
+
+        if not self.production:
+            raise ConflictError("Tra cứu liên cơ sở chỉ áp dụng trong vận hành production.")
+        self._require_clinic_access(request.clinic_id)
+        if not request.identity_checked:
+            raise ValidationError("Nhân viên phải xác nhận đã kiểm tra giấy tờ của bệnh nhân.")
+        patient = self.session.get(Patient, request.patient_id)
+        verified = (
+            patient is not None
+            and patient.date_of_birth == request.date_of_birth
+            and patient.user is not None
+            and patient.user.role == "PATIENT"
+            and (patient.user.is_active or patient.is_walk_in)
+        )
+        try:
+            record_audit_event(
+                self.session,
+                actor_user_id=self.staff_user_id,
+                actor_role="STAFF",
+                action="PATIENT_IDENTITY_LOOKUP",
+                entity_type="Patient",
+                entity_id=request.patient_id,
+                clinic_id=request.clinic_id,
+                outcome="SUCCESS" if verified else "DENIED",
+            )
+            self.session.commit()
+        except SQLAlchemyError as exc:
+            self.session.rollback()
+            raise InternalServerError("Không thể ghi nhận lần xác minh danh tính.") from exc
+        if not verified:
+            raise NotFoundError("Không tìm thấy hồ sơ khớp mã bệnh nhân và ngày sinh.")
+        assert patient is not None and patient.date_of_birth is not None
+        return VerifiedPatientIdentity(
+            patient_id=patient.patient_id,
+            full_name=patient.user.full_name,
+            date_of_birth=patient.date_of_birth,
+        )

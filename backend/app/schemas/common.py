@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, PlainSerializer
 
 
 class APIModel(BaseModel):
-    model_config = ConfigDict(from_attributes=True, str_strip_whitespace=True)
+    model_config = ConfigDict(from_attributes=True, str_strip_whitespace=True, extra="forbid")
 
 
 # Keep Decimal throughout ORM/service validation, but honor the public API
@@ -26,6 +26,7 @@ class AppointmentStatus(StrEnum):
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
+    NO_SHOW = "NO_SHOW"
 
 
 class InvoiceStatus(StrEnum):

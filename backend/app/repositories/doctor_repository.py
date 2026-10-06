@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from backend.app.models import Doctor, DoctorSchedule, Specialty
+from backend.app.models import Clinic, Doctor, DoctorSchedule, Specialty, User
 
 
 class DoctorRepository:
@@ -15,7 +15,13 @@ class DoctorRepository:
     def list_specialties(self) -> list[tuple[Specialty, int]]:
         statement = (
             select(Specialty, func.count(Doctor.doctor_id))
-            .outerjoin(Doctor, (Doctor.specialty_id == Specialty.specialty_id) & Doctor.is_active)
+            .outerjoin(
+                Doctor,
+                (Doctor.specialty_id == Specialty.specialty_id)
+                & Doctor.is_active
+                & Doctor.user.has(User.is_active & (User.role == "DOCTOR"))
+                & Doctor.clinic.has(Clinic.is_active),
+            )
             .where(Specialty.is_active)
             .group_by(
                 Specialty.specialty_id,
@@ -39,7 +45,12 @@ class DoctorRepository:
                 joinedload(Doctor.specialty),
                 joinedload(Doctor.clinic),
             )
-            .where(Doctor.is_active)
+            .where(
+                Doctor.is_active,
+                Doctor.user.has(User.is_active & (User.role == "DOCTOR")),
+                Doctor.specialty.has(Specialty.is_active),
+                Doctor.clinic.has(Clinic.is_active),
+            )
         )
         if specialty_id is not None:
             statement = statement.where(Doctor.specialty_id == specialty_id)
@@ -59,7 +70,13 @@ class DoctorRepository:
                 joinedload(Doctor.specialty),
                 joinedload(Doctor.clinic),
             )
-            .where(Doctor.doctor_id == doctor_id, Doctor.is_active)
+            .where(
+                Doctor.doctor_id == doctor_id,
+                Doctor.is_active,
+                Doctor.user.has(User.is_active & (User.role == "DOCTOR")),
+                Doctor.specialty.has(Specialty.is_active),
+                Doctor.clinic.has(Clinic.is_active),
+            )
         )
         return self.session.execute(statement).unique().scalar_one_or_none()
 

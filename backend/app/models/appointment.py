@@ -32,10 +32,35 @@ class Appointment(Base):
     clinic_id: Mapped[int | None] = mapped_column(
         "ClinicID", ForeignKey("Clinics.ClinicID"), nullable=True
     )
+    specialty_id: Mapped[int | None] = mapped_column(
+        "SpecialtyID", ForeignKey("Specialties.SpecialtyID"), nullable=True
+    )
     appointment_date: Mapped[date] = mapped_column("AppointmentDate", Date, nullable=False)
     start_time: Mapped[time] = mapped_column("StartTime", Time, nullable=False)
     end_time: Mapped[time] = mapped_column("EndTime", Time, nullable=False)
     reason: Mapped[str | None] = mapped_column("Reason", NVARCHAR(500), nullable=True)
+    queue_number: Mapped[str | None] = mapped_column("QueueNumber", NVARCHAR(10), nullable=True)
+    check_in_at: Mapped[datetime | None] = mapped_column("CheckInAt", DATETIME2, nullable=True)
+    clinical_context_loaded_at: Mapped[datetime | None] = mapped_column(
+        "ClinicalContextLoadedAt", DATETIME2, nullable=True
+    )
+    clinical_context_loaded_by_user_id: Mapped[int | None] = mapped_column(
+        "ClinicalContextLoadedByUserID", ForeignKey("Users.UserID"), nullable=True
+    )
+    check_in_note: Mapped[str | None] = mapped_column("CheckInNote", NVARCHAR(500), nullable=True)
+    cancellation_reason: Mapped[str | None] = mapped_column(
+        "CancellationReason", NVARCHAR(500), nullable=True
+    )
+    last_reschedule_reason: Mapped[str | None] = mapped_column(
+        "LastRescheduleReason", NVARCHAR(500), nullable=True
+    )
+    no_show_at: Mapped[datetime | None] = mapped_column("NoShowAt", DATETIME2, nullable=True)
+    no_show_by_user_id: Mapped[int | None] = mapped_column(
+        "NoShowByUserID", ForeignKey("Users.UserID"), nullable=True
+    )
+    no_show_reason_code: Mapped[str | None] = mapped_column(
+        "NoShowReasonCode", NVARCHAR(30), nullable=True
+    )
     status: Mapped[str] = mapped_column(
         "Status", NVARCHAR(20), nullable=False, server_default=text("'PENDING'")
     )

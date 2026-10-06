@@ -25,6 +25,21 @@ class Payment(Base):
     )
     amount: Mapped[Decimal] = mapped_column("Amount", Numeric(18, 2), nullable=False)
     payment_method: Mapped[str] = mapped_column("PaymentMethod", NVARCHAR(20), nullable=False)
+    amount_received: Mapped[Decimal | None] = mapped_column(
+        "AmountReceived", Numeric(18, 2), nullable=True
+    )
+    change_due: Mapped[Decimal | None] = mapped_column(
+        "ChangeDue", Numeric(18, 2), nullable=True
+    )
+    recorded_by_user_id: Mapped[int | None] = mapped_column(
+        "RecordedByUserID", ForeignKey("Users.UserID"), nullable=True
+    )
+    external_reference: Mapped[str | None] = mapped_column(
+        "ExternalReference", NVARCHAR(100), nullable=True
+    )
+    verified_at: Mapped[datetime | None] = mapped_column(
+        "VerifiedAt", DATETIME2, nullable=True
+    )
     payment_date: Mapped[datetime] = mapped_column(
         "PaymentDate", DATETIME2, nullable=False, server_default=text("GETDATE()")
     )
