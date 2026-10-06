@@ -8,9 +8,15 @@ from unittest.mock import MagicMock
 import pytest
 from sqlalchemy.exc import SQLAlchemyError
 
-from backend.app.core.exceptions import AuthenticationError, ConflictError, NotFoundError
+from backend.app.core.exceptions import (
+    AuthenticationError,
+    AuthorizationError,
+    ConflictError,
+    NotFoundError,
+)
 from backend.app.schemas.auth import LoginRequest, RegisterRequest
 from backend.app.schemas.patient import PatientProfileUpdate
+from backend.app.services import patient_service as patient_service_module
 from backend.app.services.appointment_service import AppointmentService
 from backend.app.services.auth_service import AuthService
 from backend.app.services.dashboard_service import DashboardService
@@ -43,6 +49,7 @@ def user_stub(**overrides: object) -> SimpleNamespace:
         "email": "patient01@example.com",
         "role": "PATIENT",
         "is_active": True,
+        "patient": SimpleNamespace(patient_id=10),
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -201,7 +208,9 @@ def test_login_rejects_non_patient_accounts(monkeypatch: pytest.MonkeyPatch) -> 
         service.login(LoginRequest(username="doctor01", password="Doctor123!"))
 
 
-@pytest.mark.parametrize("user", [None, user_stub(is_active=False), user_stub()])
+@pytest.mark.parametrize(
+    "user", [None, user_stub(is_active=False), user_stub(patient=None), user_stub()]
+)
 def test_login_rejects_unknown_inactive_or_wrong_password(
     user: SimpleNamespace | None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -249,6 +258,45 @@ def test_profile_update_rolls_back_on_database_error() -> None:
         service.update_profile(patient_stub(), PatientProfileUpdate(full_name="Updated Name"))
 
     session.rollback.assert_called_once_with()
+
+
+@pytest.mark.parametrize(
+    "identity_update",
+    [{"full_name": "Different Name"}, {"date_of_birth": date(1990, 1, 1)}],
+)
+def test_production_patient_cannot_self_change_verified_identity(
+    monkeypatch: pytest.MonkeyPatch, identity_update: dict[str, object]
+) -> None:
+    monkeypatch.setattr(
+        patient_service_module,
+        "get_settings",
+        lambda: SimpleNamespace(app_mode="production"),
+    )
+    session = MagicMock()
+    patient = patient_stub()
+    with pytest.raises(AuthorizationError):
+        PatientService(session).update_profile(patient, PatientProfileUpdate(**identity_update))
+    session.commit.assert_not_called()
+    assert patient.user.full_name == "Nguyen Van A"
+    assert patient.date_of_birth == date(2000, 1, 1)
+
+
+def test_production_patient_can_update_contact_without_identity_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        patient_service_module,
+        "get_settings",
+        lambda: SimpleNamespace(app_mode="production"),
+    )
+    session = MagicMock()
+    patient = patient_stub()
+    result = PatientService(session).update_profile(
+        patient, PatientProfileUpdate(phone="0911111111", address="New address")
+    )
+    assert result.phone == "0911111111"
+    assert result.address == "New address"
+    session.commit.assert_called_once()
 
 
 def test_appointment_list_forwards_pagination_search_and_status() -> None:
@@ -329,6 +377,7 @@ def test_medical_result_loads_prescription_items() -> None:
         symptoms="Sore throat",
         diagnosis="Acute pharyngitis",
         notes="Rest",
+        late_entry_reason=None,
         prescription=prescription,
     )
     service.repository.get_owned.return_value = record

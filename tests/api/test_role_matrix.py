@@ -20,6 +20,7 @@ from backend.app.api.deps import (
 from backend.app.api.deps import (
     get_current_user as api_get_current_user,
 )
+from backend.app.core.clock import clinic_today
 from backend.app.db.session import get_db
 from backend.app.deps import get_current_user as legacy_get_current_user
 from backend.app.main import app
@@ -124,7 +125,7 @@ def test_admin_create_doctor_at_users_rejected(client: TestClient) -> None:
             "Role": "DOCTOR",
         },
     )
-    assert res.status_code == 400
+    assert res.status_code == 422
     assert "Quản lý Bác sĩ" in res.json()["detail"]
 
 
@@ -146,7 +147,7 @@ def test_admin_create_user_invalid_role_rejected(client: TestClient) -> None:
 
 
 def test_admin_create_user_duplicate_username_rejected(client: TestClient) -> None:
-    """TC-ADM-04: Creating user with already existing username returns 400."""
+    """TC-ADM-04: Creating user with already existing username returns 409."""
     admin_user = SimpleNamespace(user_id=999, username="admin", role="ADMIN", is_active=True)
     mock_db = MagicMock()
     # Simulate existing user found
@@ -164,12 +165,12 @@ def test_admin_create_user_duplicate_username_rejected(client: TestClient) -> No
             "Role": "STAFF",
         },
     )
-    assert res.status_code == 400
+    assert res.status_code == 409
     assert "Username đã tồn tại" in res.json()["detail"]
 
 
 def test_admin_create_doctor_duplicate_license_rejected(client: TestClient) -> None:
-    """TC-ADM-12: Creating a doctor with a duplicate license number returns 400 Bad Request."""
+    """TC-ADM-12: Creating a doctor with a duplicate license number returns 409."""
     admin_user = SimpleNamespace(user_id=999, username="admin", role="ADMIN", is_active=True)
     mock_db = MagicMock()
 
@@ -201,12 +202,12 @@ def test_admin_create_doctor_duplicate_license_rejected(client: TestClient) -> N
             "LicenseNumber": "LIC-001",
         },
     )
-    assert res.status_code == 400
+    assert res.status_code == 409
     assert "Số chứng chỉ hành nghề đã tồn tại" in res.json()["detail"]
 
 
 def test_admin_update_specialty_duplicate_name_rejected(client: TestClient) -> None:
-    """TC-ADM-19: Updating a specialty with an existing specialty name returns 400 Bad Request."""
+    """TC-ADM-19: Updating a specialty with an existing specialty name returns 409."""
     admin_user = SimpleNamespace(user_id=999, username="admin", role="ADMIN", is_active=True)
     mock_db = MagicMock()
 
@@ -233,7 +234,7 @@ def test_admin_update_specialty_duplicate_name_rejected(client: TestClient) -> N
         "/specialties/1",
         json={"SpecialtyName": "Dermatology"},
     )
-    assert res.status_code == 400
+    assert res.status_code == 409
     assert "Tên chuyên khoa đã tồn tại" in res.json()["detail"]
 
 
@@ -256,8 +257,8 @@ def test_admin_create_schedule_time_validation_rejected(client: TestClient) -> N
             "SlotDuration": 30,
         },
     )
-    assert res.status_code == 400
-    assert "Giờ bắt đầu phải nhỏ hơn giờ kết thúc" in res.json()["detail"]
+    assert res.status_code == 422
+    assert "StartTime must be before EndTime" in str(res.json()["detail"])
 
 
 def test_admin_can_deactivate_specialty_after_all_doctors_are_inactive(
@@ -313,7 +314,7 @@ def test_admin_cannot_deactivate_specialty_with_active_doctors(
 
     response = client.delete("/specialties/7")
 
-    assert response.status_code == 400
+    assert response.status_code == 409
     assert "2 bác sĩ đang hoạt động" in response.json()["detail"]
     assert specialty.is_active is True
 
@@ -374,6 +375,7 @@ def test_admin_statistics_overview_success(client: TestClient) -> None:
     mock_db = MagicMock()
     mock_db.query.return_value.scalar.return_value = 10
     mock_db.query.return_value.filter.return_value.scalar.return_value = 5
+    mock_db.scalar.side_effect = [12, 5, 4, 1, 250000, 100000, 50000]
     mock_db.query.return_value.join.return_value.filter.return_value.group_by.return_value.all.return_value = [
         ("Cardiology", 3),
         ("Internal Medicine", 2),
@@ -388,6 +390,9 @@ def test_admin_statistics_overview_success(client: TestClient) -> None:
     assert "total_users" in data
     assert "total_doctors" in data
     assert "doctors_by_specialty" in data
+    assert data["total_appointments"] == 12
+    assert data["completed_appointments"] == 5
+    assert data["paid_revenue"] == 250000.0
 
 
 # ==============================================================================
@@ -423,7 +428,10 @@ def test_doctor_accept_own_appointment_success(client: TestClient) -> None:
     """TC-DOC-09: Doctor accepts their own appointment, transitioning status to IN_PROGRESS."""
     doctor_user = SimpleNamespace(user_id=10, username="doctor01", full_name="Dr. Minh Anh", role="DOCTOR", is_active=True)
     doctor = SimpleNamespace(doctor_id=1, user_id=10, is_active=True)
-    appointment = SimpleNamespace(appointment_id=50, doctor_id=1, status="CHECKED_IN")
+    appointment = SimpleNamespace(
+        appointment_id=50, doctor_id=1, status="CHECKED_IN",
+        appointment_date=clinic_today(),
+    )
 
     mock_db = MagicMock()
     def query_mock(model):
@@ -463,7 +471,7 @@ def test_doctor_accept_cancelled_appointment_rejected(client: TestClient) -> Non
     app.dependency_overrides[get_db] = lambda: mock_db
 
     res = client.put("/api/v1/doctor/appointments/51/accept")
-    assert res.status_code == 400
+    assert res.status_code == 409
     assert "CANCELLED" in res.json()["detail"]
 
 
@@ -471,7 +479,12 @@ def test_doctor_complete_examination_success(client: TestClient) -> None:
     """TC-DOC-13: Doctor completes appointment, recording symptoms, diagnosis, and prescription items."""
     doctor_user = SimpleNamespace(user_id=10, username="doctor01", full_name="Dr. Minh Anh", role="DOCTOR", is_active=True)
     doctor = SimpleNamespace(doctor_id=1, user_id=10, is_active=True)
-    appointment = SimpleNamespace(appointment_id=52, doctor_id=1, status="IN_PROGRESS")
+    appointment = SimpleNamespace(
+        appointment_id=52,
+        doctor_id=1,
+        status="IN_PROGRESS",
+        appointment_date=clinic_today(),
+    )
 
     mock_db = MagicMock()
     def query_mock(model):
@@ -588,7 +601,7 @@ def test_staff_confirm_appointment_success(client: TestClient, monkeypatch: pyte
         "patient": {"patient_id": 1, "user_id": 10, "full_name": "Bệnh nhân A"},
         "doctor": {"doctor_id": 1, "full_name": "Dr. Minh Anh", "specialty": "Internal"},
     }
-    monkeypatch.setattr(reception, "ReceptionService", lambda _session: mock_service)
+    monkeypatch.setattr(reception, "ReceptionService", lambda _session, **_kwargs: mock_service)
 
     staff_user = SimpleNamespace(user_id=88, username="reception01", role="STAFF", is_active=True)
     app.dependency_overrides[api_get_current_user] = lambda: staff_user
@@ -610,18 +623,20 @@ def test_staff_check_in_appointment_success(client: TestClient, monkeypatch: pyt
         "end_time": "09:30:00",
         "reason": "Khám nội",
         "status": "CHECKED_IN",
+        "queue_number": "A-001",
+        "check_in_at": "2026-09-25T09:00:00",
         "created_at": "2026-09-24T10:00:00",
         "patient": {"patient_id": 1, "user_id": 10, "full_name": "Bệnh nhân A"},
         "doctor": {"doctor_id": 1, "full_name": "Dr. Minh Anh", "specialty": "Internal"},
     }
-    monkeypatch.setattr(reception, "ReceptionService", lambda _session: mock_service)
+    monkeypatch.setattr(reception, "ReceptionService", lambda _session, **_kwargs: mock_service)
 
     staff_user = SimpleNamespace(user_id=88, username="reception01", role="STAFF", is_active=True)
     app.dependency_overrides[api_get_current_user] = lambda: staff_user
 
     res = client.post(
         "/api/v1/reception/appointments/200/check-in",
-        json={"queue_number": "A-01", "notes": "Đã có mặt tại quầy"},
+        json={"notes": "Đã có mặt tại quầy"},
     )
     assert res.status_code == 200
     assert res.json()["status"] == "CHECKED_IN"
@@ -636,7 +651,7 @@ def test_staff_create_duplicate_invoice_rejected(client: TestClient, monkeypatch
     mock_service.create_invoice.side_effect = ConflictError(
         "An invoice already exists for this appointment."
     )
-    monkeypatch.setattr(reception, "ReceptionService", lambda _session: mock_service)
+    monkeypatch.setattr(reception, "ReceptionService", lambda _session, **_kwargs: mock_service)
 
     staff_user = SimpleNamespace(user_id=88, username="reception01", role="STAFF", is_active=True)
     app.dependency_overrides[api_get_current_user] = lambda: staff_user
@@ -696,7 +711,7 @@ def test_staff_get_invoice_by_id(client: TestClient, monkeypatch: pytest.MonkeyP
         doctor_name="BS. Nguyen Van B",
         appointment_date=date(2026, 9, 25),
     )
-    monkeypatch.setattr(reception, "ReceptionService", lambda _session: mock_service)
+    monkeypatch.setattr(reception, "ReceptionService", lambda _session, **_kwargs: mock_service)
 
     staff_user = SimpleNamespace(user_id=88, username="reception01", role="STAFF", is_active=True)
     app.dependency_overrides[api_get_current_user] = lambda: staff_user
@@ -731,7 +746,9 @@ def test_admin_cannot_deactivate_self_or_system_admin(client: TestClient) -> Non
 
 def test_doctor_user_sync_on_activation_toggle(client: TestClient) -> None:
     admin_user = SimpleNamespace(user_id=999, username="admin", role="ADMIN", is_active=True)
-    doc_user = SimpleNamespace(user_id=4, username="doctor01", full_name="Dr. One", is_active=True)
+    doc_user = SimpleNamespace(
+        user_id=4, username="doctor01", full_name="Dr. One", role="DOCTOR", is_active=True
+    )
     doctor = SimpleNamespace(
         doctor_id=1,
         user_id=4,
@@ -744,7 +761,18 @@ def test_doctor_user_sync_on_activation_toggle(client: TestClient) -> None:
         clinic=SimpleNamespace(clinic_name="Clinic 1"),
     )
     mock_db = MagicMock()
-    mock_db.query.return_value.filter.return_value.first.return_value = doctor
+
+    def query_mock(model):
+        query = MagicMock()
+        if model == Doctor:
+            query.filter.return_value.first.return_value = doctor
+        elif model == Specialty:
+            query.filter.return_value.first.return_value = SimpleNamespace(is_active=True)
+        elif model == Clinic:
+            query.filter.return_value.first.return_value = SimpleNamespace(is_active=True)
+        return query
+
+    mock_db.query.side_effect = query_mock
 
     app.dependency_overrides[legacy_get_current_user] = lambda: admin_user
     app.dependency_overrides[get_db] = lambda: mock_db

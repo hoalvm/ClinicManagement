@@ -119,12 +119,29 @@ def admin_window(monkeypatch: pytest.MonkeyPatch, qt_app: QApplication):
                 "IsActive": True,
             }
         ],
+        "/schedules/exceptions": [],
+        "/api/v1/catalog/charges": [
+            {
+                "charge_id": 1,
+                "code": "CONSULT-CARD-2026-01",
+                "display_name": "Phí khám Tim mạch",
+                "category": "CONSULTATION",
+                "specialty_id": 1,
+                "unit_price": "150000.00",
+                "is_active": True,
+                "effective_from": "2026-10-06T08:00:00",
+                "effective_to": None,
+            }
+        ],
         "/statistics/overview": {
             "total_users": 100,
             "total_doctors": 20,
             "total_clinics": 5,
             "total_specialties": 12,
             "total_schedules": 35,
+            "total_appointments": 63,
+            "completed_appointments": 42,
+            "paid_revenue": 4_500_000,
             "doctors_by_specialty": [
                 {"name": "Tim mạch can thiệp và phục hồi", "count": 10}
             ],
@@ -231,12 +248,17 @@ def test_statistics_cards_reflow_without_duplicates(
     _drain_admin_workers(qt_app)
     page = admin_window.pages.currentWidget()
 
-    assert page.cards_layout.count() == 5
+    assert page.cards_layout.count() == 8
+    assert [card._value.text() for card in page._stat_cards[-3:]] == [
+        "63",
+        "42",
+        "4.500.000 ₫",
+    ]
     positions = [
         page.cards_layout.getItemPosition(page.cards_layout.indexOf(card))[:2]
         for card in page._stat_cards
     ]
-    assert positions == [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0)]
+    assert positions == [(i // 2, i % 2) for i in range(8)]
     assert all(card._title_label.wordWrap() for card in page._stat_cards)
 
     admin_window.resize(1280, 800)
@@ -245,19 +267,19 @@ def test_statistics_cards_reflow_without_duplicates(
         page.cards_layout.getItemPosition(page.cards_layout.indexOf(card))[:2]
         for card in page._stat_cards
     ]
-    assert positions == [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1)]
+    assert positions == [(i // 3, i % 3) for i in range(8)]
 
     page.load_data()
     _drain_admin_workers(qt_app)
-    assert page.cards_layout.count() == 5
-    assert len({id(card) for card in page._stat_cards}) == 5
+    assert page.cards_layout.count() == 8
+    assert len({id(card) for card in page._stat_cards}) == 8
 
     admin_window.resize(1560, 900)
     qt_app.processEvents()
-    assert all(
-        page.cards_layout.getItemPosition(page.cards_layout.indexOf(card))[0] == 0
+    assert [
+        page.cards_layout.getItemPosition(page.cards_layout.indexOf(card))[:2]
         for card in page._stat_cards
-    )
+    ] == [(i // 4, i % 4) for i in range(8)]
 
 
 def test_admin_sidebar_boundary_does_not_reduce_stat_card_columns(

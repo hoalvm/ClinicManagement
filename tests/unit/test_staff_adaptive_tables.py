@@ -4,9 +4,14 @@ from collections.abc import Iterator
 from unittest.mock import MagicMock
 
 import pytest
+from PySide6.QtCore import QDate
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QCheckBox,
+    QDialog,
+    QLineEdit,
+    QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -14,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from frontend.api.api_client import ApiClient
 from frontend.ui.design_system import ViewState
+from frontend.views import appointment_management_view as appointment_module
 from frontend.views.appointment_management_view import AppointmentManagementView
 from frontend.views.check_in_view import CheckInView
 from frontend.views.common import BaseApiView
@@ -30,6 +36,68 @@ from frontend.widgets.adaptive_data_table import (
 def qt_app() -> Iterator[QApplication]:
     application = QApplication.instance() or QApplication([])
     yield application
+
+
+def test_stale_check_in_cancel_requires_staff_attestation_in_dialog(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = MagicMock(spec=ApiClient)
+    view = AppointmentManagementView(client)
+    monkeypatch.setattr(appointment_module, "clinic_today_qdate", lambda: QDate(2026, 10, 7))
+    monkeypatch.setattr(view, "run_api_task", lambda _key, action, *_args, **_kwargs: action())
+
+    def accept_after_attestation(dialog: QDialog) -> QDialog.DialogCode:
+        reason = dialog.findChild(QLineEdit)
+        attestation = dialog.findChild(QCheckBox)
+        confirm = next(
+            button for button in dialog.findChildren(QPushButton)
+            if button.text() == "Xác nhận hủy"
+        )
+        assert reason is not None and attestation is not None
+        assert confirm.isEnabled() is False
+        reason.setText("Bệnh nhân rời phòng khám khi chưa được khám")
+        assert confirm.isEnabled() is False
+        attestation.setChecked(True)
+        assert confirm.isEnabled() is True
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(QDialog, "exec", accept_after_attestation)
+    view._cancel_dialog(
+        {
+            "appointment_id": 21,
+            "appointment_date": "2026-10-06",
+            "status": "CHECKED_IN",
+        }
+    )
+    assert client.post.call_args.kwargs["json"] == {
+        "cancellation_reason": "Bệnh nhân rời phòng khám khi chưa được khám",
+        "care_not_started": True,
+    }
+    view.close()
+    view.deleteLater()
+    qt_app.processEvents()
+
+
+def test_no_show_action_calls_staff_endpoint_only_after_confirmation(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = MagicMock(spec=ApiClient)
+    view = AppointmentManagementView(client)
+    monkeypatch.setattr(view, "run_api_task", lambda _key, action, *_args, **_kwargs: action())
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *_args, **_kwargs: QMessageBox.StandardButton.No
+    )
+    view._confirm_no_show(21)
+    client.post.assert_not_called()
+
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *_args, **_kwargs: QMessageBox.StandardButton.Yes
+    )
+    view._confirm_no_show(21)
+    client.post.assert_called_once_with("/api/v1/reception/appointments/21/no-show")
+    view.close()
+    view.deleteLater()
+    qt_app.processEvents()
 
 
 @pytest.fixture
@@ -112,7 +180,7 @@ def test_status_and_primary_actions_stay_visible_at_staff_minimum_width(
     appointment._on_appointments_loaded(
         {"items": [appt], "total": 1, "total_pages": 1}
     )
-    check_in._on_candidates_loaded({"items": [appt]})
+    check_in._on_candidates_loaded({"items": [{**appt, "status": "CONFIRMED"}]})
     invoice._on_invoices_loaded(
         {"items": [invoice_data], "total": 1, "total_pages": 1}
     )
@@ -148,6 +216,7 @@ def test_status_and_primary_actions_stay_visible_at_staff_minimum_width(
         assert table.horizontalScrollBar().maximum() == 0
         assert table.model().index(0, status_column).data(RAW_VALUE_ROLE) in {
             "PENDING",
+            "CONFIRMED",
             "UNPAID",
         }
         action_widget = table.indexWidget(table.model().index(0, action_column))

@@ -19,6 +19,8 @@ def test_database_url_preserves_reserved_password_characters() -> None:
         db_driver="ODBC Driver 18 for SQL Server",
         db_encrypt="yes",
         db_trust_server_certificate="no",
+        app_mode="normal",
+        clinic_demo_now=None,
     )
 
     url = settings.database_url

@@ -6,6 +6,7 @@ import httpx
 import pytest
 
 from frontend.api.api_client import ApiClient, ApiError
+from frontend.api_client import ApiClient as LegacyApiClient
 
 
 def make_client(handler: Callable[[httpx.Request], httpx.Response]) -> ApiClient:
@@ -46,6 +47,24 @@ def test_clear_token_removes_authorization_header() -> None:
         assert client.get("/health") == {"status": "ok"}
     finally:
         client.close()
+
+
+def test_legacy_admin_adapter_does_not_show_transport_details() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("private SQL host and patient identifier", request=request)
+
+    client = LegacyApiClient()
+    client._client.close()
+    client._client = httpx.Client(
+        base_url="https://clinic.example.test", transport=httpx.MockTransport(handler)
+    )
+    try:
+        response = client.get("/users/")
+    finally:
+        client._client.close()
+    assert response.status_code == 503
+    assert "private" not in str(response.json())
+    assert response.json()["detail"] == "Không thể kết nối server."
 
 
 @pytest.mark.parametrize(

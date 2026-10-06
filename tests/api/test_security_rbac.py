@@ -52,7 +52,7 @@ def test_patient_cannot_access_doctor_portal(client: TestClient) -> None:
     # Attempt to view doctor schedule
     res = client.get("/api/v1/doctor/schedule?doctor_id=1")
     assert res.status_code == 403
-    assert "Chỉ bác sĩ hoặc quản trị viên" in res.json()["detail"]
+    assert "Chỉ bác sĩ đang hoạt động" in res.json()["detail"]
 
     # Attempt to accept appointment
     res2 = client.put("/api/v1/doctor/appointments/1/accept")
@@ -211,7 +211,7 @@ def test_cannot_complete_already_completed_appointment(client: TestClient) -> No
         "/api/v1/doctor/appointments/100/complete",
         json={"symptoms": "Cough", "diagnosis": "Flu"},
     )
-    assert res.status_code == 400
+    assert res.status_code == 409
     assert "đã được hoàn tất trước đó" in res.json()["detail"]
 
 

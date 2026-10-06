@@ -1,6 +1,7 @@
 """Regression coverage for the responsive doctor workspace."""
 
 from collections.abc import Iterator
+from datetime import date
 from threading import Event
 from types import SimpleNamespace
 
@@ -90,6 +91,31 @@ class _ControllableCompleteWorker(QObject):
     def resolve(self, ok: bool, message: str) -> None:
         self.running = False
         self.finished.emit(ok, message)
+
+
+class _ControllableContextWorker(QObject):
+    success = Signal(dict)
+    error = Signal(str)
+    unauthorized = Signal(str)
+    finished = Signal()
+    instances: list["_ControllableContextWorker"] = []
+
+    def __init__(self, appointment_id: int, token: str) -> None:
+        super().__init__()
+        self.appointment_id = appointment_id
+        self.token = token
+        self.instances.append(self)
+
+    def start(self) -> None:
+        pass
+
+    def resolve(self, context: dict) -> None:
+        self.success.emit(context)
+        self.finished.emit()
+
+    def reject(self, message: str) -> None:
+        self.error.emit(message)
+        self.finished.emit()
 
 
 def test_schedule_table_is_read_only_and_preserves_full_text(
@@ -269,7 +295,7 @@ def test_exam_v2_uses_full_width_summary_balanced_body_and_fixed_footer(
     qt_app.processEvents()
 
     assert view.header.title == "Khám bệnh"
-    assert view.breadcrumb.text() == "← Lịch khám hôm nay"
+    assert view.breadcrumb.text() == "← Hàng đợi khám"
     assert view.patient_summary.parent() is view.scroll_content
     assert view.patient_summary.width() > view.left_panel.width()
     assert view.body_layout.columnStretch(0) == 11
@@ -378,6 +404,123 @@ def test_exam_confirms_completion_and_keeps_api_payload_compatible(
     qt_app.processEvents()
 
 
+def test_production_exam_requires_history_load_and_displays_prior_care(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _ControllableContextWorker.instances.clear()
+    monkeypatch.setattr(
+        doctor_app, "get_frontend_settings", lambda: SimpleNamespace(app_mode="production")
+    )
+    monkeypatch.setattr(doctor_app, "FetchClinicalContextWorker", _ControllableContextWorker)
+    view = MedicalExamView(SimpleNamespace(token="test-token", doctor_id=7))
+    view.load_patient_data(_appointment())
+
+    first = _ControllableContextWorker.instances[0]
+    assert first.appointment_id == 241
+    assert not view.btn_finish.isEnabled()
+    assert not view.btn_add_medicine.isEnabled()
+    assert "CHƯA ĐƯỢC GHI NHẬN" in view.allergy_status_label.text()
+
+    first.resolve(
+        {
+            "appointment_id": 241,
+            "allergy_status": "NOT_DOCUMENTED",
+            "prior_records_has_more": False,
+            "prior_records": [
+                {
+                    "examination_date": "2026-09-12T10:00:00",
+                    "doctor_name": "Bác sĩ A",
+                    "symptoms": "Ho khan",
+                    "diagnosis": "Viêm họng",
+                    "notes": "Theo dõi",
+                    "prescription_items": [
+                        {
+                            "medicine_name": "Thuốc mẫu",
+                            "dosage": "500 mg",
+                            "quantity": 2,
+                            "instructions": "Theo đơn",
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    assert view.btn_finish.isEnabled()
+    assert not view.btn_add_medicine.isEnabled()
+    assert not view.in_med.isEnabled()
+    assert "chưa hỗ trợ kê đơn" in view.prescription_notice.text()
+    view.in_med.setText("Thuốc thử")
+    view.add_medicine()
+    assert view.table_med.rowCount() == 0
+    assert "Viêm họng" in view.clinical_context_history.toPlainText()
+    assert "Thuốc mẫu" in view.clinical_context_history.toPlainText()
+
+    view.load_clinical_context()
+    second = _ControllableContextWorker.instances[1]
+    assert not view.btn_finish.isEnabled()
+    second.resolve(
+        {
+            "appointment_id": 241,
+            "allergy_status": "NOT_DOCUMENTED",
+            "prior_records_has_more": True,
+            "prior_records": [],
+        }
+    )
+    assert "còn hồ sơ cũ hơn" in view.clinical_context_status.text()
+
+    view.load_clinical_context()
+    third = _ControllableContextWorker.instances[2]
+    third.reject("Mất kết nối")
+    assert not view.btn_finish.isEnabled()
+    assert "Mất kết nối" in view.clinical_context_status.text()
+
+    view.close()
+    view.deleteLater()
+    qt_app.processEvents()
+
+
+def test_production_past_in_progress_visit_requires_visible_late_entry_reason(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _ControllableContextWorker.instances.clear()
+    _ControllableCompleteWorker.instances.clear()
+    monkeypatch.setattr(
+        doctor_app, "get_frontend_settings", lambda: SimpleNamespace(app_mode="production")
+    )
+    monkeypatch.setattr(doctor_app.clinic_clock, "today", lambda: date(2026, 10, 6))
+    monkeypatch.setattr(doctor_app, "FetchClinicalContextWorker", _ControllableContextWorker)
+    monkeypatch.setattr(doctor_app, "CompleteExamWorker", _ControllableCompleteWorker)
+    appointment = _appointment()
+    appointment["AppointmentDate"] = "2026-10-05"
+    appointment["Status"] = "IN_PROGRESS"
+    view = MedicalExamView(SimpleNamespace(token="test-token", doctor_id=7))
+    view.load_patient_data(appointment)
+    view.show()
+    qt_app.processEvents()
+    assert view.late_entry_panel.isVisible()
+    _ControllableContextWorker.instances[-1].resolve(
+        {
+            "appointment_id": appointment["AppointmentID"],
+            "allergy_status": "NOT_DOCUMENTED",
+            "prior_records_has_more": False,
+            "prior_records": [],
+        }
+    )
+    view.txt_diagnosis.setText("Đau đầu do thiếu ngủ")
+    monkeypatch.setattr(view, "_ask_confirmation", lambda *_args, **_kwargs: True)
+    view.submit_examination()
+    assert not _ControllableCompleteWorker.instances
+
+    view.txt_late_reason.setText("Gián đoạn hệ thống tại thời điểm kết thúc ca")
+    view.submit_examination()
+    assert _ControllableCompleteWorker.instances[-1].payload["late_entry_reason"] == (
+        "Gián đoạn hệ thống tại thời điểm kết thúc ca"
+    )
+    view.close()
+    view.deleteLater()
+    qt_app.processEvents()
+
+
 def test_dashboard_warns_before_discarding_dirty_examination(
     qt_app: QApplication,
     monkeypatch: pytest.MonkeyPatch,
@@ -437,7 +580,7 @@ def test_doctor_shell_collapses_and_exam_returns_to_two_columns_when_wide(
     qt_app.processEvents()
     assert dashboard.sidebar.is_compact is True
     assert dashboard.sidebar.schedule_button.text() == ""
-    assert dashboard.sidebar.schedule_button.accessibleName() == "Lịch khám hôm nay"
+    assert dashboard.sidebar.schedule_button.accessibleName() == "Hàng đợi khám"
 
     dashboard.resize(1280, 800)
     dashboard.go_to_exam(_appointment())

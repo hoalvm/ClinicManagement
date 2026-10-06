@@ -111,7 +111,7 @@ def test_staff_operational_tables_fit_1022_pixel_content_width(
         }
     )
     check_in = CheckInView(client)
-    check_in._on_candidates_loaded({"items": [appointment]})
+    check_in._on_candidates_loaded({"items": [{**appointment, "status": "CONFIRMED"}]})
     appointments = AppointmentManagementView(client)
     appointments._on_appointments_loaded(
         {"items": [appointment], "total": 1, "total_pages": 1}

@@ -18,6 +18,7 @@ def jwt_settings(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         jwt_secret_value="unit-test-secret-that-is-not-used-outside-tests",
         jwt_algorithm="HS256",
         access_token_expire_minutes=60,
+        app_mode="normal",
     )
     monkeypatch.setattr(security, "get_settings", lambda: settings)
     return settings

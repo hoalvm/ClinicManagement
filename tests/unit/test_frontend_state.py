@@ -12,6 +12,7 @@ from frontend.api.api_client import ApiClient, ApiError
 from frontend.core.i18n import t
 from frontend.core.session import SessionState
 from frontend.main_window import MainWindow
+from frontend.views import patient_profile_view as profile_module
 from frontend.views.appointment_detail_view import AppointmentDetailView
 from frontend.views.appointment_history_view import AppointmentHistoryView
 from frontend.views.common import BaseApiView, table_item
@@ -75,6 +76,45 @@ def test_profile_renders_null_demographics_and_merges_session(
         "role": "PATIENT",
         "is_active": True,
     }
+    view.deleteLater()
+    qt_app.processEvents()
+
+
+def test_production_profile_keeps_verified_identity_read_only_and_omits_it_from_patch(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        profile_module,
+        "get_frontend_settings",
+        lambda: SimpleNamespace(app_mode="production"),
+    )
+    client = MagicMock(spec=ApiClient)
+    view = PatientProfileView(client, SessionState())
+    view._render({
+        "patient_id": 21,
+        "username": "patient21",
+        "full_name": "Verified Patient",
+        "phone": "0900000001",
+        "email": None,
+        "date_of_birth": "2000-01-01",
+        "gender": "FEMALE",
+        "address": None,
+    })
+    view._set_editing(True)
+    assert view.full_name.isReadOnly()
+    assert view.date_of_birth.isReadOnly()
+    assert not view.identity_notice.isHidden()
+    view.phone.setText("0911111111")
+    monkeypatch.setattr(
+        view,
+        "run_api_task",
+        lambda _key, operation, _on_success, **_kwargs: operation(),
+    )
+    view._save()
+    payload = client.patch.call_args.kwargs["json"]
+    assert payload["phone"] == "0911111111"
+    assert "full_name" not in payload
+    assert "date_of_birth" not in payload
     view.deleteLater()
     qt_app.processEvents()
 
@@ -647,6 +687,6 @@ def test_invoice_detail_renders_backend_payload_without_key_error(
     assert view._appointment_id == 42
     assert view.values["doctor"].text() == "Dr. Strange"
     assert view.items_model.rowCount() == 1
-    assert view.payment_values["method"].text() == "CASH"
+    assert view.payment_values["method"].text() == "Tiền mặt"
     view.deleteLater()
     qt_app.processEvents()
