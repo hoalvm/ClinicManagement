@@ -32,6 +32,10 @@ Thumbs.db
 # Runtime output
 *.log
 
+# Documentation and notes
+docs/
+
+# Skill and agent configuration files
 .mcp.json
 AGENTS.md
 GEMINI.md
