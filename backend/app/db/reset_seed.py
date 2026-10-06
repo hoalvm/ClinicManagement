@@ -37,8 +37,8 @@ def _validate_existing_database() -> None:
         marker = None
         if cursor.execute("SELECT OBJECT_ID(N'dbo.SchemaMigrations', N'U')").fetchval():
             marker = cursor.execute(
-                "SELECT COUNT(*) FROM dbo.SchemaMigrations WHERE MigrationID = ?",
-                SEED_VERSION,
+                "SELECT COUNT(*) FROM dbo.SchemaMigrations WHERE MigrationID IN (?, ?)",
+                "project-synthetic-seed-v2", SEED_VERSION,
             ).fetchval()
         if marker == 1:
             return

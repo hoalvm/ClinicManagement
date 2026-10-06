@@ -134,7 +134,11 @@ def validate_production_database(connection: Connection, expected_name: str) -> 
         )
 
     demo_marker = connection.execute(
-        text("SELECT COUNT(*) FROM dbo.SchemaMigrations WHERE MigrationID LIKE 'demo-seed-%'")
+        text(
+            "SELECT COUNT(*) FROM dbo.SchemaMigrations "
+            "WHERE MigrationID LIKE 'demo-seed-%' "
+            "OR MigrationID LIKE 'project-synthetic-seed-%'"
+        )
     ).scalar_one()
     if demo_marker:
         raise RuntimeError("Production database contains the demo seed marker; use a clean verified database")

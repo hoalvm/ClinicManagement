@@ -38,7 +38,7 @@ from backend.app.models import (
 )
 
 PROJECT_DB_NAME = "ClinicManagementDB"
-SEED_VERSION = "project-synthetic-seed-v2"
+SEED_VERSION = "project-synthetic-seed-v3"
 ADMIN_PASSWORD = "Admin123!"
 DOCTOR_PASSWORD = "Doctor123!"
 DEMO_PASSWORD = "Password123!"
@@ -55,14 +55,14 @@ DEMO_DOCTORS = (
 )
 
 DEMO_PATIENTS = (
-    ("patient01", "Trần Minh Anh", date(1995, 4, 12), "FEMALE", "0900000201"),
-    ("patient02", "Nguyễn Văn Bình", date(1986, 7, 21), "MALE", "0900000202"),
-    ("patient03", "Lê Thu Hà", date(1991, 11, 3), "FEMALE", "0900000203"),
-    ("patient04", "Phạm Quốc Khánh", date(1967, 2, 16), "MALE", "0900000204"),
-    ("patient05", "Võ Ngọc Mai", date(2001, 8, 9), "FEMALE", "0900000205"),
-    ("patient06", "Đặng Hoàng Long", date(1978, 6, 30), "MALE", "0900000206"),
-    ("patient07", "Bùi Thanh Thảo", date(1993, 12, 14), "FEMALE", "0900000207"),
-    ("patient08", "Huỳnh Gia Bảo", date(2004, 3, 25), "MALE", "0900000208"),
+    ("patient01", "Nguyễn Minh Anh", date(1995, 4, 12), "FEMALE", "0912847365", "24/7 Lê Văn Sỹ, Phú Nhuận, TP. Hồ Chí Minh"),
+    ("patient02", "Nguyễn Văn Bình", date(1986, 7, 21), "MALE", "0984762153", "118 Nguyễn Kiệm, Gò Vấp, TP. Hồ Chí Minh"),
+    ("patient03", "Lê Thu Hà", date(1991, 11, 3), "FEMALE", "0937624815", "36 Nguyễn Trãi, Quận 1, TP. Hồ Chí Minh"),
+    ("patient04", "Phạm Quốc Khánh", date(1967, 2, 16), "MALE", "0905183742", "205 Xô Viết Nghệ Tĩnh, Bình Thạnh, TP. Hồ Chí Minh"),
+    ("patient05", "Võ Ngọc Mai", date(2001, 8, 9), "FEMALE", "0836457291", "72 Trường Chinh, Tân Bình, TP. Hồ Chí Minh"),
+    ("patient06", "Đặng Hoàng Long", date(1978, 6, 30), "MALE", "0973541862", "15/4 Phan Văn Trị, Gò Vấp, TP. Hồ Chí Minh"),
+    ("patient07", "Bùi Thanh Thảo", date(1993, 12, 14), "FEMALE", "0867194352", "91 Võ Văn Tần, Quận 3, TP. Hồ Chí Minh"),
+    ("patient08", "Huỳnh Gia Bảo", date(2004, 3, 25), "MALE", "0926381745", "42 Bạch Đằng, Bình Thạnh, TP. Hồ Chí Minh"),
 )
 
 def _shift_workdays(start: date, count: int) -> date:
@@ -152,13 +152,13 @@ DEMO_RECORDS = {
         "Đầy bụng sau bữa ăn, không nôn, không sụt cân.",
         "Khó tiêu chức năng (K30).",
         "Ăn bữa nhỏ, theo dõi triệu chứng; tái khám nếu đau tăng hoặc xuất hiện dấu hiệu báo động.",
-        (("Omeprazole 20 mg", 14, "1 viên/ngày", "Uống trước bữa sáng theo đơn mẫu."),),
+        (("Omeprazole 20 mg", 14, "1 viên/ngày", "Uống trước bữa sáng theo chỉ định."),),
     ),
     "A02": (
         "Mảng đỏ ngứa khu trú hai bàn tay sau dùng chất tẩy mới.",
         "Viêm da tiếp xúc kích ứng (L24.9).",
         "Tránh tác nhân nghi ngờ, dưỡng ẩm và tái khám nếu tổn thương lan rộng.",
-        (("Kem hydrocortisone 1%", 1, "Bôi lớp mỏng", "Dùng ngắn ngày theo đơn mẫu."),),
+        (("Kem hydrocortisone 1%", 1, "Bôi lớp mỏng", "Dùng ngắn ngày theo chỉ định."),),
     ),
     "A03": (
         "Tự đo huyết áp tại nhà dao động 130–145/80–90 mmHg, không đau ngực.",
@@ -170,13 +170,13 @@ DEMO_RECORDS = {
         "Hắt hơi, chảy mũi trong và nghẹt mũi buổi sáng; không sốt.",
         "Viêm mũi dị ứng (J30.4).",
         "Tránh dị nguyên nghi ngờ, vệ sinh mũi; tái khám nếu khó thở hoặc sốt.",
-        (("Nước muối sinh lý xịt mũi", 1, "2 nhát mỗi bên", "Rửa mũi theo hướng dẫn mẫu."),),
+        (("Nước muối sinh lý xịt mũi", 1, "2 nhát mỗi bên", "Vệ sinh mũi theo hướng dẫn của bác sĩ."),),
     ),
     "A05": (
         "Đau gối phải khi lên cầu thang, không sưng nóng đỏ.",
         "Đau khớp gối, cần theo dõi (M25.56).",
         "Giảm tải khớp tạm thời, tập vận động phù hợp và tái khám nếu sưng hoặc đau tăng.",
-        (("Paracetamol 500 mg", 10, "1 viên khi đau", "Dùng theo đơn mẫu, không vượt liều được bác sĩ hướng dẫn."),),
+        (("Paracetamol 500 mg", 10, "1 viên khi đau", "Dùng theo chỉ định, không vượt liều được bác sĩ hướng dẫn."),),
     ),
 }
 
@@ -245,7 +245,7 @@ def _add_user(
 ) -> User:
     user = User(
         username=username, password_hash=hash_password(password), full_name=full_name,
-        phone=phone, email=f"{username}@example.com", role=role, is_active=True,
+        phone=phone, email=f"{username}@anhoaclinic.example.com", role=role, is_active=True,
         created_at=created_at,
     )
     session.add(user)
@@ -256,27 +256,36 @@ def _add_user(
 def _add_catalog_and_people(
     session: Session, user_created_at: datetime,
 ) -> tuple[dict[str, Doctor], dict[str, Patient]]:
-    _add_user(session, "admin", ADMIN_PASSWORD, "Quản trị viên (đào tạo)",
-              "0900000001", "ADMIN", user_created_at)
+    _add_user(session, "admin", ADMIN_PASSWORD, "admin",
+              "1234567890", "ADMIN", user_created_at)
     staff_users = []
-    for index, name in enumerate(("Nguyễn Ngọc Lan", "Trần Thanh Tâm"), start=1):
+    for index, (name, phone) in enumerate((
+        ("Nguyễn Ngọc Lan", "0935481726"),
+        ("Lê Thanh Tâm", "0886245731"),
+    ), start=1):
         staff_users.append(_add_user(session, f"reception{index:02d}", STAFF_PASSWORD, name,
-                                     f"090000001{index}", "STAFF", user_created_at))
+                                     phone, "STAFF", user_created_at))
 
     specialties = {}
-    for name in ("Nội tổng quát", "Da liễu", "Tim mạch", "Tai Mũi Họng", "Cơ Xương Khớp"):
-        specialty = Specialty(specialty_name=name, description=f"Chuyên khoa {name} (dữ liệu demo)", is_active=True)
+    for name, description in (
+        ("Nội tổng quát", "Khám và theo dõi các vấn đề sức khỏe nội khoa thường gặp."),
+        ("Da liễu", "Khám và điều trị các bệnh lý về da, tóc và móng."),
+        ("Tim mạch", "Khám, tư vấn và theo dõi sức khỏe tim mạch."),
+        ("Tai Mũi Họng", "Khám và điều trị bệnh lý tai, mũi, họng."),
+        ("Cơ Xương Khớp", "Khám và theo dõi bệnh lý cơ, xương, khớp."),
+    ):
+        specialty = Specialty(specialty_name=name, description=description, is_active=True)
         session.add(specialty)
         specialties[name] = specialty
     clinics = {}
-    for name, address in (
-        ("Quận 1", "Đường Nguyễn Du, Quận 1, TP. Hồ Chí Minh (địa chỉ giả lập)"),
-        ("Tân Bình", "Đường Cộng Hòa, Quận Tân Bình, TP. Hồ Chí Minh (địa chỉ giả lập)"),
-        ("Bình Thạnh", "Đường Điện Biên Phủ, Quận Bình Thạnh, TP. Hồ Chí Minh (địa chỉ giả lập)"),
+    for key, name, address in (
+        ("Quận 1", "Phòng khám An Hòa - Quận 1", "88 Nguyễn Du, Quận 1, TP. Hồ Chí Minh"),
+        ("Tân Bình", "Phòng khám An Hòa - Tân Bình", "251 Cộng Hòa, Tân Bình, TP. Hồ Chí Minh"),
+        ("Bình Thạnh", "Phòng khám An Hòa - Bình Thạnh", "159 Điện Biên Phủ, Bình Thạnh, TP. Hồ Chí Minh"),
     ):
         clinic = Clinic(clinic_name=name, address=address, phone=None, is_active=True)
         session.add(clinic)
-        clinics[name] = clinic
+        clinics[key] = clinic
     session.flush()
 
     # Reception01 covers the full fictional network; reception02 is assigned
@@ -309,12 +318,13 @@ def _add_catalog_and_people(
         ))
 
     doctors = {}
+    doctor_phones = ("0985321746", "0916482753", "0903764185", "0978415263", "0932846751")
     for index, (username, full_name, specialty, clinic_name) in enumerate(DEMO_DOCTORS, start=1):
         user = _add_user(session, username, DOCTOR_PASSWORD, full_name,
-                         f"090000010{index}", "DOCTOR", user_created_at)
+                         doctor_phones[index - 1], "DOCTOR", user_created_at)
         doctor = Doctor(user_id=user.user_id, specialty_id=specialties[specialty].specialty_id,
                         clinic_id=clinics[clinic_name].clinic_id,
-                        license_number=f"DEMO-BS-{index:03d}", is_active=True)
+                        license_number=f"CCHN-AH-2026-{index:03d}", is_active=True)
         session.add(doctor)
         session.flush()
         doctors[username] = doctor
@@ -325,11 +335,11 @@ def _add_catalog_and_people(
                                            slot_duration=30, is_active=True))
 
     patients = {}
-    for username, full_name, birthday, gender, phone in DEMO_PATIENTS:
+    for username, full_name, birthday, gender, phone, address in DEMO_PATIENTS:
         user = _add_user(session, username, DEMO_PASSWORD, full_name, phone,
                          "PATIENT", user_created_at)
         patient = Patient(user_id=user.user_id, date_of_birth=birthday, gender=gender,
-                          address="TP. Hồ Chí Minh (dữ liệu giả lập)")
+                          address=address)
         session.add(patient)
         session.flush()
         patients[username] = patient
@@ -429,7 +439,7 @@ def _add_clinical_and_billing(session: Session, appointments: dict[str, Appointm
                                 amount_received=received,
                                 change_due=received - total,
                                 recorded_by_user_id=reception_user_id,
-                                external_reference="TRAINING-A02-TRANSFER" if method == "TRANSFER" else None,
+                                external_reference="FT2628001845" if method == "TRANSFER" else None,
                                 verified_at=verified_at,
                                 payment_date=verified_at))
 
