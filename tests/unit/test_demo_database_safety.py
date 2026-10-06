@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from backend.app.db import init_db
+from backend.app.db import init_db, reset_seed
 from backend.app.db.seed import build_demo_appointments, demo_live_slot, validate_demo_fixture
 
 
@@ -18,6 +18,26 @@ def test_reset_refuses_the_existing_application_database(monkeypatch: pytest.Mon
     )
     with pytest.raises(ValueError, match="only for ClinicManagementDemoDB"):
         init_db.init_database(reset=True, verbose=False)
+
+
+@pytest.mark.parametrize(
+    ("app_mode", "db_name"),
+    [
+        ("production", "ClinicManagementDB"),
+        ("demo", "ClinicManagementDemoDB"),
+        ("normal", "ClinicManagementDB"),
+    ],
+)
+def test_project_seed_reset_requires_exact_demo_target(
+    monkeypatch: pytest.MonkeyPatch, app_mode: str, db_name: str,
+) -> None:
+    monkeypatch.setattr(
+        reset_seed,
+        "get_settings",
+        lambda: SimpleNamespace(db_name=db_name, app_mode=app_mode),
+    )
+    with pytest.raises(RuntimeError, match="No database was changed"):
+        reset_seed.validate_reset_settings()
 
 
 def test_production_schema_changes_require_explicit_dba_command(
