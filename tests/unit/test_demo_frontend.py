@@ -215,8 +215,8 @@ def test_transfer_qr_is_demo_only_and_never_posts_before_confirmation(qt_app: QA
     view._show_invoice_details({"invoice_id": 9, "total_amount": "200000.00", "status": "UNPAID"})
     view.rb_transfer.setChecked(True)
 
-    assert demo_transfer_payload(9, Decimal("200000.00")) == "CLINIC-DEMO|9|200000.00"
-    assert view.qr_label.toolTip() == "CLINIC-DEMO|9|200000.00"
+    assert demo_transfer_payload(9, Decimal("200000.00")) == "CLINIC-INVOICE|9|200000.00"
+    assert view.qr_label.toolTip() == "CLINIC-INVOICE|9|200000.00"
     assert not view.qr_label.pixmap().isNull()
     client.post.assert_not_called()
 

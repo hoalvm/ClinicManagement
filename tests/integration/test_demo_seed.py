@@ -15,6 +15,7 @@ from backend.app.db.session import SessionLocal
 from backend.app.models import (
     Appointment,
     ChargeCatalog,
+    Clinic,
     Doctor,
     DoctorSchedule,
     Invoice,
@@ -22,6 +23,8 @@ from backend.app.models import (
     MedicalRecord,
     Patient,
     Payment,
+    PrescriptionItem,
+    Specialty,
     StaffClinicAssignment,
     User,
 )
@@ -54,9 +57,33 @@ def test_fresh_demo_seed_is_coherent_and_rerun_is_non_destructive() -> None:
         payments = session.execute(select(Payment)).scalars().all()
         charges = session.execute(select(ChargeCatalog)).scalars().all()
         grants = session.execute(select(StaffClinicAssignment)).scalars().all()
+        clinics = session.execute(select(Clinic)).scalars().all()
+        specialties = session.execute(select(Specialty)).scalars().all()
+        prescription_items = session.execute(select(PrescriptionItem)).scalars().all()
 
         assert len(users) == 16  # 1 admin, 2 staff, 5 doctors, 8 patients
         assert len(doctors) == 5 and len(patients) == 8
+        assert len(clinics) == 3 and len(specialties) == 5
+        assert len({user.phone for user in users}) == len(users)
+        assert all(user.email.endswith("@anhoaclinic.example.com") for user in users)
+        assert len({patient.address for patient in patients}) == len(patients)
+        assert len({doctor.license_number for doctor in doctors}) == len(doctors)
+        displayed_fields = [
+            *(user.full_name for user in users),
+            *(user.phone for user in users),
+            *(clinic.clinic_name for clinic in clinics),
+            *(clinic.address for clinic in clinics),
+            *(specialty.description for specialty in specialties),
+            *(doctor.license_number for doctor in doctors),
+            *(patient.address for patient in patients),
+            *(item.instructions for item in prescription_items),
+            *(payment.external_reference for payment in payments if payment.external_reference),
+        ]
+        assert all(
+            forbidden not in value.casefold()
+            for value in displayed_fields
+            for forbidden in ("demo", "giả lập", "mẫu", "training", "090000")
+        )
         users_by_id = {user.user_id: user for user in users}
         assert {(users_by_id[doctor.user_id].username, users_by_id[doctor.user_id].full_name)
                 for doctor in doctors} == {(row[0], row[1]) for row in DEMO_DOCTORS}
