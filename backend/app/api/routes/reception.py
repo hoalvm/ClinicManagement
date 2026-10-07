@@ -65,6 +65,7 @@ def list_appointments(
     status: Annotated[str | None, Query()] = None,
     appointment_date: Annotated[date | None, Query()] = None,
     doctor_id: Annotated[int | None, Query()] = None,
+    unbilled_only: bool = False,
 ) -> ReceptionAppointmentPage:
     return _service(session, staff).list_appointments(
         page=page,
@@ -73,6 +74,7 @@ def list_appointments(
         status=status,
         appointment_date=appointment_date,
         doctor_id=doctor_id,
+        unbilled_only=unbilled_only,
     )
 
 

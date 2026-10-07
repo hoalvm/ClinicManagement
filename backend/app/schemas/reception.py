@@ -202,10 +202,12 @@ class InvoicePreview(APIModel):
     appointment_status: str
     charge_id: int
     charge_name: str
+    billing_item_name: str
     unit_price: Money
     quantity: int
     total_amount: Money
     medication_note: str
+    prescribed_items: list[dict[str, str | int]] = Field(default_factory=list)
 
 
 class ProcessPaymentRequest(APIModel):

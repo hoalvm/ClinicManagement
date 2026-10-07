@@ -5,12 +5,14 @@ from __future__ import annotations
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QDialog,
     QFormLayout,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -29,7 +31,7 @@ from frontend.ui.design_system import (
     ColumnPriority,
     ColumnSpec,
 )
-from frontend.views.common import BaseApiView, format_money
+from frontend.views.common import BaseApiView, format_date, format_money
 from frontend.widgets.adaptive_data_table import AdaptiveDataTable
 from frontend.widgets.async_task_controller import AsyncTaskController
 from frontend.widgets.filter_toolbar import FilterToolbar
@@ -49,6 +51,8 @@ class InvoiceManagementView(BaseApiView):
         super().__init__(api_client, parent)
         self._current_page = 1
         self._page_size = 15
+        self._unbilled_page = 1
+        self._unbilled_tasks = AsyncTaskController(self)
 
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
@@ -61,14 +65,84 @@ class InvoiceManagementView(BaseApiView):
 
         self.header = PageHeader(
             "Hóa đơn",
-            "Lập và theo dõi hóa đơn viện phí",
-            action_label="Lập hóa đơn",
+            "Từ ca đã khám đến hóa đơn và thu phí",
+            action_label="Lập theo mã hẹn",
             parent=self,
         )
         self.header.action_clicked.connect(self._create_invoice_dialog)
         layout.addWidget(self.header)
         layout.addWidget(self.feedback)
         layout.addWidget(self.loading)
+
+        self.recent_invoice = QFrame()
+        self.recent_invoice.setObjectName("infoCard")
+        recent_layout = QHBoxLayout(self.recent_invoice)
+        recent_layout.setContentsMargins(18, 14, 18, 14)
+        self.recent_invoice_label = QLabel()
+        self.recent_invoice_label.setWordWrap(True)
+        recent_layout.addWidget(self.recent_invoice_label, 1)
+        self.btn_pay_new = QPushButton("Thu phí hóa đơn vừa lập")
+        self.btn_pay_new.setObjectName("primaryButton")
+        self.btn_pay_new.clicked.connect(self._pay_recent_invoice)
+        recent_layout.addWidget(self.btn_pay_new)
+        layout.addWidget(self.recent_invoice)
+        self.recent_invoice.hide()
+
+        waiting_card = QFrame()
+        waiting_card.setObjectName("infoCard")
+        waiting_layout = QVBoxLayout(waiting_card)
+        waiting_layout.setContentsMargins(18, 16, 18, 16)
+        waiting_layout.setSpacing(10)
+        waiting_heading = QHBoxLayout()
+        waiting_title = QLabel("Ca đã khám · chờ lập hóa đơn")
+        waiting_title.setObjectName("sectionTitle")
+        waiting_heading.addWidget(waiting_title)
+        waiting_heading.addStretch(1)
+        self.btn_refresh_unbilled = QPushButton("Làm mới")
+        self.btn_refresh_unbilled.setObjectName("secondaryButton")
+        self.btn_refresh_unbilled.clicked.connect(self.load_unbilled)
+        waiting_heading.addWidget(self.btn_refresh_unbilled)
+        waiting_layout.addLayout(waiting_heading)
+        waiting_help = QLabel(
+            "Bác sĩ hoàn tất ca khám → lễ tân đối chiếu bệnh án và lập hóa đơn → thu phí."
+        )
+        waiting_help.setObjectName("mutedLabel")
+        waiting_help.setWordWrap(True)
+        waiting_layout.addWidget(waiting_help)
+        self.unbilled_status = QLabel("Đang tải ca chờ lập hóa đơn...")
+        self.unbilled_status.setObjectName("mutedLabel")
+        waiting_layout.addWidget(self.unbilled_status)
+        self.unbilled_table = QTableWidget()
+        self.unbilled_table.setAccessibleName("Ca đã khám chờ lập hóa đơn")
+        self.unbilled_table.setColumnCount(5)
+        self.unbilled_table.setHorizontalHeaderLabels(
+            ["Mã hẹn", "Ngày khám", "Bệnh nhân", "Bác sĩ", "Thao tác"]
+        )
+        self.unbilled_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.unbilled_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.unbilled_table.setAlternatingRowColors(True)
+        self.unbilled_table.verticalHeader().hide()
+        self.unbilled_table.horizontalHeader().setSectionResizeMode(
+            2, QHeaderView.ResizeMode.Stretch
+        )
+        self.unbilled_table.horizontalHeader().setSectionResizeMode(
+            3, QHeaderView.ResizeMode.Stretch
+        )
+        for column, width in ((0, 82), (1, 115), (4, 146)):
+            self.unbilled_table.setColumnWidth(column, width)
+        self.unbilled_table.setMaximumHeight(360)
+        waiting_layout.addWidget(self.unbilled_table)
+        self.unbilled_pagination = Pagination(parent=self)
+        self.unbilled_pagination.page_requested.connect(self._go_to_unbilled_page)
+        self.unbilled_pagination.page_size_changed.connect(
+            lambda _size: self._go_to_unbilled_page(1)
+        )
+        waiting_layout.addWidget(self.unbilled_pagination)
+        layout.addWidget(waiting_card)
+
+        issued_title = QLabel("Hóa đơn đã lập")
+        issued_title.setObjectName("sectionTitle")
+        layout.addWidget(issued_title)
 
         self.filters = FilterToolbar(
             "Tìm tên bệnh nhân, số điện thoại hoặc mã hóa đơn",
@@ -200,7 +274,87 @@ class InvoiceManagementView(BaseApiView):
 
     def showEvent(self, event: Any) -> None:
         super().showEvent(event)
+        self.load_unbilled()
         self.load_invoices()
+
+    def invalidate_pending(self) -> None:
+        super().invalidate_pending()
+        self._unbilled_tasks.invalidate()
+
+    def _go_to_unbilled_page(self, page: int) -> None:
+        self._unbilled_page = page
+        self.load_unbilled()
+
+    def load_unbilled(self) -> None:
+        self.unbilled_status.setText("Đang tải ca chờ lập hóa đơn...")
+        params = {
+            "page": self._unbilled_page,
+            "page_size": self.unbilled_pagination.page_size,
+            "unbilled_only": True,
+        }
+
+        def failed(error: Exception) -> None:
+            if isinstance(error, ApiError) and error.status_code == 401:
+                self.session_expired.emit()
+                return
+            self.unbilled_status.setText(
+                error.message if isinstance(error, ApiError)
+                else "Không tải được ca chờ lập hóa đơn. Vui lòng làm mới."
+            )
+
+        self._unbilled_tasks.run(
+            "load_unbilled",
+            lambda: self.api_client.get("/api/v1/reception/appointments", params=params),
+            self._on_unbilled_loaded,
+            failed,
+            controls=(self.btn_refresh_unbilled, self.unbilled_pagination),
+        )
+
+    def _on_unbilled_loaded(self, data: dict[str, Any]) -> None:
+        items = data.get("items", [])
+        total = int(data.get("total", 0))
+        self.unbilled_status.setText(
+            f"{total} ca cần lập hóa đơn" if total
+            else "Không có ca nào đang chờ lập hóa đơn."
+        )
+        self.unbilled_pagination.update_state(
+            self._unbilled_page, int(data.get("total_pages", 1)), total
+        )
+        self.unbilled_table.setRowCount(len(items))
+        self.unbilled_table.setFixedHeight(min(360, 42 + 52 * len(items)))
+        self.unbilled_table.setVisible(bool(items))
+        self.unbilled_pagination.setVisible(
+            total > self.unbilled_pagination.page_size
+        )
+        for row, appointment in enumerate(items):
+            appointment_id = int(appointment["appointment_id"])
+            patient = appointment.get("patient") or {}
+            doctor = appointment.get("doctor") or {}
+            values = (
+                f"#{appointment_id}",
+                format_date(appointment.get("appointment_date")),
+                str(patient.get("full_name") or "—"),
+                str(doctor.get("full_name") or "—"),
+            )
+            for column, value in enumerate(values):
+                cell = QTableWidgetItem(value)
+                cell.setToolTip(value)
+                self.unbilled_table.setItem(row, column, cell)
+            button = QPushButton("Lập hóa đơn")
+            button.setObjectName("tableActionPrimary")
+            button.setAccessibleName(f"Lập hóa đơn cho lịch hẹn #{appointment_id}")
+            button.clicked.connect(
+                lambda _checked=False, appt_id=appointment_id:
+                self._create_invoice_dialog(appt_id)
+            )
+            self.unbilled_table.setCellWidget(row, 4, button)
+            self.unbilled_table.setRowHeight(row, 52)
+
+    def _pay_recent_invoice(self) -> None:
+        invoice_id = self.btn_pay_new.property("invoiceId")
+        if invoice_id:
+            self.recent_invoice.hide()
+            self.pay_invoice_requested.emit(int(invoice_id))
 
     def _apply_filter(self, _values: object | None = None) -> None:
         self._current_page = 1
@@ -365,30 +519,80 @@ class InvoiceManagementView(BaseApiView):
             raise ValueError("Vui lòng thêm ít nhất một khoản mục dịch vụ.")
         return items
 
-    def _create_invoice_dialog(self) -> None:
+    def _create_invoice_dialog(self, appointment_id: int | None = None) -> None:
         if get_frontend_settings().app_mode == "production":
-            self._create_production_invoice_dialog()
+            self._create_production_invoice_dialog(appointment_id)
             return
         dialog = QDialog(self)
-        dialog.setWindowTitle("Lập hóa đơn")
-        dialog.resize(480, 420)
+        dialog.setWindowTitle("Lập hóa đơn khám bệnh")
+        dialog.setMinimumSize(650, 540)
+        dialog.resize(760, 640)
         d_layout = QVBoxLayout(dialog)
+        d_layout.setContentsMargins(22, 20, 22, 20)
+        d_layout.setSpacing(13)
+
+        title = QLabel("Lập hóa đơn khám bệnh")
+        title.setObjectName("pageTitle")
+        d_layout.addWidget(title)
+        subtitle = QLabel("01  Kiểm tra ca khám     →     02  Đối chiếu khoản thu     →     03  Lập hóa đơn")
+        subtitle.setObjectName("mutedLabel")
+        subtitle.setWordWrap(True)
+        d_layout.addWidget(subtitle)
 
         form = QFormLayout()
         appt_input = QLineEdit()
-        form.addRow("Mã lịch hẹn *", appt_input)
+        appt_input.setPlaceholderText("Ví dụ: 7")
+        appt_input.setAccessibleName("Mã lịch hẹn đã khám")
+        lookup_row = QHBoxLayout()
+        lookup_row.addWidget(appt_input, 1)
+        btn_lookup = QPushButton("Tải thông tin ca khám")
+        btn_lookup.setObjectName("secondaryButton")
+        lookup_row.addWidget(btn_lookup)
+        form.addRow("Mã lịch hẹn *", lookup_row)
         d_layout.addLayout(form)
 
-        items_label = QLabel("Chi tiết dịch vụ:")
-        items_label.setObjectName("fieldLabel")
+        summary_card = QFrame()
+        summary_card.setObjectName("infoCard")
+        summary_layout = QGridLayout(summary_card)
+        summary_layout.setContentsMargins(16, 12, 16, 12)
+        summary_layout.setHorizontalSpacing(20)
+        summary_layout.setVerticalSpacing(8)
+
+        def summary_field(caption: str, value: str) -> tuple[QWidget, QLabel]:
+            field = QWidget()
+            field_layout = QVBoxLayout(field)
+            field_layout.setContentsMargins(0, 0, 0, 0)
+            field_layout.setSpacing(3)
+            caption_label = QLabel(caption)
+            caption_label.setObjectName("sectionEyebrow")
+            field_layout.addWidget(caption_label)
+            value_label = QLabel(value)
+            value_label.setObjectName("fieldLabel")
+            value_label.setWordWrap(True)
+            field_layout.addWidget(value_label)
+            return field, value_label
+
+        patient_field, patient_label = summary_field("BỆNH NHÂN", "Chưa tải ca khám")
+        doctor_field, doctor_label = summary_field("BÁC SĨ", "—")
+        service_field, service_label = summary_field("PHÍ KHÁM THEO BẢNG GIÁ", "—")
+        summary_layout.addWidget(patient_field, 0, 0)
+        summary_layout.addWidget(doctor_field, 0, 1)
+        summary_layout.addWidget(service_field, 1, 0, 1, 2)
+        d_layout.addWidget(summary_card)
+
+        items_label = QLabel("Chi tiết khoản thu")
+        items_label.setObjectName("sectionTitle")
         d_layout.addWidget(items_label)
-        help_label = QLabel("Chỉ thêm phí khám, thuốc hoặc dịch vụ thực sự thuộc ca đã hoàn tất.")
+        help_label = QLabel(
+            "Phí khám được điền từ bảng giá. Thuốc chỉ thêm khi đúng đơn bác sĩ và đã xác nhận giá thực thu."
+        )
         help_label.setWordWrap(True)
         help_label.setObjectName("helperText")
         d_layout.addWidget(help_label)
 
         # Editable line items with explicit add/remove controls and a live total.
         item_table = QTableWidget()
+        item_table.setAccessibleName("Các khoản thu của hóa đơn")
         item_table.setColumnCount(4)
         item_table.setHorizontalHeaderLabels(
             ["Tên dịch vụ / Thuốc", "Số lượng", "Đơn giá (₫)", "Xóa"]
@@ -398,7 +602,13 @@ class InvoiceManagementView(BaseApiView):
         item_table.setItem(0, 1, QTableWidgetItem("1"))
         item_table.setItem(0, 2, QTableWidgetItem("0"))
 
-        item_table.horizontalHeader().setStretchLastSection(True)
+        item_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        item_table.setColumnWidth(1, 100)
+        item_table.setColumnWidth(2, 142)
+        item_table.setColumnWidth(3, 74)
+        item_table.setAlternatingRowColors(True)
+        item_table.verticalHeader().hide()
+        item_table.setMinimumHeight(185)
         d_layout.addWidget(item_table)
 
         item_actions = QHBoxLayout()
@@ -410,6 +620,11 @@ class InvoiceManagementView(BaseApiView):
         total_label.setObjectName("sectionTitle")
         item_actions.addWidget(total_label)
         d_layout.addLayout(item_actions)
+
+        prescription_label = QLabel("Đơn thuốc: Chưa tải ca khám")
+        prescription_label.setObjectName("mutedLabel")
+        prescription_label.setWordWrap(True)
+        d_layout.addWidget(prescription_label)
 
         def update_total() -> None:
             total = Decimal("0")
@@ -466,6 +681,86 @@ class InvoiceManagementView(BaseApiView):
         d_layout.addWidget(error_label)
         tasks = AsyncTaskController(dialog)
         dialog.finished.connect(lambda _result: tasks.invalidate())
+        verified_id: int | None = None
+
+        def reset_preview(_text: str) -> None:
+            nonlocal verified_id
+            verified_id = None
+            patient_label.setText("Chưa tải ca khám")
+            doctor_label.setText("—")
+            service_label.setText("—")
+            prescription_label.setText("Đơn thuốc: Chưa tải ca khám")
+            error_label.hide()
+
+        appt_input.textChanged.connect(reset_preview)
+
+        def check() -> None:
+            nonlocal verified_id
+            raw = appt_input.text().strip()
+            if not raw.isdigit() or int(raw) <= 0:
+                error_label.setText("Vui lòng nhập mã lịch hẹn hợp lệ dạng số.")
+                error_label.show()
+                return
+            requested_id = int(raw)
+            error_label.hide()
+
+            def succeeded(result: dict[str, Any]) -> None:
+                nonlocal verified_id
+                if appt_input.text().strip() != str(requested_id):
+                    return
+                verified_id = requested_id
+                patient_label.setText(str(result["patient_name"]))
+                doctor_label.setText(str(result["doctor_name"]))
+                service_label.setText(
+                    f"{result['charge_name']} · "
+                    f"{format_money(result['unit_price'])}"
+                )
+                item_table.blockSignals(True)
+                item_table.setRowCount(1)
+                item_table.setItem(
+                    0, 0,
+                    QTableWidgetItem(str(result.get("billing_item_name") or result["charge_name"])),
+                )
+                item_table.setItem(0, 1, QTableWidgetItem("1"))
+                item_table.setItem(0, 2, QTableWidgetItem(str(result["unit_price"])))
+                install_remove_button(0)
+                item_table.blockSignals(False)
+                update_total()
+                medicines = result.get("prescribed_items") or []
+                prescription_label.setText(
+                    "Đơn thuốc: "
+                    + (
+                        ", ".join(
+                            f"{item['medicine_name']} × {item['quantity']}"
+                            for item in medicines
+                        ) if medicines else "Không kê thuốc"
+                    )
+                    + "\n" + str(result.get("medication_note") or "")
+                )
+
+            def failed(error: Exception) -> None:
+                if isinstance(error, ApiError) and error.status_code == 401:
+                    dialog.reject()
+                    self.session_expired.emit()
+                    return
+                error_label.setText(
+                    error.message if isinstance(error, ApiError)
+                    else "Không thể tải ca khám. Vui lòng thử lại."
+                )
+                error_label.show()
+
+            tasks.run(
+                "invoice_preview",
+                lambda: self.api_client.get(
+                    f"/api/v1/reception/appointments/{requested_id}/invoice-preview"
+                ),
+                succeeded,
+                failed,
+                controls=(btn_lookup, appt_input),
+            )
+
+        btn_lookup.clicked.connect(check)
+        appt_input.returnPressed.connect(check)
         btn_cancel = QPushButton("Hủy")
         btn_cancel.setObjectName("secondaryButton")
         btn_cancel.setCursor(Qt.PointingHandCursor)
@@ -477,6 +772,10 @@ class InvoiceManagementView(BaseApiView):
             appt_id_text = appt_input.text().strip()
             if not appt_id_text.isdigit() or int(appt_id_text) <= 0:
                 error_label.setText("Vui lòng nhập mã lịch hẹn hợp lệ dạng số.")
+                error_label.show()
+                return
+            if verified_id != int(appt_id_text):
+                error_label.setText("Vui lòng tải và kiểm tra ca khám trước khi lập hóa đơn.")
                 error_label.show()
                 return
             try:
@@ -511,31 +810,54 @@ class InvoiceManagementView(BaseApiView):
             )
 
         btn_submit.clicked.connect(submit)
+        btn_row.addStretch(1)
         btn_row.addWidget(btn_cancel)
         btn_row.addWidget(btn_submit)
         d_layout.addLayout(btn_row)
 
+        if appointment_id is not None:
+            appt_input.setText(str(appointment_id))
+            QTimer.singleShot(0, check)
         dialog.exec()
 
-    def _create_production_invoice_dialog(self) -> None:
+    def _create_production_invoice_dialog(self, appointment_id: int | None = None) -> None:
         """Review the server-owned consultation charge before issuing an invoice."""
         dialog = QDialog(self)
         dialog.setWindowTitle("Lập hóa đơn khám")
-        dialog.resize(520, 320)
+        dialog.setMinimumSize(580, 360)
+        dialog.resize(640, 400)
         layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(22, 20, 22, 20)
+        layout.setSpacing(14)
+        title = QLabel("Lập hóa đơn khám bệnh")
+        title.setObjectName("pageTitle")
+        layout.addWidget(title)
         help_label = QLabel(
             "Hóa đơn chỉ gồm phí khám đã cấu hình. Đơn thuốc chưa được phát và không được thu trong luồng này."
         )
         help_label.setWordWrap(True)
+        help_label.setObjectName("mutedLabel")
         layout.addWidget(help_label)
 
+        lookup_row = QHBoxLayout()
         appt_input = QLineEdit()
         appt_input.setPlaceholderText("Mã lịch khám đã hoàn tất")
         appt_input.setAccessibleName("Mã lịch khám đã hoàn tất")
-        layout.addWidget(appt_input)
+        lookup_row.addWidget(appt_input, 1)
+        btn_check = QPushButton("Kiểm tra phí khám")
+        btn_check.setObjectName("secondaryButton")
+        lookup_row.addWidget(btn_check)
+        layout.addLayout(lookup_row)
+
+        preview_card = QFrame()
+        preview_card.setObjectName("infoCard")
+        preview_layout = QVBoxLayout(preview_card)
+        preview_layout.setContentsMargins(16, 14, 16, 14)
         preview_label = QLabel("Nhập mã lịch khám và chọn Kiểm tra.")
         preview_label.setWordWrap(True)
-        layout.addWidget(preview_label)
+        preview_label.setObjectName("fieldLabel")
+        preview_layout.addWidget(preview_label)
+        layout.addWidget(preview_card)
         error_label = QLabel()
         error_label.setWordWrap(True)
         error_label.setObjectName("errorText")
@@ -543,9 +865,6 @@ class InvoiceManagementView(BaseApiView):
         layout.addWidget(error_label)
 
         actions = QHBoxLayout()
-        btn_check = QPushButton("Kiểm tra phí khám")
-        btn_check.setObjectName("secondaryButton")
-        actions.addWidget(btn_check)
         actions.addStretch(1)
         btn_cancel = QPushButton("Hủy")
         btn_cancel.clicked.connect(dialog.reject)
@@ -639,14 +958,25 @@ class InvoiceManagementView(BaseApiView):
         btn_check.clicked.connect(check)
         appt_input.returnPressed.connect(check)
         btn_create.clicked.connect(create)
+        if appointment_id is not None:
+            appt_input.setText(str(appointment_id))
+            QTimer.singleShot(0, check)
         dialog.exec()
 
     def _on_invoice_created(self, inv: dict[str, Any]) -> None:
         inv_id = inv.get("invoice_id", 0)
-        total = float(inv.get("total_amount", 0))
+        total = Decimal(str(inv.get("total_amount", 0)))
+        self.invalidate_pending()
+        self._unbilled_page = 1
         self.feedback.show_message(
             "Lập hóa đơn thành công",
             f"Đã lập hóa đơn INV-{inv_id:04d} với số tiền {format_money(total)}.",
             severity="success",
         )
+        self.btn_pay_new.setProperty("invoiceId", int(inv_id))
+        self.recent_invoice_label.setText(
+            f"Đã lập INV-{int(inv_id):04d} · {format_money(total)} · Chưa thanh toán"
+        )
+        self.recent_invoice.show()
+        self.load_unbilled()
         self.load_invoices(clear_feedback=False)

@@ -235,6 +235,7 @@ class ReceptionService:
         status: str | None = None,
         appointment_date: date | None = None,
         doctor_id: int | None = None,
+        unbilled_only: bool = False,
     ) -> ReceptionAppointmentPage:
         pu = aliased(User, name="pu")
         du = aliased(User, name="du")
@@ -270,6 +271,15 @@ class ReceptionService:
         if status and status != "ALL":
             base = base.where(Appointment.status == status)
             count_stmt = count_stmt.where(Appointment.status == status)
+
+        if unbilled_only:
+            ready_to_bill = (
+                (Appointment.status == "COMPLETED")
+                & Appointment.medical_record.has()
+                & ~Appointment.invoice.has()
+            )
+            base = base.where(ready_to_bill)
+            count_stmt = count_stmt.where(ready_to_bill)
 
         if appointment_date:
             base = base.where(Appointment.appointment_date == appointment_date)
@@ -873,9 +883,17 @@ class ReceptionService:
             raise ConflictError("Chỉ có thể xem phí cho ca đã hoàn tất và có bệnh án.")
         if appt.invoice is not None:
             raise ConflictError("Ca khám này đã có hóa đơn.")
-        if not self.production:
-            raise ConflictError("Xem trước bảng giá chỉ hỗ trợ chế độ production.")
         charge = self._resolve_consultation_charge(appt)
+        prescription = getattr(appt.medical_record, "prescription", None)
+        specialty = getattr(appt.doctor, "specialty", None)
+        billing_item_name = (
+            f"Khám {specialty.specialty_name}"
+            if specialty is not None else charge.display_name
+        )
+        prescribed_items = [
+            {"medicine_name": item.medicine_name, "quantity": item.quantity}
+            for item in (prescription.items if prescription is not None else [])
+        ]
         return InvoicePreview(
             appointment_id=appt.appointment_id,
             patient_name=appt.patient.user.full_name,
@@ -883,10 +901,16 @@ class ReceptionService:
             appointment_status=appt.status,
             charge_id=charge.charge_id,
             charge_name=charge.display_name,
+            billing_item_name=billing_item_name,
             unit_price=charge.unit_price,
             quantity=1,
             total_amount=charge.unit_price,
-            medication_note="Thuốc trong đơn là chỉ định điều trị, chưa được giao hoặc thu tiền tại bước này.",
+            medication_note=(
+                "Thuốc trong đơn là chỉ định điều trị, chưa được giao hoặc thu tiền tại bước này."
+                if self.production else
+                "Chỉ thêm thuốc vào hóa đơn khi đã đối chiếu đơn và xác nhận đơn giá thực thu."
+            ),
+            prescribed_items=prescribed_items,
         )
 
     def create_invoice(self, req: CreateInvoiceRequest) -> ReceptionInvoiceItem:

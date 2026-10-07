@@ -150,8 +150,9 @@ class ReceptionDashboard(QMainWindow):
         self.view_check_in.search_input.setText(str(appointment_id))
         self.navigate_by_route("check_in")
 
-    def _handle_create_invoice_requested(self, _appointment_id: int) -> None:
+    def _handle_create_invoice_requested(self, appointment_id: int) -> None:
         self.navigate_by_route("invoice_management")
+        self.view_invoices._create_invoice_dialog(appointment_id)
 
     def _handle_pay_invoice_requested(self, invoice_id: int) -> None:
         self.navigate_by_route("payment")
