@@ -27,6 +27,7 @@ from backend.app.models import (
     StaffClinicAssignment,
     User,
 )
+from backend.app.services.reception_service import ReceptionService
 
 pytestmark = [
     pytest.mark.integration,
@@ -133,3 +134,20 @@ def test_project_seed_remains_coherent_and_rerun_is_non_destructive() -> None:
         after = Counter((appt.appointment_id, appt.status) for appt in
                         session.execute(select(Appointment)).scalars().all())
         assert after == before
+
+
+def test_paid_receipt_reads_clinic_lines_and_payment_from_database() -> None:
+    with SessionLocal() as session:
+        paid_invoice_id = session.scalar(
+            select(Invoice.invoice_id).where(Invoice.status == "PAID").order_by(Invoice.invoice_id)
+        )
+        assert paid_invoice_id is not None
+        detail = ReceptionService(session).get_invoice(paid_invoice_id)
+        assert detail.status == "PAID"
+        assert detail.clinic_name
+        assert detail.clinic_address
+        assert detail.items
+        assert sum((line.line_total for line in detail.items), Decimal("0.00")) == detail.total_amount
+        assert detail.payment_id is not None
+        assert detail.paid_at is not None
+        session.rollback()

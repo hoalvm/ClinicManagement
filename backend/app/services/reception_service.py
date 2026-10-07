@@ -45,6 +45,7 @@ from backend.app.schemas.reception import (
     ReceptionAppointmentPage,
     ReceptionDashboardStats,
     ReceptionInvoiceItem,
+    ReceptionInvoiceLine,
     ReceptionInvoicePage,
     ReceptionPatientSummary,
     VerifiedPatientIdentity,
@@ -811,6 +812,8 @@ class ReceptionService:
                 joinedload(Invoice.appointment)
                 .joinedload(Appointment.doctor)
                 .joinedload(Doctor.user),
+                joinedload(Invoice.appointment).joinedload(Appointment.clinic),
+                joinedload(Invoice.items),
                 joinedload(Invoice.payment),
             )
         )
@@ -821,6 +824,7 @@ class ReceptionService:
         self._require_clinic_access(appt.clinic_id if appt else None)
         pt_user = appt.patient.user if appt and appt.patient else None
         dr_user = appt.doctor.user if appt and appt.doctor else None
+        clinic = getattr(appt, "clinic", None) if appt else None
         payment = inv.payment
 
         return ReceptionInvoiceItem(
@@ -833,6 +837,10 @@ class ReceptionService:
             patient_phone=pt_user.phone if pt_user else None,
             doctor_name=dr_user.full_name if dr_user else "Doctor",
             appointment_date=appt.appointment_date if appt else date.today(),
+            clinic_name=clinic.clinic_name if clinic else None,
+            clinic_address=clinic.address if clinic else None,
+            items=self._invoice_lines(inv),
+            payment_id=payment.payment_id if payment else None,
             payment_method=payment.payment_method if payment else None,
             paid_at=payment.payment_date if payment else None,
             amount_received=getattr(payment, "amount_received", None) if payment else None,
@@ -1175,6 +1183,7 @@ class ReceptionService:
         appt = invoice.appointment
         pt_user = appt.patient.user if appt and appt.patient else None
         dr_user = appt.doctor.user if appt and appt.doctor else None
+        clinic = getattr(appt, "clinic", None) if appt else None
 
         return ReceptionInvoiceItem(
             invoice_id=invoice.invoice_id,
@@ -1186,6 +1195,10 @@ class ReceptionService:
             patient_phone=pt_user.phone if pt_user else None,
             doctor_name=dr_user.full_name if dr_user else "Doctor",
             appointment_date=appt.appointment_date if appt else date.today(),
+            clinic_name=clinic.clinic_name if clinic else None,
+            clinic_address=clinic.address if clinic else None,
+            items=self._invoice_lines(invoice),
+            payment_id=payment.payment_id if getattr(payment, "payment_id", None) else None,
             payment_method=payment.payment_method,
             paid_at=payment.payment_date,
             amount_received=payment.amount_received,
@@ -1194,6 +1207,18 @@ class ReceptionService:
             external_reference=payment.external_reference,
             verified_at=payment.verified_at,
         )
+
+    @staticmethod
+    def _invoice_lines(invoice: Invoice) -> list[ReceptionInvoiceLine]:
+        return [
+            ReceptionInvoiceLine(
+                item_name=item.item_name,
+                quantity=item.quantity,
+                unit_price=item.unit_price,
+                line_total=Decimal(item.unit_price) * item.quantity,
+            )
+            for item in (getattr(invoice, "items", None) or [])
+        ]
 
     def list_payments(
         self,

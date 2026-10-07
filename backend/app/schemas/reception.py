@@ -172,6 +172,13 @@ class CreateInvoiceRequest(APIModel):
     items: list[InvoiceItemCreate] | None = Field(default=None, min_length=1, max_length=100)
 
 
+class ReceptionInvoiceLine(APIModel):
+    item_name: str
+    quantity: int
+    unit_price: Money
+    line_total: Money
+
+
 class ReceptionInvoiceItem(APIModel):
     invoice_id: int
     appointment_id: int
@@ -182,6 +189,10 @@ class ReceptionInvoiceItem(APIModel):
     patient_phone: str | None = None
     doctor_name: str
     appointment_date: date
+    clinic_name: str | None = None
+    clinic_address: str | None = None
+    items: list[ReceptionInvoiceLine] = Field(default_factory=list)
+    payment_id: int | None = None
     payment_method: str | None = None
     paid_at: datetime | None = None
     amount_received: Money | None = None

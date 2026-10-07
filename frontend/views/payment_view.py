@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import os
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QMarginsF, Qt, Signal
+from PySide6.QtGui import QFontDatabase, QPageLayout, QPageSize, QPixmap, QTextDocument
+from PySide6.QtPrintSupport import QPrinter
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
+    QFileDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -19,6 +23,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QRadioButton,
     QScrollArea,
+    QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
@@ -28,6 +33,7 @@ from frontend.core.config import get_frontend_settings
 from frontend.views.common import BaseApiView, format_money
 from frontend.widgets.empty_state import EmptyState
 from frontend.widgets.page_header import PageHeader
+from frontend.widgets.payment_receipt import receipt_html
 from frontend.widgets.status_badge import StatusBadge
 
 
@@ -63,6 +69,7 @@ class PaymentView(BaseApiView):
         super().__init__(api_client, parent)
         self._production_mode = get_frontend_settings().app_mode == "production"
         self._current_invoice: dict[str, Any] | None = None
+        self._receipt_data: dict[str, Any] | None = None
 
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
@@ -248,10 +255,27 @@ class PaymentView(BaseApiView):
         self.receipt_card.setObjectName("receiptCard")
         receipt_layout = QVBoxLayout(self.receipt_card)
         receipt_layout.setContentsMargins(24, 20, 24, 20)
+        receipt_layout.setSpacing(14)
 
-        self.receipt_text = QLabel("Biên lai thu tiền")
-        self.receipt_text.setWordWrap(True)
-        self.receipt_text.setObjectName("receiptText")
+        receipt_heading = QHBoxLayout()
+        heading = QLabel("Biên lai thu phí")
+        heading.setObjectName("sectionTitle")
+        receipt_heading.addWidget(heading)
+        receipt_heading.addStretch(1)
+        self.btn_save_receipt = QPushButton("Lưu PDF")
+        self.btn_save_receipt.setObjectName("secondaryButton")
+        self.btn_save_receipt.setCursor(Qt.PointingHandCursor)
+        self.btn_save_receipt.clicked.connect(self._save_receipt_pdf)
+        receipt_heading.addWidget(self.btn_save_receipt)
+        receipt_layout.addLayout(receipt_heading)
+
+        self.receipt_text = QTextBrowser()
+        self.receipt_text.setObjectName("receiptDocument")
+        self.receipt_text.setAccessibleName("Biên lai thu phí đã thanh toán")
+        self.receipt_text.setFrameShape(QFrame.Shape.NoFrame)
+        self.receipt_text.setOpenExternalLinks(False)
+        self.receipt_text.setMinimumHeight(450)
+        self.receipt_text.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         receipt_layout.addWidget(self.receipt_text)
 
         layout.addWidget(self.receipt_card)
@@ -308,13 +332,20 @@ class PaymentView(BaseApiView):
             self.receipt_card.hide()
             self.empty_prompt.show()
             return
-        self._show_invoice_details(items[0])
+        invoice_id = int(items[0]["invoice_id"])
+        self.run_api_task(
+            f"get_inv_{invoice_id}",
+            lambda: self.api_client.get(f"/api/v1/reception/invoices/{invoice_id}"),
+            self._show_invoice_details,
+            loading_text="Đang tải chi tiết hóa đơn...",
+        )
 
     def _show_invoice_details(self, matched: dict[str, Any]) -> None:
         self._current_invoice = matched
         self.empty_prompt.hide()
         self.settlement_card.show()
         self.receipt_card.hide()
+        self._receipt_data = None
 
         inv_id = matched.get("invoice_id", 0)
         self.lbl_inv_title.setText(f"Hóa đơn INV-{inv_id:04d}")
@@ -334,10 +365,14 @@ class PaymentView(BaseApiView):
 
         if matched.get("status") == "PAID":
             self.btn_pay.setEnabled(False)
+            self.settlement_card.hide()
+            self._render_receipt(matched)
             self.feedback.show_message(
-                "Đã thanh toán", "Hóa đơn này đã được thanh toán đầy đủ trước đó.", severity="info"
+                "Đã thanh toán", "Có thể xem lại hoặc lưu biên lai PDF.", severity="info"
             )
         else:
+            self.header.title_label.setText("Thu phí")
+            self.header.subtitle_label.setText("Tìm hóa đơn, ghi nhận thanh toán và xuất biên lai.")
             self.btn_pay.setEnabled(True)
             self.feedback.clear()
 
@@ -434,14 +469,10 @@ class PaymentView(BaseApiView):
 
     def _on_payment_success(self, res: dict[str, Any]) -> None:
         inv_id = res.get("invoice_id")
-        total = Decimal(str(res.get("total_amount", 0)))
         method = res.get("payment_method", "CASH")
-        patient_name = res.get("patient_name", "Bệnh nhân")
         method_str = "Tiền mặt" if method == "CASH" else (
             "Chuyển khoản đã đối soát" if self._production_mode else "Chuyển khoản xác nhận thủ công"
         )
-        tendered = Decimal(str(res.get("amount_received") or total))
-        change = Decimal(str(res.get("change_due") or 0))
 
         self.feedback.show_message(
             "Thu tiền thành công",
@@ -452,24 +483,65 @@ class PaymentView(BaseApiView):
         self.settlement_card.hide()
         self.empty_prompt.hide()
 
-        # Display Receipt
-        receipt = f"""
-==================================================
-              PHÒNG KHÁM CLINICCARE
-               BIÊN LAI THU VIỆN PHÍ
-==================================================
-Mã hóa đơn: INV-{inv_id:04d}
-Bệnh nhân: {patient_name}
-Bác sĩ khám: {res.get("doctor_name")}
-Phương thức: {method_str}
---------------------------------------------------
-TỔNG THANH TOÁN: {format_money(total)}
-{f"TIỀN KHÁCH ĐƯA: {format_money(tendered)}" if method == "CASH" else ""}
-{f"TIỀN THỪA: {format_money(change)}" if method == "CASH" else ""}
-TRẠNG THÁI: ĐÃ THANH TOÁN
-==================================================
-           Cảm ơn Quý khách & Chúc mau khỏe!
-"""
-        self.receipt_text.setText(receipt)
-        self.receipt_card.show()
+        self._render_receipt({**res, "status": "PAID"})
         self.payment_completed.emit(inv_id)
+
+    def _render_receipt(self, invoice: dict[str, Any]) -> None:
+        self._ensure_receipt_font()
+        self.header.title_label.setText("Biên lai thu phí")
+        self.header.subtitle_label.setText("Chi tiết hóa đơn đã thanh toán")
+        self._receipt_data = invoice
+        self.receipt_text.setHtml(receipt_html(invoice))
+        self.receipt_text.setMinimumHeight(
+            min(1200, 520 + 38 * len(invoice.get("items") or []))
+        )
+        self.btn_save_receipt.setEnabled(bool(invoice.get("items")))
+        self.receipt_card.show()
+
+    @staticmethod
+    def _ensure_receipt_font() -> None:
+        """Make Vietnamese PDF text available in Qt's headless Windows renderer."""
+        if "Arial" in QFontDatabase.families() or os.name != "nt":
+            return
+        fonts = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
+        for filename in ("arial.ttf", "arialbd.ttf"):
+            candidate = fonts / filename
+            if candidate.is_file():
+                QFontDatabase.addApplicationFont(str(candidate))
+
+    def _save_receipt_pdf(self) -> None:
+        if not self._receipt_data or not self._receipt_data.get("items"):
+            return
+        invoice_id = int(self._receipt_data["invoice_id"])
+        path, _selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "Lưu biên lai PDF",
+            f"Bien-lai-INV-{invoice_id:04d}.pdf",
+            "Tệp PDF (*.pdf)",
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".pdf"):
+            path += ".pdf"
+        try:
+            printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+            printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+            printer.setOutputFileName(path)
+            printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+            printer.setPageMargins(
+                QMarginsF(16, 16, 16, 16), QPageLayout.Unit.Millimeter
+            )
+            document = QTextDocument()
+            document.setHtml(receipt_html(self._receipt_data))
+            document.print_(printer)
+            if not Path(path).is_file() or Path(path).stat().st_size == 0:
+                raise OSError("Tệp PDF không được tạo. Vui lòng kiểm tra nơi lưu.")
+        except (OSError, RuntimeError, ValueError) as exc:
+            self.feedback.show_message(
+                "Không lưu được PDF", str(exc), severity="error"
+            )
+            return
+        self.feedback.show_message(
+            "Đã lưu biên lai", f"Biên lai INV-{invoice_id:04d} đã được lưu thành PDF.",
+            severity="success",
+        )

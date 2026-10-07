@@ -46,6 +46,7 @@ class InvoiceManagementView(BaseApiView):
     """View to manage all clinic billing, issue invoices for post-exam appointments, and trigger payments."""
 
     pay_invoice_requested = Signal(int)  # invoice_id
+    view_receipt_requested = Signal(int)  # paid invoice_id
 
     def __init__(self, api_client: ApiClient, parent: QWidget | None = None) -> None:
         super().__init__(api_client, parent)
@@ -441,44 +442,19 @@ class InvoiceManagementView(BaseApiView):
                 action.setAccessibleName(f"Thu phí hóa đơn INV-{inv_id:04d}")
                 action.clicked.connect(lambda _, i_id=inv_id: self.pay_invoice_requested.emit(i_id))
             else:
-                action = QPushButton("Xem thông tin")
+                action = QPushButton("Xem biên lai")
                 action.setObjectName("tableActionSecondary")
                 action.setCursor(Qt.PointingHandCursor)
-                action.setAccessibleName(f"Xem hóa đơn INV-{inv_id:04d}")
-                action.clicked.connect(lambda _, invoice=inv: self._show_invoice_details(invoice))
+                action.setAccessibleName(f"Xem biên lai INV-{inv_id:04d}")
+                action.clicked.connect(
+                    lambda _, i_id=inv_id: self.view_receipt_requested.emit(i_id)
+                )
             action_widget = table_action_cell(
                 action,
                 accessible_name=f"Thao tác hóa đơn INV-{inv_id:04d}",
             )
             self.table.setIndexWidget(self.table.model().index(row, 6), action_widget)
             self.table.verticalHeader().resizeSection(row, 60)
-
-    def _show_invoice_details(self, invoice: dict[str, Any]) -> None:
-        dialog = QDialog(self)
-        invoice_id = int(invoice.get("invoice_id") or 0)
-        dialog.setWindowTitle(f"Hóa đơn INV-{invoice_id:04d}")
-        dialog.setMinimumWidth(420)
-        layout = QVBoxLayout(dialog)
-        details = QLabel(
-            "\n".join(
-                (
-                    f"Bệnh nhân: {invoice.get('patient_name', '—')}",
-                    f"Bác sĩ: {invoice.get('doctor_name', '—')}",
-                    f"Tổng tiền: {format_money(invoice.get('total_amount', 0))}",
-                    "Phương thức: "
-                    + {"CASH": "Tiền mặt", "TRANSFER": "Chuyển khoản", "CARD": "Thẻ"}.get(
-                        str(invoice.get("payment_method") or ""), "Chưa ghi nhận"
-                    ),
-                )
-            )
-        )
-        details.setWordWrap(True)
-        layout.addWidget(details)
-        close = QPushButton("Đóng")
-        close.setObjectName("primaryButton")
-        close.clicked.connect(dialog.accept)
-        layout.addWidget(close, 0, Qt.AlignmentFlag.AlignRight)
-        dialog.exec()
 
     def _retry(self) -> None:
         self.load_invoices()

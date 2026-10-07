@@ -349,9 +349,18 @@ QFrame#cashBox {
 
 /* Receipt card */
 QFrame#receiptCard {
-    background-color: #F0FDF4;
-    border: 2px dashed #16A34A;
-    border-radius: 12px;
+    background-color: #ffffff;
+    border: 1px solid #D7E0EA;
+    border-radius: 14px;
+}
+
+QTextBrowser#receiptDocument {
+    background-color: #ffffff;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    padding: 16px;
+    selection-background-color: #CCFBF1;
+    selection-color: #0F172A;
 }
 
 /* =========================================================================
@@ -1335,12 +1344,6 @@ QLabel#changeAmount {{
     color: {UI_TOKENS.success};
     font-size: 16px;
     font-weight: 700;
-}}
-
-QLabel#receiptText {{
-    color: #14532D;
-    font-family: Consolas, "Courier New", monospace;
-    font-size: 13px;
 }}
 
 QLabel#paidLabel {{

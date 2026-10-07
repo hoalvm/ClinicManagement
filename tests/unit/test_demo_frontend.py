@@ -204,7 +204,7 @@ def test_payment_uses_cash_tender_and_server_change(qt_app: QApplication) -> Non
             "patient_name": "Nguyễn Văn An",
         }
     )
-    assert "50.000 ₫" in view.receipt_text.text()
+    assert "50.000 ₫" in view.receipt_text.toPlainText()
     view.deleteLater()
     qt_app.processEvents()
 

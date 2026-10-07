@@ -124,6 +124,9 @@ class ReceptionDashboard(QMainWindow):
         self.view_invoices.pay_invoice_requested.connect(
             self._handle_pay_invoice_requested
         )
+        self.view_invoices.view_receipt_requested.connect(
+            self._handle_pay_invoice_requested
+        )
 
     def navigate_by_route(self, route: str) -> None:
         page = self._route_to_page.get(route)
